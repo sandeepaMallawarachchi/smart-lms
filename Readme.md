@@ -1,3 +1,0 @@
-# SMART LMS
-
-## Initial commit
