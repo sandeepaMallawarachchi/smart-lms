@@ -1,5 +1,6 @@
 'use client';
 
+import Footer from '@/components/CommonForAll/Layouts/Footer';
 import Header from '@/components/CommonForAll/Layouts/Header';
 
 export default function Home() {
@@ -31,6 +32,21 @@ export default function Home() {
           This is your main content area. The header component is fully customizable and responsive.
         </p>
       </div>
+
+      <Footer
+        supportEmail="support@sliit.lk"
+        supportPhone="+94 11 754 4801"
+        supportWebsite="https://www.sliit.lk"
+        copyrightOwner="SLIIT"
+        socialLinks={{
+          facebook: "https://facebook.com/...",
+          twitter: "https://twitter.com/...",
+          instagram: "https://instagram.com/...",
+          youtube: "https://youtube.com/...",
+          linkedin: "https://linkedin.com/..."
+        }}
+        onFeedbackClick={() => console.log('Feedback clicked')}
+      />
     </main>
   );
 }
