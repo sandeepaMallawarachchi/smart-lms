@@ -11,7 +11,7 @@ export default function Home() {
   return (
     <main>
       <Header
-        logoText="CourseWeb"
+        logoText="Smart Learning Management System"
         onLoginClick={handleLogin}
         showForgotPassword={true}
         navItems={[
@@ -25,7 +25,7 @@ export default function Home() {
       />
 
       {/* Page content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="max-w-screen mx-auto px-4 sm:px-6 lg:px-24 py-12">
         <h2 className="text-2xl font-bold text-brand-blue mb-4">Welcome</h2>
         <p className="text-gray-600">
           This is your main content area. The header component is fully customizable and responsive.

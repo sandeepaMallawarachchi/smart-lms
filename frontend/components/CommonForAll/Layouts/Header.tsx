@@ -40,28 +40,28 @@ const Header: React.FC<HeaderProps> = ({
   return (
     <>
       {/* Top accent bar */}
-      <div className="h-1 bg-linear-to-r from-brand-yellow via-brand-yellow to-brand-yellow"></div>
+      <div className="h-1 bg-linear-to-r from-brand-yellow via-brand-yellow to-brand-yellow rounded-t-4xl"></div>
 
       {/* Main header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header className=" bg-white shadow-sm ">
+        <div className="max-w-screen mx-auto px-4 md:px-3 lg:px-16">
           {/* Top section with logo and login */}
           <div className="flex items-center justify-between h-20">
             {/* Logo section */}
             <div className="flex items-center gap-6">
               {/* Logo box */}
               <Link href="/" className="shrink-0">
-                <div className="border-3 border-brand-blue   w-72 h-14 flex items-center justify-center">
+                <div className="md:border-r-3 md:border-l-3 border-brand-blue   w-72 h-18 flex items-center justify-center ">
                   <img
                         src="/logo1.png"
                         alt="logo"
-                        className="w-fit h-fit object-contain"
+                        className="w-fit h-17 object-cover "
                       />
                 </div>
               </Link>
 
               {/* Logo text */}
-              <h1 className="text-3xl font-bold text-brand-blue hidden sm:block">
+              <h1 className="text-3xl md:text-2xl lg:text-3xl font-bold text-brand-blue hidden sm:block">
                 {logoText}
               </h1>
             </div>
@@ -83,7 +83,7 @@ const Header: React.FC<HeaderProps> = ({
                         className="w-full h-full object-contain"
                       />
                   </div>
-                  <span>SLIIT Login</span>
+                  <span>LMS Login</span>
                 </button>
                 {showForgotPassword && (
                   <Link
@@ -237,7 +237,7 @@ const Header: React.FC<HeaderProps> = ({
                         className="w-full h-full object-contain"
                       />
                 </div>
-                <span>SLIIT Login</span>
+                <span>LMS Login</span>
               </button>
               {showForgotPassword && (
                 <Link
