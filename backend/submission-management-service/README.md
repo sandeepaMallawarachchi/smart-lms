@@ -31,8 +31,8 @@ Core microservice for handling student submissions in the Smart LMS platform.
 
 1. **Set up database**:
 ```bash
-createdb smartlms
-psql -d smartlms -c "CREATE SCHEMA submission_service;"
+createdb lms_db
+psql -d lms_db -c "CREATE SCHEMA submission_service;"
 ```
 
 2. **Configure application.properties**:
