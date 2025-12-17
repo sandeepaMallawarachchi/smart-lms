@@ -40,7 +40,7 @@ const Header: React.FC<HeaderProps> = ({
   return (
     <>
       {/* Top accent bar */}
-      <div className="h-1 bg-linear-to-r from-brand-yellow via-brand-yellow to-brand-yellow rounded-t-4xl"></div>
+      <div className="h-1 bg-linear-to-r from-brand-yellow via-brand-yellow to-brand-yellow "></div>
 
       {/* Main header */}
       <header className=" bg-white shadow-sm ">

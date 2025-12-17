@@ -222,7 +222,7 @@ const Footer: React.FC<FooterProps> = ({
                 Copyright {copyrightYear} © {copyrightOwner}. All Rights Reserved.
               </p>
 
-              <div className="flex items-center gap-6">
+              <div className="space-y-2 md:flex items-center gap-6">
                 <a
                   href={supportWebsite}
                   target="_blank"
