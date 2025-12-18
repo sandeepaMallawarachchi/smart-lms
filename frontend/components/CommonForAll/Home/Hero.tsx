@@ -175,8 +175,8 @@ const HeroSection: React.FC = () => {
                     </div>
 
                     {/* Features Grid - Bottom */}
-                    <div className="hidden md:flex relative bg-white/95 backdrop-blur-md w-[90%] mb-4 mx-auto ">
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-6 md:gap-8 px-4 md:px-12 lg:px-16 py-12">
+                    <div className="hidden md:block relative bg-white/95 backdrop-blur-md w-[90%] mb-4 mx-auto ">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8 px-4 md:px-12 lg:px-16 py-12 mx-auto">
                             {features.map((feature, index) => (
                                 <div
                                     key={index}
@@ -186,10 +186,10 @@ const HeroSection: React.FC = () => {
                                         animationDelay: `${0.4 + index * 0.1}s`,
                                     }}
                                 >
-                                    <div className="mb-4 text-teal-600 group-hover:text-blue-600 transition-colors">
+                                    <div className="group mb-4 text-brand-yellow group-hover:text-brand-blue transition-colors">
                                         {feature.icon}
                                     </div>
-                                    <p className="font-medium text-xs md:text-sm text-gray-700 font-sans tracking-wide">
+                                    <p className="font-medium text-xs md:text-sm text-brand-blue group-hover:text-brand-yellow font-sans tracking-wide">
                                         {feature.label}
                                     </p>
                                 </div>
@@ -216,10 +216,10 @@ const HeroSection: React.FC = () => {
                                 animationDelay: `${0.4 + index * 0.1}s`,
                             }}
                         >
-                            <div className="mb-4 text-teal-600 group-hover:text-blue-600 transition-colors">
+                            <div className="group mb-4 text-brand-yellow group-hover:text-brand-blue transition-colors">
                                 {feature.icon}
                             </div>
-                            <p className="font-medium text-xs md:text-sm text-gray-700 font-sans tracking-wide">
+                            <p className="font-medium text-xs md:text-sm text-brand-blue group-hover:text-brand-yellow font-sans tracking-wide">
                                 {feature.label}
                             </p>
                         </div>
