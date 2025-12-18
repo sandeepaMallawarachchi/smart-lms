@@ -1,5 +1,6 @@
 'use client';
 
+import HeroSection from '@/components/CommonForAll/Home/Hero';
 import Footer from '@/components/CommonForAll/Layouts/Footer';
 import Header from '@/components/CommonForAll/Layouts/Header';
 
@@ -26,11 +27,8 @@ export default function Home() {
       />
 
       {/* Page content */}
-      <div className="max-w-screen mx-auto px-4 sm:px-6 lg:px-24 py-12">
-        <h2 className="text-2xl font-bold text-brand-blue mb-4">Welcome</h2>
-        <p className="text-gray-600">
-          This is your main content area. The header component is fully customizable and responsive.
-        </p>
+      <div className="max-w-screen mx-auto px-4 sm:px-6 lg:px-16 py-8">
+       <HeroSection />
       </div>
 
       <Footer
