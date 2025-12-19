@@ -175,7 +175,7 @@ const HeroSection: React.FC = () => {
                     </div>
 
                     {/* Features Grid - Bottom */}
-                    <div className="hidden md:block relative bg-white/95 backdrop-blur-md w-[90%] mb-4 mx-auto ">
+                    <div className="hidden md:block relative bg-white/90 w-[90%] mb-4 mx-auto ">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8 px-4 md:px-12 lg:px-16 py-12 mx-auto">
                             {features.map((feature, index) => (
                                 <div
