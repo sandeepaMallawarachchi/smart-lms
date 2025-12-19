@@ -2,11 +2,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface HeroFeature {
     icon: React.ReactNode;
     label: string;
+    route?: string;
 }
 
 interface Slide {
@@ -18,6 +20,7 @@ interface Slide {
 const HeroSection: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [currentSlide, setCurrentSlide] = useState(0);
+    const router = useRouter();
 
     // ===== EMBEDDED DATA - EDIT HERE =====
     const slides: Slide[] = [
@@ -56,27 +59,31 @@ const HeroSection: React.FC = () => {
     const features: HeroFeature[] = [
         {
             icon: (
-                <Image src="/commonforall/hero/1.svg" alt="Feature 2" width={48} height={48} />
+                <Image src="/commonforall/hero/1.svg" alt="Code Engine" width={48} height={48} />
             ),
             label: 'Code Engine',
+            route: '/code-engine',
         },
         {
             icon: (
-                <Image src="/commonforall/hero/2.svg" alt="Feature 2" width={48} height={48} />
+                <Image src="/commonforall/hero/2.svg" alt="Submission & Feedback" width={48} height={48} />
             ),
             label: 'Submission & Feedback',
+            route: '/submissions',
         },
         {
             icon: (
-                <Image src="/commonforall/hero/3.svg" alt="Feature 2" width={48} height={48} />
+                <Image src="/commonforall/hero/3.svg" alt="Projects & Tasks" width={48} height={48} />
             ),
             label: 'Projects & Tasks',
+            route: '/projects-and-tasks',
         },
         {
             icon: (
-                <Image src="/commonforall/hero/4.svg" alt="Feature 2" width={48} height={48} />
+                <Image src="/commonforall/hero/4.svg" alt="Learning Progress & Insights" width={48} height={48} />
             ),
             label: 'Learning Progress & Insights',
+            route: '/learning-progress',
         },
     ];
     // ===== END EMBEDDED DATA =====
@@ -105,6 +112,12 @@ const HeroSection: React.FC = () => {
 
     const handleNext = () => {
         setCurrentSlide((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
+    };
+
+    const handleFeatureClick = (route?: string) => {
+        if (route) {
+            router.push(route);
+        }
     };
 
     return (
@@ -175,12 +188,14 @@ const HeroSection: React.FC = () => {
                     </div>
 
                     {/* Features Grid - Bottom */}
-                    <div className="hidden md:block relative bg-white/90 w-[90%] mb-4 mx-auto ">
+                    <div className="hidden md:block relative bg-white/95 backdrop-blur-md w-[90%] mb-4 mx-auto ">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8 px-4 md:px-12 lg:px-16 py-12 mx-auto">
                             {features.map((feature, index) => (
-                                <div
+                                <button
                                     key={index}
-                                    className="flex flex-col items-center justify-center text-center group cursor-pointer transition-all duration-300 hover:-translate-y-2"
+                                    onClick={() => handleFeatureClick(feature.route)}
+                                    disabled={!feature.route}
+                                    className="flex flex-col items-center justify-center text-center group cursor-pointer transition-all duration-300 hover:-translate-y-2 disabled:cursor-default"
                                     style={{
                                         animation: `fadeInUp 0.6s ease-out forwards`,
                                         animationDelay: `${0.4 + index * 0.1}s`,
@@ -192,7 +207,7 @@ const HeroSection: React.FC = () => {
                                     <p className="font-medium text-xs md:text-sm text-brand-blue group-hover:text-brand-yellow font-sans tracking-wide">
                                         {feature.label}
                                     </p>
-                                </div>
+                                </button>
                             ))}
                         </div>
                     </div>
@@ -208,9 +223,11 @@ const HeroSection: React.FC = () => {
             <div className="md:hidden relative  bg-black/10 backdrop-blur-md mb-4 mx-auto mt-2">
                 <div className="grid grid-cols-4 md:grid-cols-5 gap-6 md:gap-8 px-4 md:px-12 lg:px-16 py-4">
                     {features.map((feature, index) => (
-                        <div
+                        <button
                             key={index}
-                            className="flex flex-col items-center justify-center text-center group cursor-pointer transition-all duration-300 hover:-translate-y-2"
+                            onClick={() => handleFeatureClick(feature.route)}
+                            disabled={!feature.route}
+                            className="flex flex-col items-center justify-center text-center group cursor-pointer transition-all duration-300 hover:-translate-y-2 disabled:cursor-default"
                             style={{
                                 animation: `fadeInUp 0.6s ease-out forwards`,
                                 animationDelay: `${0.4 + index * 0.1}s`,
@@ -222,7 +239,7 @@ const HeroSection: React.FC = () => {
                             <p className="font-medium text-xs md:text-sm text-brand-blue group-hover:text-brand-yellow font-sans tracking-wide">
                                 {feature.label}
                             </p>
-                        </div>
+                        </button>
                     ))}
                 </div>
             </div>
