@@ -90,6 +90,15 @@ const HeroSection: React.FC = () => {
         }
     }, []);
 
+    useEffect(() => {
+        // Auto-slide every 5 seconds
+        const interval = setInterval(() => {
+            setCurrentSlide((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
+        }, 5000);
+
+        return () => clearInterval(interval);
+    }, [slides.length]);
+
     const handlePrev = () => {
         setCurrentSlide((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
     };
