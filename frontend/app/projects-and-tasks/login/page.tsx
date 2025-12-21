@@ -46,7 +46,7 @@ export default function LoginPage() {
       if (data.data.userRole === 'student') {
         router.push('/projects-and-tasks/student');
       } else if (data.data.userRole === 'lecture') {
-        router.push('/projects-and-tasks/lecture');
+        router.push('/projects-and-tasks/lecturer');
       }
     } catch (err) {
       console.error('Login error:', err);

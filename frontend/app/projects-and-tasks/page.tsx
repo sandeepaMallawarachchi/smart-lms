@@ -54,7 +54,7 @@ export default function ProjectAndTasksManagementModule() {
         if (userRole === 'student') {
           router.push('/projects-and-tasks/student');
         } else if (userRole === 'lecture') {
-          router.push('/projects-and-tasks/lecture');
+          router.push('/projects-and-tasks/lecturer');
         } else {
           setError('Invalid user role');
           setIsLoading(false);

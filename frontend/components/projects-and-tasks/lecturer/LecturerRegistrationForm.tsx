@@ -77,7 +77,7 @@ export default function LecturerRegistrationForm() {
 
       // Redirect after a short delay
       setTimeout(() => {
-        router.push('/projects-and-tasks/lecture');
+        router.push('/projects-and-tasks/lecturer');
       }, 1500);
     } catch (err) {
       console.error('Registration error:', err);
