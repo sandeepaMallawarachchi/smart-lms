@@ -19,7 +19,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/project-and-tasks/auth/login', {
+      const response = await fetch('/api/projects-and-tasks/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

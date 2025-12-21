@@ -29,7 +29,7 @@ export default function ProjectAndTaskStudentPage() {
           return;
         }
 
-        const response = await fetch('/api/project-and-tasks/auth/verify', {
+        const response = await fetch('/api/projects-and-tasks/auth/verify', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,

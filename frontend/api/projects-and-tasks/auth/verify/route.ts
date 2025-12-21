@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server';
-import { connectDB } from '@/lib/db';
+import { connectDB } from '@/lib/projects-and-tasks/db';
 import Student from '@/model/projects-and-tasks/Student';
-import Lecturer from '@/model/projects-and-tasks/Lecture';
-import { verifyToken } from '@/lib/jwt';
-import { successResponse, unauthorizedResponse, serverErrorResponse } from '@/lib/api-response';
+import Lecturer from '@/model/projects-and-tasks/Lecturer';
+import { verifyToken } from '@/lib/projects-and-tasks/jwt';
+import { successResponse, unauthorizedResponse, serverErrorResponse } from '@/lib/projects-and-tasks/api-response';
 
 export async function GET(request: NextRequest) {
   try {

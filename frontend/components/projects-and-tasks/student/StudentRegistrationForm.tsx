@@ -46,7 +46,7 @@ export default function StudentRegistrationForm() {
     setSuccessMessage(null);
 
     try {
-      const response = await fetch('/api/project-and-tasks/auth/register/student', {
+      const response = await fetch('/api/projects-and-tasks/auth/register/student', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

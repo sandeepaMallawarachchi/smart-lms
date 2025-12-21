@@ -44,7 +44,7 @@ export default function LecturerRegistrationForm() {
     setSuccessMessage(null);
 
     try {
-      const response = await fetch('/api/project-and-tasks/auth/register/lecturer', {
+      const response = await fetch('/api/projects-and-tasks/auth/register/lecturer', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
