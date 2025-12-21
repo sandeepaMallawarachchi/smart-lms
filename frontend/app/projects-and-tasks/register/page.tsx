@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import StudentRegistrationForm from '@/components/projects-and-tasks/student/StudentRegistrationForm';
-import LecturerRegistrationForm from '@/components/projects-and-tasks/lecture/LecturerRegistrationForm';
+import LecturerRegistrationForm from '@/components/projects-and-tasks/lecturer/LecturerRegistrationForm';
 
 type TabType = 'student' | 'lecturer';
 
