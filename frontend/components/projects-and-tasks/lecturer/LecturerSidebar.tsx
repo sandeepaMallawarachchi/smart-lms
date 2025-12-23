@@ -124,7 +124,7 @@ export default function LecturerSidebar() {
       <aside
       className={`h-full bg-blue-50 border-t-4 border-brand-yellow flex flex-col overflow-y-auto scrollbar-hide shadow-sm transition-all duration-300 ${sidebarCollapsed ? 'w-24' : 'w-72'
         }`}
-           style={{ borderRight: '2px solid #242d66' }}
+           style={{ borderRight: '1px solid #242d66' }}
     >
       {/* Header */}
       <div className="sticky top-0 px-6 py-5 border-b border-gray-200 bg-white shadow-md">

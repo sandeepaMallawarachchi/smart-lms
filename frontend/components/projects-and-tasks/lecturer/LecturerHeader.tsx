@@ -81,7 +81,7 @@ export default function LecturerHeader() {
   const displayName = lecturerData?.name || 'Lecturer';
 
   return (
-    <header className="sticky top-0 z-40 bg-yellow-50 border-b border-gray-200 shadow-sm">
+    <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm" style={{ borderTop: '4px solid #efa300' }}>
       <div className="max-w-full px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Left: Menu Toggle & Branding */}
@@ -111,12 +111,12 @@ export default function LecturerHeader() {
           </div>
 
           {/* Right: Actions */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-6 ">
             {/* Notifications */}
             <div className="relative">
               <button
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
-                className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="relative p-2 text-brand-blue hover:bg-gray-100 rounded-lg transition-colors"
                 aria-label="Notifications"
               >
                 <Bell size={20} />
@@ -151,8 +151,10 @@ export default function LecturerHeader() {
               )}
             </div>
 
+            <div className="w-0.5 h-6 bg-brand-blue"></div>
+
             {/* User Profile Dropdown */}
-            <div className="relative">
+            <div className="relative ">
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded-lg transition-colors"

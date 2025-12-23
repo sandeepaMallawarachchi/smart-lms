@@ -103,7 +103,7 @@ export default function StudentHeader() {
   const displayId = studentData?.studentIdNumber || 'ID';
 
   return (
-    <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
+    <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm" style={{ borderTop: '4px solid #efa300' }}>
       <div className="max-w-full px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Left: Menu Toggle & Branding */}
@@ -141,11 +141,13 @@ export default function StudentHeader() {
               </div>
             )}
 
+            {/* <div className="w-[2.5px] h-8 bg-brand-blue"></div> */}
+
             {/* Notifications */}
             <div className="relative">
               <button
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
-                className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="relative p-2 text-brand-blue hover:bg-gray-100 rounded-lg transition-colors"
                 aria-label="Notifications"
               >
                 <Bell size={20} />
@@ -174,11 +176,10 @@ export default function StudentHeader() {
                           className="p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
                         >
                           <div className="flex gap-3">
-                            <div className={`mt-1 flex-shrink-0 p-2 rounded ${
-                              notif.type === 'alert' ? 'bg-red-100 text-red-600' :
+                            <div className={`mt-1 flex-shrink-0 p-2 rounded ${notif.type === 'alert' ? 'bg-red-100 text-red-600' :
                               notif.type === 'warning' ? 'bg-amber-100 text-amber-600' :
-                              'bg-blue-100 text-blue-600'
-                            }`}>
+                                'bg-blue-100 text-blue-600'
+                              }`}>
                               <IconComponent size={16} />
                             </div>
                             <div className="flex-1">
@@ -198,6 +199,8 @@ export default function StudentHeader() {
                 </div>
               )}
             </div>
+
+            <div className="w-0.5 h-8 bg-brand-blue"></div>
 
             {/* User Profile Dropdown */}
             <div className="relative">
