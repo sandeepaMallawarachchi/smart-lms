@@ -202,7 +202,7 @@ export default function StudentSidebar() {
       </div>
 
       {/* Main Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto scrollbar-hide">
+      <nav className="flex-1 pr-4 py-6 space-y-2 overflow-y-auto scrollbar-hide">
         {navItems.map((item) => {
           const isExpanded = expandedSections.includes(item.id);
           const isActive = activeSection === item.id;
@@ -212,9 +212,9 @@ export default function StudentSidebar() {
               {/* Main Item */}
               <button
                 onClick={() => handleNavigate(item.id)}
-                className={`w-full flex items-center pl-4 px-1 py-3 rounded-lg transition-all ${
+                className={`w-full flex items-center pl-6  px-2 py-3 rounded-r-full transition-all ${
                   isActive
-                    ? 'bg-brand-yellow text-brand-blue shadow-lg'
+                    ? 'bg-brand-yellow text-brand-blue shadow-lg rounded-r-full'
                     : 'text-brand-blue hover:bg-brand-blue/10'
                 }`}
                 title={sidebarCollapsed ? item.label : undefined}
@@ -256,7 +256,7 @@ export default function StudentSidebar() {
                   {item.subsections.map((subsection) => (
                     <button
                       key={subsection.id}
-                      className="w-full text-left px-3 py-2 text-sm text-blue-800 hover:text-brand-yellow hover:bg-brand-blue/10 rounded transition-colors flex items-center justify-between"
+                      className="w-full text-left px-3 py-2 text-sm text-blue-800 hover:text-brand-yellow hover:bg-brand-blue/10 rounded-full transition-colors flex items-center justify-between"
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <ArrowRight size={14} className="shrink-0" />

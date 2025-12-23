@@ -168,7 +168,7 @@ export default function LecturerSidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-400">
+      <nav className="flex-1 overflow-y-auto py-4 pr-4 space-y-1 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-400">
         {navItems.map((item) => {
           const isExpanded = expandedSections.includes(item.id);
           const isActive = activeSection === item.id;
@@ -179,8 +179,8 @@ export default function LecturerSidebar() {
               {/* Main Item */}
               <button
                 onClick={() => handleNavigate(item.id, !!hasSubsections)}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 group ${isActive
-                    ? 'bg-brand-yellow text-white shadow-md'
+                className={`w-full flex items-center justify-between pl-6 px-2 py-3 rounded-r-full transition-all duration-200 group ${isActive
+                    ? 'bg-brand-yellow text-white shadow-lg rounded-r-full'
                     : 'text-brand-blue hover:bg-brand-blue/10 hover:text-brand-yellow'
                   } ${sidebarCollapsed ? 'justify-center px-2' : ''}`}
                 title={sidebarCollapsed ? item.label : ''}
@@ -217,11 +217,11 @@ export default function LecturerSidebar() {
 
               {/* Submenu */}
               {hasSubsections && isExpanded && !sidebarCollapsed && (
-                <div className="mt-2 ml-4 space-y-1 border-l border-gray-200 pl-4">
+                <div className="mt-2 ml-4 space-y-1 border-l border-yellow-500 pl-4">
                   {item.subsections.map((subsection) => (
                     <button
                       key={subsection.id}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:text-brand-yellow hover:bg-blue-50 rounded-lg transition-colors duration-150"
+                      className="w-full text-left px-4 py-2 text-sm text-blue-800 hover:text-brand-yellow hover:bg-brand-blue/10 rounded-full transition-colors duration-150"
                     >
                       {subsection.label}
                     </button>
