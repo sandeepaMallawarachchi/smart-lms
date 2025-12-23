@@ -42,9 +42,9 @@ export default function LecturerSidebar() {
       icon: <ListTodo size={22} />,
       href: '/lecturer/projects',
       subsections: [
-        { id: 'all-projects', label: 'All Projects' },
-        { id: 'create-project', label: 'Create Project' },
-        { id: 'templates', label: 'Templates' },
+        { id: 'all-projects', label: 'All Projects' ,href: '/lecturer/projects',},
+        { id: 'create-project', label: 'Create Project' , href: '/lecturer/projects',},
+        { id: 'templates', label: 'Templates',href: '/lecturer/projects', },
       ],
     },
     {
@@ -168,7 +168,7 @@ export default function LecturerSidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-4 pr-4 space-y-1 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-400">
+      <nav className="flex-1 overflow-y-auto scrollbar-hide py-4 pr-4 space-y-1 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-400">
         {navItems.map((item) => {
           const isExpanded = expandedSections.includes(item.id);
           const isActive = activeSection === item.id;
@@ -209,7 +209,7 @@ export default function LecturerSidebar() {
                 {hasSubsections && !sidebarCollapsed && (
                   <ChevronDown
                     size={16}
-                    className={`text-brand-blue transition-transform duration-300 flex-shrink-0 ${isExpanded ? 'rotate-180' : ''
+                    className={`text-brand-blue transition-transform duration-300 shrink-0 ${isExpanded ? 'rotate-180' : ''
                       }`}
                   />
                 )}
@@ -221,6 +221,7 @@ export default function LecturerSidebar() {
                   {item.subsections.map((subsection) => (
                     <button
                       key={subsection.id}
+
                       className="w-full text-left px-4 py-2 text-sm text-blue-800 hover:text-brand-yellow hover:bg-brand-blue/10 rounded-full transition-colors duration-150"
                     >
                       {subsection.label}
