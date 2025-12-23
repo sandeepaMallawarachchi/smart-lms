@@ -40,3 +40,12 @@ h5,
 h6 {
   font-family: var(--font-inter-tight), sans-serif;
 }
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
