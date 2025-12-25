@@ -6,7 +6,7 @@ const JWT_EXPIRE = '7d';
 export interface TokenPayload {
   userId: string;
   email: string;
-  userRole: 'student' | 'lecture';
+  userRole: 'student' | 'lecture' | 'superadmin';
 }
 
 export function generateToken(payload: TokenPayload): string {

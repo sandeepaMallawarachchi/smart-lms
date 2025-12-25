@@ -23,6 +23,30 @@ export async function POST(request: NextRequest) {
       return errorResponse('Validation failed', errors, 400);
     }
 
+    // Check if credentials match superadmin
+    const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+    if (email === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+      // Generate token for superadmin
+      const token = generateToken({
+        userId: 'superadmin',
+        email: ADMIN_USERNAME as string,
+        userRole: 'superadmin',
+      });
+
+      return successResponse('Login successful', {
+        user: {
+          email: ADMIN_USERNAME,
+          role: 'superadmin',
+          name: 'Super Admin',
+        },
+        token,
+        userRole: 'superadmin',
+        isSuperAdmin: true,
+      }, 200);
+    }
+
     // Try to find student first
     let user = await Student.findOne({ email: email.toLowerCase() }).select('+password');
     let userRole: 'student' | 'lecture' = 'student';
@@ -64,6 +88,7 @@ export async function POST(request: NextRequest) {
       user: userData,
       token,
       userRole,
+      isSuperAdmin: false,
     }, 200);
   } catch (error: any) {
     console.error('Login error:', error);
