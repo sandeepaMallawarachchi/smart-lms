@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    const { studentIdNumber, name, email, password, passwordConfirmation, gender, dateOfBirth, address, nicNumber } =
+    const { studentIdNumber, name, email, password, passwordConfirmation, gender, dateOfBirth, address, nicNumber, academicYear, specialization } =
       body;
 
     // Validation
@@ -28,6 +28,8 @@ export async function POST(request: NextRequest) {
     if (!dateOfBirth) errors.dateOfBirth = ['Date of birth is required'];
     if (!address) errors.address = ['Address is required'];
     if (!nicNumber) errors.nicNumber = ['NIC number is required'];
+    if (!academicYear) errors.nicNumber = ['Academic Year is required'];
+    if (!specialization) errors.nicNumber = ['Specialization is required'];
 
     if (Object.keys(errors).length > 0) {
       return errorResponse('Validation failed', errors, 400);
@@ -61,6 +63,8 @@ export async function POST(request: NextRequest) {
       dateOfBirth: new Date(dateOfBirth),
       address,
       nicNumber,
+      academicYear,
+      specialization,
     });
 
     await student.save();

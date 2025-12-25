@@ -5,16 +5,11 @@ import Footer from '@/components/CommonForAll/Layouts/Footer';
 import Header from '@/components/CommonForAll/Layouts/Header';
 
 export default function Home() {
-  const handleLogin = () => {
-    console.log('Login clicked');
-    // Handle login logic here
-  };
 
   return (
     <main>
       <Header
         logoText="Smart Learning Management System"
-        onLoginClick={handleLogin}
         showForgotPassword={true}
         navItems={[
           { label: 'Home', href: '/' },
@@ -28,7 +23,7 @@ export default function Home() {
 
       {/* Page content */}
       <div className="max-w-screen mx-auto px-4 sm:px-6 lg:px-16 py-8">
-       <HeroSection />
+        <HeroSection />
       </div>
 
       <Footer

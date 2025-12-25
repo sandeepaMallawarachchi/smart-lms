@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import StudentRegistrationForm from '@/components/projects-and-tasks/student/StudentRegistrationForm';
-import LecturerRegistrationForm from '@/components/projects-and-tasks/lecturer/LecturerRegistrationForm';
+import LecturerRegistrationForm from '@/components/CommonForAll/auth/LecturerRegistrationForm';
+import StudentRegistrationForm from '@/components/CommonForAll/auth/StudentRegistrationForm';
 
 type TabType = 'student' | 'lecturer';
 

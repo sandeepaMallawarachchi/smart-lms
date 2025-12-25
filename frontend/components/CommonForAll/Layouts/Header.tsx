@@ -13,7 +13,6 @@ interface NavItem {
 interface HeaderProps {
   logoText?: string;
   navItems?: NavItem[];
-  onLoginClick?: () => void;
   showForgotPassword?: boolean;
 }
 
@@ -27,7 +26,6 @@ const Header: React.FC<HeaderProps> = ({
     { label: 'Libraries', href: '/libraries', hasDropdown: true },
     { label: 'Email', href: '/email', hasDropdown: true },
   ],
-  onLoginClick,
   showForgotPassword = true,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -72,8 +70,8 @@ const Header: React.FC<HeaderProps> = ({
                 <div className="text-xs text-gray-600 font-medium">
                   LOG IN USING YOUR ACCOUNT ON:
                 </div>
-                <button
-                  onClick={onLoginClick}
+                <Link
+                  href={'/login'}
                   className="flex items-center gap-2 bg-white border border-gray-300 rounded px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   <div className="w-5 h-5 rounded flex items-center justify-center text-white text-xs font-bold">
@@ -84,7 +82,7 @@ const Header: React.FC<HeaderProps> = ({
                       />
                   </div>
                   <span>LMS Login</span>
-                </button>
+                </Link>
                 {showForgotPassword && (
                   <Link
                     href="/forgot-password"
@@ -226,8 +224,8 @@ const Header: React.FC<HeaderProps> = ({
               <div className="text-xs text-gray-600 font-medium">
                 LOG IN USING YOUR ACCOUNT ON:
               </div>
-              <button
-                onClick={onLoginClick}
+              <Link
+                href={'/login'}
                 className="w-full flex items-center justify-center gap-2 bg-white border border-gray-300 rounded px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 <div className="w-5 h-5 bg-brand-blue rounded flex items-center justify-center text-white text-xs font-bold">
@@ -238,7 +236,7 @@ const Header: React.FC<HeaderProps> = ({
                       />
                 </div>
                 <span>LMS Login</span>
-              </button>
+              </Link>
               {showForgotPassword && (
                 <Link
                   href="/forgot-password"
