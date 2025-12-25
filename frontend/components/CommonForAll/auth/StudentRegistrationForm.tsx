@@ -374,7 +374,7 @@ export default function StudentRegistrationForm() {
             : 'linear-gradient(135deg, #efa300 0%, #242d66 100%)',
           color: 'white',
         }}
-        className="w-full py-2.5 rounded-lg font-medium transition duration-200 disabled:cursor-not-allowed mt-6"
+        className="w-full cursor-pointer py-2.5 rounded-lg font-medium transition duration-200 disabled:cursor-not-allowed mt-6"
       >
         {isLoading ? 'Creating Account...' : 'Create Account'}
       </button>
@@ -383,7 +383,7 @@ export default function StudentRegistrationForm() {
       <div className="text-center pt-4">
         <p className="text-sm text-gray-600">
           Already have an account?{' '}
-          <Link href="/projects-and-tasks/login" className="text-yellow-600 hover:text-yellow-700 font-medium">
+          <Link href="/login" className="text-yellow-600 hover:text-yellow-700 font-medium">
             Sign in
           </Link>
         </p>
