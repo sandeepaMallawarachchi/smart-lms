@@ -24,6 +24,22 @@ export async function GET(request: NextRequest) {
       return unauthorizedResponse('Invalid or expired token');
     }
 
+    // Check if user is superadmin
+    if (payload.userRole === 'superadmin') {
+      const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
+      
+      return successResponse('User verified', {
+        user: {
+          email: ADMIN_USERNAME || '',
+          role: 'superadmin',
+          name: 'Super Admin',
+          userId: 'superadmin',
+        },
+        userRole: 'superadmin',
+        isSuperAdmin: true,
+      }, 200);
+    }
+
     // Fetch user based on role
     let user;
 
@@ -43,6 +59,7 @@ export async function GET(request: NextRequest) {
     return successResponse('User verified', {
       user: userData,
       userRole: payload.userRole,
+      isSuperAdmin: false,
     }, 200);
   } catch (error: any) {
     console.error('Verify user error:', error);
