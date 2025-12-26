@@ -66,7 +66,7 @@ def model_info():
 @api_bp.route('/predict', methods=['POST'])
 def predict_single():
     """
-    Predict risk for a single student
+    Predict risk for a single student with LLM recommendations
     """
     try:
         if not predictor.model_loaded:
@@ -96,7 +96,20 @@ def predict_single():
             }), 400
         
         student_id = data.get('student_id', None)
+        
+        # Get ML prediction
         prediction_result = predictor.predict(data)
+        
+        # Generate LLM recommendations
+        from app.llm_service import llm_service
+        llm_recommendations = llm_service.generate_recommendations(
+            student_data=data,
+            prediction_result=prediction_result,
+            student_id=student_id
+        )
+        
+        # Replace hardcoded recommendations with LLM output
+        prediction_result['recommendations'] = llm_recommendations
         
         response = {
             'success': True,
@@ -105,74 +118,11 @@ def predict_single():
             'timestamp': datetime.utcnow().isoformat()
         }
         
-        logger.info(f"Prediction successful for student: {student_id}")
+        logger.info(f"Prediction with LLM recommendations successful for student: {student_id}")
         return jsonify(response), 200
         
     except Exception as e:
         logger.error(f"Prediction error: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'timestamp': datetime.utcnow().isoformat()
-        }), 500
-
-
-@api_bp.route('/predict/batch', methods=['POST'])
-def predict_batch():
-    """
-    Predict risk for multiple students
-    """
-    try:
-        if not predictor.model_loaded:
-            init_models()
-        
-        if not request.is_json:
-            return jsonify({
-                'success': False,
-                'error': 'Content-Type must be application/json',
-                'timestamp': datetime.utcnow().isoformat()
-            }), 400
-        
-        data = request.get_json()
-        
-        if 'students' not in data or not isinstance(data['students'], list):
-            return jsonify({
-                'success': False,
-                'error': 'Request must contain "students" array',
-                'timestamp': datetime.utcnow().isoformat()
-            }), 400
-        
-        if len(data['students']) == 0:
-            return jsonify({
-                'success': False,
-                'error': 'Students array cannot be empty',
-                'timestamp': datetime.utcnow().isoformat()
-            }), 400
-        
-        results = predictor.predict_batch(data['students'])
-        
-        total = len(results)
-        successful = sum(1 for r in results if r['status'] == 'success')
-        at_risk_count = sum(1 for r in results if r['status'] == 'success' and r['prediction']['at_risk'])
-        
-        response = {
-            'success': True,
-            'predictions': results,
-            'summary': {
-                'total_students': total,
-                'successful_predictions': successful,
-                'failed_predictions': total - successful,
-                'at_risk_students': at_risk_count,
-                'not_at_risk_students': successful - at_risk_count
-            },
-            'timestamp': datetime.utcnow().isoformat()
-        }
-        
-        logger.info(f"Batch prediction completed: {successful}/{total} successful")
-        return jsonify(response), 200
-        
-    except Exception as e:
-        logger.error(f"Batch prediction error: {str(e)}")
         return jsonify({
             'success': False,
             'error': str(e),

@@ -37,7 +37,11 @@ class Config:
     
     ALL_FEATURES = NUMERIC_FEATURES + [f + '_encoded' for f in CATEGORICAL_FEATURES]
 
-
+    # LLM Configuration
+    LLM_MODEL_PATH = os.getenv('LLM_MODEL_PATH', 'models/llm/Llama-3.2-3B-Instruct-Q4_K_M.gguf')
+    LLM_MAX_TOKENS = int(os.getenv('LLM_MAX_TOKENS', 500))
+    LLM_TEMPERATURE = float(os.getenv('LLM_TEMPERATURE', 0.7))
+    
 class DevelopmentConfig(Config):
     """
     Development configuration
@@ -67,3 +71,4 @@ config = {
     'testing': TestingConfig,
     'default': DevelopmentConfig
 }
+
