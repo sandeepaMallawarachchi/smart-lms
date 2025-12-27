@@ -20,6 +20,9 @@ interface Slide {
 const HeroSection: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [currentSlide, setCurrentSlide] = useState(0);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const [isCheckingAuth, setIsCheckingAuth] = useState(true);
     const router = useRouter();
 
     // ===== EMBEDDED DATA - EDIT HERE =====
@@ -90,6 +93,47 @@ const HeroSection: React.FC = () => {
 
     const currentSlideData = slides[currentSlide];
 
+    // Check authentication on mount
+    useEffect(() => {
+        const checkAuth = async () => {
+            const token = localStorage.getItem('authToken');
+            const role = localStorage.getItem('userRole');
+
+            if (token) {
+                try {
+                    // Verify token with backend
+                    const response = await fetch('/api/auth/verify', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                        },
+                    });
+
+                    if (response.ok) {
+                        setIsAuthenticated(true);
+                        setUserRole(role);
+                    } else {
+                        // Token invalid, clear storage
+                        localStorage.removeItem('authToken');
+                        localStorage.removeItem('userRole');
+                        setIsAuthenticated(false);
+                        setUserRole(null);
+                    }
+                } catch (error) {
+                    console.error('Auth verification error:', error);
+                    setIsAuthenticated(false);
+                    setUserRole(null);
+                }
+            } else {
+                setIsAuthenticated(false);
+                setUserRole(null);
+            }
+
+            setIsCheckingAuth(false);
+        };
+
+        checkAuth();
+    }, []);
+
     useEffect(() => {
         // Animate on mount
         if (containerRef.current) {
@@ -115,9 +159,30 @@ const HeroSection: React.FC = () => {
     };
 
     const handleFeatureClick = (route?: string) => {
-        if (route) {
-            router.push(route);
+        if (!route) return;
+
+        // Check if user is authenticated
+        if (!isAuthenticated) {
+            // Redirect to login
+            router.push('/login');
+            return;
         }
+
+        // Special handling for Projects & Tasks - role-based routing
+        if (route === '/projects-and-tasks') {
+            if (userRole === 'student') {
+                router.push('/projects-and-tasks/student');
+            } else if (userRole === 'lecture') {
+                router.push('/projects-and-tasks/lecturer');
+            } else {
+                // Fallback
+                router.push(route);
+            }
+            return;
+        }
+
+        // Navigate to the feature route for other features
+        router.push(route);
     };
 
     return (
@@ -194,8 +259,8 @@ const HeroSection: React.FC = () => {
                                 <button
                                     key={index}
                                     onClick={() => handleFeatureClick(feature.route)}
-                                    disabled={!feature.route}
-                                    className="flex flex-col items-center justify-center text-center group cursor-pointer transition-all duration-300 hover:-translate-y-2 disabled:cursor-default"
+                                    disabled={!feature.route || isCheckingAuth}
+                                    className="flex flex-col items-center justify-center text-center group cursor-pointer transition-all duration-300 hover:-translate-y-2 disabled:cursor-default disabled:opacity-50"
                                     style={{
                                         animation: `fadeInUp 0.6s ease-out forwards`,
                                         animationDelay: `${0.4 + index * 0.1}s`,
@@ -226,8 +291,8 @@ const HeroSection: React.FC = () => {
                         <button
                             key={index}
                             onClick={() => handleFeatureClick(feature.route)}
-                            disabled={!feature.route}
-                            className="flex flex-col items-center justify-center text-center group cursor-pointer transition-all duration-300 hover:-translate-y-2 disabled:cursor-default"
+                            disabled={!feature.route || isCheckingAuth}
+                            className="flex flex-col items-center justify-center text-center group cursor-pointer transition-all duration-300 hover:-translate-y-2 disabled:cursor-default disabled:opacity-50"
                             style={{
                                 animation: `fadeInUp 0.6s ease-out forwards`,
                                 animationDelay: `${0.4 + index * 0.1}s`,

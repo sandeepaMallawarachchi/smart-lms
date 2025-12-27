@@ -15,7 +15,9 @@ import {
   Briefcase,
   CheckCircle2,
   XCircle,
+  Plus,
 } from 'lucide-react';
+import RegisterLecturerModal from '@/components/Admin/RegisterLecturerModal';
 
 interface User {
   _id: string;
@@ -42,6 +44,7 @@ export default function AllUsersPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [approveLoading, setApproveLoading] = useState<string | null>(null);
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
 
   // Apply filter from URL on mount
   useEffect(() => {
@@ -167,6 +170,10 @@ export default function AllUsersPage() {
     }
   };
 
+  const handleRegisterSuccess = () => {
+    fetchUsers();
+  };
+
   const stats = {
     total: users.length,
     students: users.filter(u => u.userType === 'student').length,
@@ -239,6 +246,15 @@ export default function AllUsersPage() {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
+            {filterType === 'lecturer' && (
+              <button
+                onClick={() => setShowRegisterModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium"
+              >
+                <Plus size={20} />
+                New Lecturer
+              </button>
+            )}
 
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
@@ -454,6 +470,14 @@ export default function AllUsersPage() {
           </div>
         </div>
       )}
+
+      {/* Register Lecturer Modal */}
+      <RegisterLecturerModal
+        isOpen={showRegisterModal}
+        onClose={() => setShowRegisterModal(false)}
+        onSuccess={handleRegisterSuccess}
+      />
+
     </div>
   );
 }

@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Menu, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Menu, X, ChevronDown, LogOut } from 'lucide-react';
 
 interface NavItem {
   label: string;
@@ -30,9 +31,64 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [name, setUserName] = useState('');
+  const [userRole, setUserRole] = useState('');
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = localStorage.getItem('authToken');
+      const role = localStorage.getItem('userRole');
+
+      if (token) {
+        try {
+          const response = await fetch('/api/auth/verify', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            setIsAuthenticated(true);
+            setUserName(data.user?.name || 'User');
+            setUserRole(role || '');
+          } else {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('userRole');
+            setIsAuthenticated(false);
+          }
+        } catch (error) {
+          console.error('Auth verification error:', error);
+          setIsAuthenticated(false);
+        }
+      }
+    };
+
+    checkAuth();
+  }, []);
 
   const toggleDropdown = (label: string) => {
     setOpenDropdown(openDropdown === label ? null : label);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userRole');
+    setIsAuthenticated(false);
+    setUserName('');
+    setUserRole('');
+    setShowUserDropdown(false);
+    router.push('/');
+  };
+
+  const getRoleColor = () => {
+    if (userRole === 'student') return 'bg-green-500';
+    if (userRole === 'lecture') return 'bg-blue-500';
+    if (userRole === 'superadmin') return 'bg-purple-500';
+    return 'bg-gray-500';
   };
 
   return (
@@ -51,10 +107,10 @@ const Header: React.FC<HeaderProps> = ({
               <Link href="/" className="shrink-0">
                 <div className="md:border-r-3 md:border-l-3 border-brand-blue   w-72 h-18 flex items-center justify-center ">
                   <img
-                        src="/logo1.png"
-                        alt="logo"
-                        className="w-fit h-17 object-cover "
-                      />
+                    src="/logo1.png"
+                    alt="logo"
+                    className="w-fit h-17 object-cover "
+                  />
                 </div>
               </Link>
 
@@ -64,34 +120,67 @@ const Header: React.FC<HeaderProps> = ({
               </h1>
             </div>
 
-            {/* Right section - Login and mobile menu button */}
+            {/* Right section - Login/User info and mobile menu button */}
             <div className="flex items-center gap-4">
-              <div className="hidden lg:flex flex-col items-end gap-1">
-                <div className="text-xs text-gray-600 font-medium">
-                  LOG IN USING YOUR ACCOUNT ON:
+              {isAuthenticated ? (
+                // User is logged in - Show user info
+                <div className="hidden lg:block relative">
+                  <button
+                    onClick={() => setShowUserDropdown(!showUserDropdown)}
+                    className="flex items-center gap-3 hover:bg-gray-50 rounded-lg px-3 py-2 transition-colors"
+                  >
+                    <div className={`w-10 h-10 rounded-full ${getRoleColor()} flex items-center justify-center text-white font-semibold text-sm`}>
+                      {name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="text-left">
+                      <div className="text-sm font-medium text-gray-900">{name}</div>
+                      <div className="text-xs text-gray-500 capitalize">{userRole}</div>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showUserDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* User dropdown menu */}
+                  {showUserDropdown && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <LogOut size={16} />
+                        Logout
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <Link
-                  href={'/login'}
-                  className="flex items-center gap-2 bg-white border border-gray-300 rounded px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  <div className="w-5 h-5 rounded flex items-center justify-center text-white text-xs font-bold">
-                    <img
+              ) : (
+                // User is not logged in - Show login section
+                <div className="hidden lg:flex flex-col items-end gap-1">
+                  <div className="text-xs text-gray-600 font-medium">
+                    LOG IN USING YOUR ACCOUNT ON:
+                  </div>
+                  <Link
+                    href={'/login'}
+                    className="flex items-center gap-2 bg-white border border-gray-300 rounded px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="w-5 h-5 rounded flex items-center justify-center text-white text-xs font-bold">
+                      <img
                         src="/logo2.png"
                         alt="logo"
                         className="w-full h-full object-contain"
                       />
-                  </div>
-                  <span>LMS Login</span>
-                </Link>
-                {showForgotPassword && (
-                  <Link
-                    href="/forgot-password"
-                    className="text-xs text-brand-yellow hover:text-brand-yellow/80 font-medium mt-1"
-                  >
-                    Forgotten your password?
+                    </div>
+                    <span>LMS Login</span>
                   </Link>
-                )}
-              </div>
+                  {showForgotPassword && (
+                    <Link
+                      href="/forgot-password"
+                      className="text-xs text-brand-yellow hover:text-brand-yellow/80 font-medium mt-1"
+                    >
+                      Forgotten your password?
+                    </Link>
+                  )}
+                </div>
+              )}
 
               {/* Mobile menu button */}
               <button
@@ -113,11 +202,10 @@ const Header: React.FC<HeaderProps> = ({
               <div key={item.label} className="relative group">
                 <button
                   onClick={() => item.hasDropdown && toggleDropdown(item.label)}
-                  className={`px-6 py-3 text-sm font-medium transition-colors relative ${
-                    item.label === 'Home'
+                  className={`px-6 py-3 text-sm font-medium transition-colors relative ${item.label === 'Home'
                       ? 'bg-brand-yellow text-white'
                       : 'text-gray-700 hover:bg-gray-100'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-2">
                     <span>{item.label}</span>
@@ -170,19 +258,17 @@ const Header: React.FC<HeaderProps> = ({
                 <div key={item.label}>
                   <button
                     onClick={() => item.hasDropdown && toggleDropdown(item.label)}
-                    className={`w-full text-left px-4 py-2 text-sm font-medium rounded transition-colors ${
-                      item.label === 'Home'
+                    className={`w-full text-left px-4 py-2 text-sm font-medium rounded transition-colors ${item.label === 'Home'
                         ? 'bg-brand-yellow text-white'
                         : 'text-gray-700 hover:bg-gray-100'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <span>{item.label}</span>
                       {item.hasDropdown && (
                         <svg
-                          className={`w-4 h-4 transition-transform ${
-                            openDropdown === item.label ? 'rotate-180' : ''
-                          }`}
+                          className={`w-4 h-4 transition-transform ${openDropdown === item.label ? 'rotate-180' : ''
+                            }`}
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -219,33 +305,54 @@ const Header: React.FC<HeaderProps> = ({
               ))}
             </div>
 
-            {/* Mobile login section */}
-            <div className="border-t border-gray-200 px-4 py-4 space-y-3">
-              <div className="text-xs text-gray-600 font-medium">
-                LOG IN USING YOUR ACCOUNT ON:
-              </div>
-              <Link
-                href={'/login'}
-                className="w-full flex items-center justify-center gap-2 bg-white border border-gray-300 rounded px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                <div className="w-5 h-5 bg-brand-blue rounded flex items-center justify-center text-white text-xs font-bold">
-                   <img
-                        src="/logo2.png"
-                        alt="logo"
-                        className="w-full h-full object-contain"
-                      />
+            {/* Mobile login/user section */}
+            {isAuthenticated ? (
+              <div className="border-t border-gray-200 px-4 py-4 space-y-3">
+                <div className="flex items-center gap-3 pb-3">
+                  <div className={`w-10 h-10 rounded-full ${getRoleColor()} flex items-center justify-center text-white font-semibold text-sm`}>
+                    {name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">{name}</div>
+                    <div className="text-xs text-gray-500 capitalize">{userRole}</div>
+                  </div>
                 </div>
-                <span>LMS Login</span>
-              </Link>
-              {showForgotPassword && (
-                <Link
-                  href="/forgot-password"
-                  className="block text-center text-xs text-brand-yellow hover:text-brand-yellow/80 font-medium"
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                 >
-                  Forgotten your password?
+                  <LogOut size={16} />
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <div className="border-t border-gray-200 px-4 py-4 space-y-3">
+                <div className="text-xs text-gray-600 font-medium">
+                  LOG IN USING YOUR ACCOUNT ON:
+                </div>
+                <Link
+                  href={'/login'}
+                  className="w-full flex items-center justify-center gap-2 bg-white border border-gray-300 rounded px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="w-5 h-5 bg-brand-blue rounded flex items-center justify-center text-white text-xs font-bold">
+                    <img
+                      src="/logo2.png"
+                      alt="logo"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  <span>LMS Login</span>
                 </Link>
-              )}
-            </div>
+                {showForgotPassword && (
+                  <Link
+                    href="/forgot-password"
+                    className="block text-center text-xs text-brand-yellow hover:text-brand-yellow/80 font-medium"
+                  >
+                    Forgotten your password?
+                  </Link>
+                )}
+              </div>
+            )}
           </div>
         )}
       </header>

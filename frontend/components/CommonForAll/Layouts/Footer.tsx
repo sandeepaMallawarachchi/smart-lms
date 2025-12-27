@@ -24,12 +24,12 @@ interface FooterProps {
 }
 
 const Footer: React.FC<FooterProps> = ({
-  supportEmail = 'support@sliit.lk',
+  supportEmail = 'support@smartlms.lk',
   supportPhone = '+94 11 754 4801',
-  supportWebsite = 'https://www.sliit.lk',
-  feedbackButtonText = 'Provide Feedback to SLIIT',
+  supportWebsite = 'https://www.smartlms.lk',
+  feedbackButtonText = 'Provide Feedback to smartlms',
   copyrightYear = 2022,
-  copyrightOwner = 'SLIIT',
+  copyrightOwner = 'smartlms',
   socialLinks = {
     facebook: '#',
     twitter: '#',

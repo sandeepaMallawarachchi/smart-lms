@@ -1,33 +1,39 @@
 'use client';
 
-import React from 'react';
-import LecturerHeader from '@/components/projects-and-tasks/lecturer/LecturerHeader';
-import LecturerSidebar from '@/components/projects-and-tasks/lecturer/LecturerSidebar';
+import React, { useState } from 'react';
+import UnifiedHeader from '@/components/CommonForAll/Dashboard/UnifiedHeader';
+import UnifiedSidebar from '@/components/CommonForAll/Dashboard/UnifiedSidebar';
 
-interface LecturerLayoutProps {
-  children: React.ReactNode;
+interface AdminLayoutProps {
+    children: React.ReactNode;
 }
 
-export default function LecturerLayout({ children }: LecturerLayoutProps) {
-  return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
-      {/* Sidebar */}
-      <div className="flex-shrink-0">
-        <LecturerSidebar />
-      </div>
+export default function AdminLayout({ children }: AdminLayoutProps) {
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <LecturerHeader />
+    const handleSidebarToggle = () => {
+        setSidebarCollapsed(!sidebarCollapsed);
+    };
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-auto bg-gray-50 p-8">
-          <div className="max-w-7xl mx-auto">
-            {children}
-          </div>
-        </main>
-      </div>
-    </div>
-  );
+    return (
+        <div className="flex h-screen bg-gray-50 overflow-hidden">
+            {/* Sidebar */}
+            <div className="shrink-0">
+                <UnifiedSidebar userRole="superadmin" />
+            </div>
+
+            {/* Main Content */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Header */}
+                <UnifiedHeader userRole="superadmin" />
+
+                {/* Page Content */}
+                <main className="flex-1 overflow-auto bg-gray-50 p-8">
+                    <div className="max-w-7xl mx-auto">
+                        {children}
+                    </div>
+                </main>
+            </div>
+        </div>
+    );
 }

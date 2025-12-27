@@ -27,10 +27,10 @@ export default function Home() {
       </div>
 
       <Footer
-        supportEmail="support@sliit.lk"
+        supportEmail="support@smartlms.lk"
         supportPhone="+94 11 754 4801"
-        supportWebsite="https://www.sliit.lk"
-        copyrightOwner="SLIIT"
+        supportWebsite="https://www.smartlms.lk"
+        copyrightOwner="smartlms"
         socialLinks={{
           facebook: "https://facebook.com/...",
           twitter: "https://twitter.com/...",

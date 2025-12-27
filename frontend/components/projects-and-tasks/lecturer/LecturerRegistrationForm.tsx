@@ -133,7 +133,7 @@ export default function LecturerRegistrationForm() {
           type="email"
           value={formData.email}
           onChange={handleChange}
-          placeholder="lecturer@sliit.lk"
+          placeholder="lecturer@smartlms.lk"
           disabled={isLoading}
           className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed ${
             errors.email ? 'border-red-500' : 'border-gray-300'
