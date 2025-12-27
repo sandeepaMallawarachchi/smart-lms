@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server';
-import { connectDB } from '@/lib/projects-and-tasks/db';
+import { connectDB } from '@/lib/db';
 import Student from '@/model/projects-and-tasks/Student';
 import Lecturer from '@/model/projects-and-tasks/Lecturer';
-import { generateToken } from '@/lib/projects-and-tasks/jwt';
-import { successResponse, errorResponse, serverErrorResponse } from '@/lib/projects-and-tasks/api-response';
+import { generateToken } from '@/lib/jwt';
+import { successResponse, errorResponse, serverErrorResponse } from '@/lib/api-response';
 
 export async function POST(request: NextRequest) {
   try {

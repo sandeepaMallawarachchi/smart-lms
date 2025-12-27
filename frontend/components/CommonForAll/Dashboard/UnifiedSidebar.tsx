@@ -24,6 +24,7 @@ import {
   Activity,
   UserCog,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 type UserRole = 'student' | 'lecture' | 'superadmin';
 
@@ -255,10 +256,10 @@ const roleConfigs: Record<UserRole, RoleConfig> = {
         badge: 5,
         href: '/admin/users',
         subsections: [
-          { id: 'all-users', label: 'All Users' },
-          { id: 'students', label: 'Students' },
-          { id: 'lecturers', label: 'Lecturers' },
-          { id: 'pending-approvals', label: 'Pending Approvals', badge: 5 },
+          { id: 'all-users', label: 'All Users', href: '/admin/users' },
+          { id: 'students', label: 'Students', href: '/admin/users/students' },
+          { id: 'lecturers', label: 'Lecturers', href: '/admin/users/lecturers' },
+          { id: 'pending-approvals', label: 'Pending Approvals', href: '/admin/users/pending', badge: 5 },
         ],
       },
       {
@@ -338,6 +339,7 @@ interface UnifiedSidebarProps {
 }
 
 export default function UnifiedSidebar({ userRole }: UnifiedSidebarProps) {
+  const router = useRouter();
   const [expandedSections, setExpandedSections] = useState<string[]>(['dashboard', 'my-tasks']);
   const [activeSection, setActiveSection] = useState(userRole === 'student' ? 'my-tasks' : 'dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -350,19 +352,19 @@ export default function UnifiedSidebar({ userRole }: UnifiedSidebarProps) {
     );
   };
 
-  const handleNavigate = (id: string, hasSubsections: boolean) => {
+  const handleNavigate = (id: string, hasSubsections: boolean, href?: string) => {
     setActiveSection(id);
     if (hasSubsections && !sidebarCollapsed) {
       toggleSection(id);
+    } else if (href) {
+      router.push(href);
     }
   };
 
   return (
     <aside
-      className={`h-full bg-blue-50 border-t-4 border-brand-yellow flex flex-col overflow-y-auto scrollbar-hide shadow-sm transition-all duration-300 ${
-        sidebarCollapsed ? 'w-24' : 'w-72'
-      }`}
-      style={{ borderRight: '1px solid #242d66' }}
+      className={`h-full bg-blue-50 border-t-4 border-brand-yellow flex flex-col overflow-y-auto scrollbar-hide shadow-sm transition-all duration-300 ${sidebarCollapsed ? 'w-24' : 'w-72'
+        }`}
     >
       <div className="sticky z-20 top-0 px-6 py-5 border-b border-gray-200 bg-white shadow-md shrink-0">
         <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
@@ -421,12 +423,11 @@ export default function UnifiedSidebar({ userRole }: UnifiedSidebarProps) {
           return (
             <div key={item.id}>
               <button
-                onClick={() => handleNavigate(item.id, !!hasSubsections)}
-                className={`w-full flex items-center pl-6 px-2 py-3 rounded-r-full transition-all ${
-                  isActive
-                    ? 'bg-brand-yellow text-brand-blue shadow-lg rounded-r-full'
-                    : 'text-brand-blue hover:bg-brand-blue/10'
-                }`}
+                onClick={() => handleNavigate(item.id, !!hasSubsections, item.href)}
+                className={`w-full flex items-center pl-6 px-2 py-3 rounded-r-full transition-all ${isActive
+                  ? 'bg-brand-yellow text-brand-blue shadow-lg rounded-r-full'
+                  : 'text-brand-blue hover:bg-brand-blue/10'
+                  }`}
                 title={sidebarCollapsed ? item.label : undefined}
               >
                 <span className={isActive ? 'text-brand-blue' : 'text-brand-blue'}>{item.icon}</span>
@@ -464,6 +465,11 @@ export default function UnifiedSidebar({ userRole }: UnifiedSidebarProps) {
                   {item.subsections!.map((subsection) => (
                     <button
                       key={subsection.id}
+                      onClick={() => {
+                        if (subsection.href) {
+                          router.push(subsection.href);
+                        }
+                      }}
                       className="w-full text-left px-3 py-2 text-sm text-blue-800 hover:text-brand-yellow hover:bg-brand-blue/10 rounded-full transition-colors flex items-center justify-between"
                     >
                       <div className="flex items-center gap-2 min-w-0">
