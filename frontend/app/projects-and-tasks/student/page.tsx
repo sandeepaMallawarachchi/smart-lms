@@ -161,7 +161,7 @@ export default function StudentDashboard() {
           </div>
 
           {/* Daily Tip */}
-          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg shadow p-6 border border-green-200">
+          <div className="bg-linear-to-br from-green-50 to-green-100 rounded-lg shadow p-6 border border-green-200">
             <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
               💡 Daily Tip
             </h3>

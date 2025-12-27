@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import UnifiedHeader from '@/components/CommonForAll/Dashboard/UnifiedHeader';
+import UnifiedSidebar from '@/components/CommonForAll/Dashboard/UnifiedSidebar';
 
 interface AdminLayoutProps {
     children: React.ReactNode;
@@ -17,9 +18,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     return (
         <div className="flex h-screen bg-gray-50 overflow-hidden">
             {/* Sidebar */}
-            {/* <div className="flex-shrink-0">
-           <UnifiedSidebard />
-         </div> */}
+            <div className="shrink-0">
+                <UnifiedSidebar userRole="superadmin" />
+            </div>
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col overflow-hidden">
