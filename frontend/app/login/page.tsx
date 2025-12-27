@@ -44,11 +44,9 @@ export default function LoginPage() {
 
       // Navigate based on user role
       if (data.data.isSuperAdmin) {
-        router.push('/admin/dashboard');
-      } else if (data.data.userRole === 'student') {
-        router.push('/projects-and-tasks/student');
-      } else if (data.data.userRole === 'lecture') {
-        router.push('/projects-and-tasks/lecturer');
+        router.push('/admin/');
+      } else{
+        router.push('/');
       }
     } catch (err) {
       console.error('Login error:', err);
