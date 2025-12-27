@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   LayoutGrid,
   Trello,
@@ -247,19 +247,19 @@ const roleConfigs: Record<UserRole, RoleConfig> = {
         id: 'dashboard',
         label: 'Dashboard',
         icon: <LayoutDashboard size={22} />,
-        href: '/admin/dashboard',
+        href: '/admin/',
       },
       {
         id: 'user-management',
         label: 'User Management',
         icon: <UserCog size={22} />,
-        badge: 5,
+        badge: 0,
         href: '/admin/users',
         subsections: [
           { id: 'all-users', label: 'All Users', href: '/admin/users' },
-          { id: 'students', label: 'Students', href: '/admin/users/students' },
-          { id: 'lecturers', label: 'Lecturers', href: '/admin/users/lecturers' },
-          { id: 'pending-approvals', label: 'Pending Approvals', href: '/admin/users/pending', badge: 5 },
+          { id: 'students', label: 'Students', href: '/admin/users?filter=students' },
+          { id: 'lecturers', label: 'Lecturers', href: '/admin/users?filter=lecturers' },
+          { id: 'pending-approvals', label: 'Pending Approvals', href: '/admin/users?filter=pending', badge: 0 },
         ],
       },
       {
@@ -343,8 +343,7 @@ export default function UnifiedSidebar({ userRole }: UnifiedSidebarProps) {
   const [expandedSections, setExpandedSections] = useState<string[]>(['dashboard', 'my-tasks']);
   const [activeSection, setActiveSection] = useState(userRole === 'student' ? 'my-tasks' : 'dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  const config = roleConfigs[userRole];
+  const [pendingCount, setPendingCount] = useState(0);
 
   const toggleSection = (id: string) => {
     setExpandedSections((prev) =>
@@ -360,6 +359,48 @@ export default function UnifiedSidebar({ userRole }: UnifiedSidebarProps) {
       router.push(href);
     }
   };
+
+  useEffect(() => {
+    if (userRole === 'superadmin') {
+      fetchPendingCount();
+    }
+  }, [userRole]);
+
+  const fetchPendingCount = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch('/api/admin/users/pending', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setPendingCount(data.data.total);
+      }
+    } catch (error) {
+      console.error('Error fetching pending count:', error);
+    }
+  };
+
+  const config = roleConfigs[userRole];
+
+  // Update the config to use dynamic badge count
+  const updatedNavItems = config.navItems.map(item => {
+    if (userRole === 'superadmin' && item.id === 'user-management') {
+      return {
+        ...item,
+        badge: pendingCount,
+        subsections: item.subsections?.map(sub =>
+          sub.id === 'pending-approvals'
+            ? { ...sub, badge: pendingCount }
+            : sub
+        ),
+      };
+    }
+    return item;
+  });
 
   return (
     <aside
@@ -415,7 +456,7 @@ export default function UnifiedSidebar({ userRole }: UnifiedSidebarProps) {
       </div>
 
       <nav className="flex-1 pr-4 py-6 space-y-2 overflow-y-auto scrollbar-hide">
-        {config.navItems.map((item) => {
+        {updatedNavItems.map((item) => {
           const isExpanded = expandedSections.includes(item.id);
           const isActive = activeSection === item.id;
           const hasSubsections = item.subsections && item.subsections.length > 0;

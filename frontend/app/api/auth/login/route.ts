@@ -73,6 +73,12 @@ export async function POST(request: NextRequest) {
       }, 401);
     }
 
+    if (!user.isVerified) {
+      return errorResponse('Account pending approval', {
+        email: ['Your account is pending admin approval'],
+      }, 403);
+    }
+
     // Generate JWT token
     const token = generateToken({
       userId: user._id.toString(),

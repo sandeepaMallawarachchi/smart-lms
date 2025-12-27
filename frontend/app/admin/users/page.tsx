@@ -1,19 +1,20 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Search,
-  Filter,
   UserCircle,
   Mail,
   Calendar,
   Trash2,
   Eye,
-  MoreVertical,
   Download,
   Users,
   GraduationCap,
   Briefcase,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 
 interface User {
@@ -25,18 +26,35 @@ interface User {
   position?: string;
   department?: string;
   createdAt: string;
-  isApproved?: boolean;
+  isVerified?: boolean;
 }
 
 export default function AllUsersPage() {
+  const searchParams = useSearchParams();
+  const filterParam = searchParams.get('filter');
+
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'student' | 'lecturer'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'student' | 'lecturer' | 'pending'>('all');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [approveLoading, setApproveLoading] = useState<string | null>(null);
+
+  // Apply filter from URL on mount
+  useEffect(() => {
+    if (filterParam === 'students') {
+      setFilterType('student');
+    } else if (filterParam === 'lecturers') {
+      setFilterType('lecturer');
+    } else if (filterParam === 'pending') {
+      setFilterType('pending');
+    } else {
+      setFilterType('all');
+    }
+  }, [filterParam]);
 
   useEffect(() => {
     fetchUsers();
@@ -69,8 +87,12 @@ export default function AllUsersPage() {
   const filterUsers = () => {
     let filtered = users;
 
-    if (filterType !== 'all') {
-      filtered = filtered.filter(user => user.userType === filterType);
+    if (filterType === 'student') {
+      filtered = filtered.filter(user => user.userType === 'student');
+    } else if (filterType === 'lecturer') {
+      filtered = filtered.filter(user => user.userType === 'lecturer');
+    } else if (filterType === 'pending') {
+      filtered = filtered.filter(user => user.isVerified === false);
     }
 
     if (searchQuery) {
@@ -82,6 +104,37 @@ export default function AllUsersPage() {
     }
 
     setFilteredUsers(filtered);
+  };
+
+  const handleApproveReject = async (userId: string, userType: 'student' | 'lecturer', action: 'approve' | 'reject') => {
+    setApproveLoading(userId);
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch('/api/admin/users/approve', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+          userType,
+          action,
+        }),
+      });
+
+      if (response.ok) {
+        if (action === 'approve') {
+          setUsers(users.map(u => u._id === userId ? { ...u, isVerified: true } : u));
+        } else {
+          setUsers(users.filter(u => u._id !== userId));
+        }
+      }
+    } catch (error) {
+      console.error('Error approving/rejecting user:', error);
+    } finally {
+      setApproveLoading(null);
+    }
   };
 
   const handleDeleteUser = async () => {
@@ -118,6 +171,7 @@ export default function AllUsersPage() {
     total: users.length,
     students: users.filter(u => u.userType === 'student').length,
     lecturers: users.filter(u => u.userType === 'lecturer').length,
+    pending: users.filter(u => u.isVerified === false).length,
   };
 
   const formatDate = (dateString: string) => {
@@ -190,33 +244,39 @@ export default function AllUsersPage() {
               <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
                 <button
                   onClick={() => setFilterType('all')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    filterType === 'all'
-                      ? 'bg-white text-purple-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filterType === 'all'
+                    ? 'bg-white text-purple-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                    }`}
                 >
                   All
                 </button>
                 <button
                   onClick={() => setFilterType('student')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    filterType === 'student'
-                      ? 'bg-white text-purple-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filterType === 'student'
+                    ? 'bg-white text-purple-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                    }`}
                 >
                   Students
                 </button>
                 <button
                   onClick={() => setFilterType('lecturer')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    filterType === 'lecturer'
-                      ? 'bg-white text-purple-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filterType === 'lecturer'
+                    ? 'bg-white text-purple-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                    }`}
                 >
                   Lecturers
+                </button>
+                <button
+                  onClick={() => setFilterType('pending')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filterType === 'pending'
+                    ? 'bg-white text-purple-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                >
+                  Pending ({stats.pending})
                 </button>
               </div>
 
@@ -257,9 +317,8 @@ export default function AllUsersPage() {
                 <tr key={user._id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${
-                        user.userType === 'student' ? 'bg-green-500' : 'bg-blue-500'
-                      }`}>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${user.userType === 'student' ? 'bg-green-500' : 'bg-blue-500'
+                        }`}>
                         {user.name.charAt(0).toUpperCase()}
                       </div>
                       <div className="ml-4">
@@ -272,11 +331,10 @@ export default function AllUsersPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
-                      user.userType === 'student'
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-blue-100 text-blue-700'
-                    }`}>
+                    <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${user.userType === 'student'
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-blue-100 text-blue-700'
+                      }`}>
                       {user.userType === 'student' ? <GraduationCap size={14} /> : <Briefcase size={14} />}
                       {user.userType === 'student' ? 'Student' : 'Lecturer'}
                     </span>
@@ -288,8 +346,9 @@ export default function AllUsersPage() {
                     <Calendar size={14} />
                     {formatDate(user.createdAt)}
                   </td>
+
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {user.userType === 'lecturer' && user.isApproved === false ? (
+                    {user.isVerified === false ? (
                       <span className="inline-flex px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
                         Pending
                       </span>
@@ -299,9 +358,34 @@ export default function AllUsersPage() {
                       </span>
                     )}
                   </td>
+
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end gap-2">
-                      <button className="text-purple-600 hover:text-purple-900 p-2 hover:bg-purple-50 rounded-lg transition-colors">
+                      {user.isVerified === false && (
+                        <>
+                          <button
+                            onClick={() => handleApproveReject(user._id, user.userType, 'approve')}
+                            disabled={approveLoading === user._id}
+                            className="text-green-600 hover:text-green-900 p-2 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
+                            title="Approve"
+                          >
+                            {approveLoading === user._id ? (
+                              <div className="w-[18px] h-[18px] border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+                            ) : (
+                              <CheckCircle2 size={18} />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleApproveReject(user._id, user.userType, 'reject')}
+                            disabled={approveLoading === user._id}
+                            className="text-red-600 hover:text-red-900 p-2 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                            title="Reject"
+                          >
+                            <XCircle size={18} />
+                          </button>
+                        </>
+                      )}
+                      <button className="text-purple-600 hover:text-purple-900 p-2 hover:bg-purple-50 rounded-lg transition-colors" title="View">
                         <Eye size={18} />
                       </button>
                       <button
@@ -310,6 +394,7 @@ export default function AllUsersPage() {
                           setShowDeleteModal(true);
                         }}
                         className="text-red-600 hover:text-red-900 p-2 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete"
                       >
                         <Trash2 size={18} />
                       </button>

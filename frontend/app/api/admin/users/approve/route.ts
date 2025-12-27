@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/db';
+import Student from '@/model/Student';
 import Lecturer from '@/model/Lecturer';
 import { verifyToken } from '@/lib/jwt';
 import { successResponse, unauthorizedResponse, errorResponse, serverErrorResponse } from '@/lib/api-response';
@@ -22,40 +23,43 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { lecturerId, action } = body;
+    const { userId, userType, action } = body;
 
-    if (!lecturerId || !action) {
+    if (!userId || !userType || !action) {
       return errorResponse('Validation failed', {
-        lecturerId: !lecturerId ? ['Lecturer ID is required'] : [],
+        userId: !userId ? ['User ID is required'] : [],
+        userType: !userType ? ['User type is required'] : [],
         action: !action ? ['Action is required'] : [],
       }, 400);
     }
 
+    const Model = userType === 'student' ? Student : Lecturer;
+
     if (action === 'approve') {
-      const lecturer = await Lecturer.findByIdAndUpdate(
-        lecturerId,
-        { isApproved: true },
+      const user = await Model.findByIdAndUpdate(
+        userId,
+        { isVerified: true },
         { new: true }
       ).select('-password');
 
-      if (!lecturer) {
-        return errorResponse('Lecturer not found', {}, 404);
+      if (!user) {
+        return errorResponse('User not found', {}, 404);
       }
 
-      return successResponse('Lecturer approved successfully', { lecturer }, 200);
+      return successResponse(`${userType === 'student' ? 'Student' : 'Lecturer'} approved successfully`, { user }, 200);
     } else if (action === 'reject') {
-      const lecturer = await Lecturer.findByIdAndDelete(lecturerId);
+      const user = await Model.findByIdAndDelete(userId);
 
-      if (!lecturer) {
-        return errorResponse('Lecturer not found', {}, 404);
+      if (!user) {
+        return errorResponse('User not found', {}, 404);
       }
 
-      return successResponse('Lecturer rejected and removed', {}, 200);
+      return successResponse(`${userType === 'student' ? 'Student' : 'Lecturer'} rejected and removed`, {}, 200);
     } else {
       return errorResponse('Invalid action', { action: ['Action must be approve or reject'] }, 400);
     }
   } catch (error: any) {
-    console.error('Approve/reject lecturer error:', error);
+    console.error('Approve/reject user error:', error);
     return serverErrorResponse('An error occurred while processing the request');
   }
 }

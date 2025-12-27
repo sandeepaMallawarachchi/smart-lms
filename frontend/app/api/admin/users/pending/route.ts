@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/db';
+import Student from '@/model/Student';
 import Lecturer from '@/model/Lecturer';
 import { verifyToken } from '@/lib/jwt';
 import { successResponse, unauthorizedResponse, serverErrorResponse } from '@/lib/api-response';
@@ -21,14 +22,29 @@ export async function GET(request: NextRequest) {
       return unauthorizedResponse('Unauthorized access');
     }
 
-    const pendingLecturers = await Lecturer.find({ isApproved: false })
+    // Get pending students
+    const pendingStudents = await Student.find({ isVerified: false })
       .select('-password')
       .sort({ createdAt: -1 })
       .lean();
 
+    // Get pending lecturers
+    const pendingLecturers = await Lecturer.find({ isVerified: false })
+      .select('-password')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Combine and mark user types
+    const pendingUsers = [
+      ...pendingStudents.map(s => ({ ...s, userType: 'student' })),
+      ...pendingLecturers.map(l => ({ ...l, userType: 'lecturer' }))
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
     return successResponse('Pending approvals retrieved successfully', {
-      pendingLecturers,
-      total: pendingLecturers.length,
+      pendingUsers,
+      total: pendingUsers.length,
+      students: pendingStudents.length,
+      lecturers: pendingLecturers.length,
     }, 200);
   } catch (error: any) {
     console.error('Get pending approvals error:', error);
