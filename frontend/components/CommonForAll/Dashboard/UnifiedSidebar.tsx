@@ -268,9 +268,9 @@ const roleConfigs: Record<UserRole, RoleConfig> = {
         icon: <ListTodo size={22} />,
         href: '/admin/courses',
         subsections: [
-          { id: 'all-courses', label: 'All Courses' },
-          { id: 'create-course', label: 'Create Course' },
-          { id: 'archived-courses', label: 'Archived' },
+          { id: 'all-courses', label: 'All Courses', href: '/admin/courses' },
+          { id: 'active-courses', label: 'Active', href: '/admin/courses?filter=active' },
+          { id: 'archived-courses', label: 'Archived', href: '/admin/courses?filter=archived' },
         ],
       },
       {
