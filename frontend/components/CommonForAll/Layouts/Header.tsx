@@ -32,7 +32,7 @@ const Header: React.FC<HeaderProps> = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [name, setUserName] = useState('');
+  const [userName, setUserName] = useState(''); // Changed from 'name' to 'userName'
   const [userRole, setUserRole] = useState('');
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const router = useRouter();
@@ -53,7 +53,7 @@ const Header: React.FC<HeaderProps> = ({
           if (response.ok) {
             const data = await response.json();
             setIsAuthenticated(true);
-            setUserName(data.user?.name || 'User');
+            setUserName(data.data?.user?.name || 'User');
             setUserRole(role || '');
           } else {
             localStorage.removeItem('authToken');
@@ -130,10 +130,10 @@ const Header: React.FC<HeaderProps> = ({
                     className="flex items-center gap-3 hover:bg-gray-50 rounded-lg px-3 py-2 transition-colors"
                   >
                     <div className={`w-10 h-10 rounded-full ${getRoleColor()} flex items-center justify-center text-white font-semibold text-sm`}>
-                      {name.charAt(0).toUpperCase()}
+                      {userName.charAt(0).toUpperCase()}
                     </div>
                     <div className="text-left">
-                      <div className="text-sm font-medium text-gray-900">{name}</div>
+                      <div className="text-sm font-medium text-gray-900">{userName}</div>
                       <div className="text-xs text-gray-500 capitalize">{userRole}</div>
                     </div>
                     <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showUserDropdown ? 'rotate-180' : ''}`} />
@@ -203,8 +203,8 @@ const Header: React.FC<HeaderProps> = ({
                 <button
                   onClick={() => item.hasDropdown && toggleDropdown(item.label)}
                   className={`px-6 py-3 text-sm font-medium transition-colors relative ${item.label === 'Home'
-                      ? 'bg-brand-yellow text-white'
-                      : 'text-gray-700 hover:bg-gray-100'
+                    ? 'bg-brand-yellow text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
                     }`}
                 >
                   <div className="flex items-center gap-2">
@@ -259,8 +259,8 @@ const Header: React.FC<HeaderProps> = ({
                   <button
                     onClick={() => item.hasDropdown && toggleDropdown(item.label)}
                     className={`w-full text-left px-4 py-2 text-sm font-medium rounded transition-colors ${item.label === 'Home'
-                        ? 'bg-brand-yellow text-white'
-                        : 'text-gray-700 hover:bg-gray-100'
+                      ? 'bg-brand-yellow text-white'
+                      : 'text-gray-700 hover:bg-gray-100'
                       }`}
                   >
                     <div className="flex items-center justify-between">
@@ -310,10 +310,10 @@ const Header: React.FC<HeaderProps> = ({
               <div className="border-t border-gray-200 px-4 py-4 space-y-3">
                 <div className="flex items-center gap-3 pb-3">
                   <div className={`w-10 h-10 rounded-full ${getRoleColor()} flex items-center justify-center text-white font-semibold text-sm`}>
-                    {name.charAt(0).toUpperCase()}
+                    {userName.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-gray-900">{name}</div>
+                    <div className="text-sm font-medium text-gray-900">{userName}</div>
                     <div className="text-xs text-gray-500 capitalize">{userRole}</div>
                   </div>
                 </div>
