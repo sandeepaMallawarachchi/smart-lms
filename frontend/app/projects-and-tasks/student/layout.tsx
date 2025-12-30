@@ -4,11 +4,11 @@ import React, { useState } from 'react';
 import UnifiedHeader from '@/components/CommonForAll/Dashboard/UnifiedHeader';
 import UnifiedSidebar from '@/components/CommonForAll/Dashboard/UnifiedSidebar';
 
-interface AdminLayoutProps {
+interface StudentLayoutProps {
     children: React.ReactNode;
 }
 
-export default function AdminLayout({ children }: AdminLayoutProps) {
+export default function StudentLayout({ children }: StudentLayoutProps) {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
     const handleSidebarToggle = () => {
@@ -19,13 +19,13 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         <div className="flex h-screen bg-gray-50 overflow-hidden">
             {/* Sidebar */}
             <div className="shrink-0">
-                <UnifiedSidebar userRole="superadmin" />
+                <UnifiedSidebar userRole="student" />
             </div>
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Header */}
-                <UnifiedHeader userRole="superadmin" />
+                <UnifiedHeader userRole="student" />
 
                 {/* Page Content */}
                 <main className="flex-1 overflow-auto bg-gray-50 p-8">
