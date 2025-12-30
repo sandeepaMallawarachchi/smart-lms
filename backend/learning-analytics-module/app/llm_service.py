@@ -1,9 +1,11 @@
 """
-Intelligent Rule-Based Recommendation Service
-No external models required - fast, reliable, and personalized
+LLM-based Recommendation Service using Groq API
+Cloud-based, fast, reliable - no local model needed
 """
 
+import os
 import logging
+import requests
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -11,227 +13,230 @@ logger = logging.getLogger(__name__)
 
 class LLMRecommendationService:
     """
-    Generates personalized recommendations using intelligent rules
+    Generates personalized recommendations using Groq cloud API
     """
     
     def __init__(self):
+        self.api_url = "https://api.groq.com/openai/v1/chat/completions"
+        self.api_key = os.getenv('GROQ_API_KEY', '')
+        self.model = "llama-3.3-70b-versatile"
+        self.headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
         self.student_history = {}
+        
+        if not self.api_key:
+            logger.warning("GROQ_API_KEY not set in .env file")
     
     
     def generate_recommendations(self, student_data, prediction_result, student_id=None):
         """
-        Generate personalized recommendations based on student data and risk factors
+        Generate personalized recommendations using Groq API
         """
         try:
-            logger.info("Generating intelligent recommendations...")
+            if not self.api_key:
+                logger.warning("No API key.")
             
-            risk_level = prediction_result.get('risk_level', 'medium')
-            risk_factors = prediction_result.get('risk_factors', [])
+            logger.info("Generating LLM recommendations via Groq API...")
             
-            # Track student history for personalization
+            # Track history
             if student_id:
                 self._update_student_history(student_id, prediction_result)
             
-            # Generate context-aware recommendations
-            result = self._generate_personalized_recommendations(
-                student_data, 
-                prediction_result, 
-                risk_factors,
-                student_id
-            )
+            # Build prompt
+            prompt = self._build_prompt(student_data, prediction_result, student_id)
             
-            logger.info("✓ Recommendations generated successfully!")
+            # Call Groq API
+            response = self._call_groq_api(prompt)
+            
+            if not response:
+                logger.warning("API call failed.")
+            
+            # Parse response
+            result = self._parse_response(response)
+            result['source'] = 'groq_llm'
+            result['model'] = self.model
+            result['generated_at'] = datetime.utcnow().isoformat()
+            
+            logger.info("✓ LLM recommendations generated successfully!")
             return result
             
         except Exception as e:
-            logger.error(f"Error generating recommendations: {str(e)}")
-            return self._basic_recommendations(prediction_result)
+            logger.error(f"Error generating recommendations: {str(e)}")    
+    
+    def _call_groq_api(self, prompt):
+        """
+        Call Groq API to generate response
+        """
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are a supportive academic advisor helping university students succeed. Provide warm, actionable advice."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "max_tokens": 600,
+                "temperature": 0.7,
+                "top_p": 0.9
+            }
+            
+            response = requests.post(
+                self.api_url,
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                content = response.json()['choices'][0]['message']['content']
+                logger.info(f"API response received ({len(content)} chars)")
+                return content
+            else:
+                logger.error(f"API error: {response.status_code} - {response.text}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"API call failed: {str(e)}")
+            return None
     
     
-    def _generate_personalized_recommendations(self, student_data, prediction_result, risk_factors, student_id):
+    def _build_prompt(self, student_data, prediction_result, student_id):
         """
-        Generate highly personalized recommendations
+        Build prompt for LLM
         """
-        risk_level = prediction_result.get('risk_level', 'medium')
+        risk_level = prediction_result.get('risk_level', 'unknown')
         risk_prob = prediction_result.get('risk_probability', 0)
+        risk_factors = prediction_result.get('risk_factors', [])
         
-        # Check for improvement trend
-        is_improving = False
+        # Extract metrics
+        total_clicks = student_data.get('total_clicks', 0)
+        avg_score = student_data.get('avg_score', 0)
+        completion_rate = student_data.get('completion_rate', 0)
+        late_count = student_data.get('late_submission_count', 0)
+        
+        # Check improvement trend
+        trend_info = ""
         if student_id and student_id in self.student_history:
             history = self.student_history[student_id]
             if len(history) > 1:
                 is_improving = history[-1]['risk_prob'] < history[-2]['risk_prob']
+                trend_info = f"\n- Trend: {'Improving' if is_improving else 'Declining'} (monitored {len(history)} times)"
         
-        # Build detailed explanation
-        explanation = self._build_explanation(student_data, risk_level, risk_prob, risk_factors, is_improving)
+        # Format risk factors
+        challenges = []
+        for factor in risk_factors[:5]:
+            challenges.append(f"  - {factor['description']} (severity: {factor['severity']})")
+        challenges_text = "\n".join(challenges) if challenges else "  - No specific challenges identified"
         
-        # Build specific action steps
-        action_steps = self._build_action_steps(student_data, risk_factors, risk_level)
+        prompt = f"""A university student needs academic guidance based on their learning analytics.
+
+**Student Profile:**
+- Platform Engagement: {total_clicks:,} total interactions
+- Academic Performance: {avg_score:.1f}% average score
+- Completion Rate: {completion_rate:.0%}
+- Late Submissions: {late_count}
+- Risk Level: {risk_level.upper()} ({risk_prob:.0%} probability){trend_info}
+
+**Identified Challenges:**
+{challenges_text}
+
+**Your Task:**
+Provide friendly, actionable advice in exactly 3 sections:
+
+1. **EXPLANATION** (2-3 sentences):
+   - Explain WHY the student is at this risk level
+   - Reference specific metrics (engagement, performance, timing)
+   - Be warm and encouraging
+
+2. **ACTION STEPS** (3-5 bullet points):
+   - Specific, concrete actions they should take
+   - Prioritize based on their biggest challenges
+   - Make them achievable and realistic
+
+3. **MOTIVATION** (1-2 sentences):
+   - Encouraging message appropriate to their situation
+   - Focus on what they CAN control
+
+**Format your response exactly like this:**
+
+EXPLANATION:
+[Your 2-3 sentence explanation here]
+
+ACTION STEPS:
+- [First specific action]
+- [Second specific action]
+- [Third specific action]
+
+MOTIVATION:
+[Your encouraging message here]
+
+Be supportive, specific, and actionable. Focus on what the student can control."""
+
+        return prompt
+    
+    
+    def _parse_response(self, response_text):
+        """
+        Parse LLM response into structured format
+        """
+        import re
         
-        # Build motivational message
-        motivation = self._build_motivation(risk_level, is_improving, len(risk_factors))
-        
-        return {
-            'explanation': explanation,
-            'action_steps': action_steps,
-            'motivation': motivation,
-            'generated_at': datetime.utcnow().isoformat(),
-            'source': 'intelligent_rules',
-            'personalization_used': student_id is not None
+        result = {
+            'explanation': '',
+            'action_steps': [],
+            'motivation': ''
         }
-    
-    
-    def _build_explanation(self, data, risk_level, risk_prob, risk_factors, is_improving):
-        """
-        Build detailed, personalized explanation
-        """
-        total_clicks = data.get('total_clicks', 0)
-        avg_score = data.get('avg_score', 0)
-        completion_rate = data.get('completion_rate', 0)
-        late_count = data.get('late_submission_count', 0)
         
-        parts = []
+        # Extract EXPLANATION
+        explanation_match = re.search(r'EXPLANATION:\s*(.+?)(?=ACTION STEPS:|$)', response_text, re.DOTALL | re.IGNORECASE)
+        if explanation_match:
+            result['explanation'] = explanation_match.group(1).strip()
         
-        # Main risk assessment
-        if risk_level == 'high':
-            parts.append(f"You're currently at high risk ({risk_prob:.0%} probability) of academic difficulty.")
-        elif risk_level == 'medium':
-            parts.append(f"You're at moderate risk ({risk_prob:.0%} probability) and need to address some areas.")
-        else:
-            parts.append(f"You're performing well with low risk ({risk_prob:.0%} probability) of academic issues.")
+        # Extract ACTION STEPS
+        actions_match = re.search(r'ACTION STEPS:\s*(.+?)(?=MOTIVATION:|$)', response_text, re.DOTALL | re.IGNORECASE)
+        if actions_match:
+            actions_text = actions_match.group(1)
+            # Find all bullet points
+            bullets = re.findall(r'[-•*]\s*(.+)', actions_text)
+            result['action_steps'] = [b.strip() for b in bullets if len(b.strip()) > 10]
         
-        # Engagement analysis
-        if total_clicks < 1500:
-            parts.append(f"Your engagement is very low with only {total_clicks:,} platform interactions.")
-        elif total_clicks < 3000:
-            parts.append(f"Your engagement is moderate with {total_clicks:,} interactions, but consistency could improve.")
-        else:
-            parts.append(f"Your engagement is strong with {total_clicks:,} platform interactions.")
+        # Extract MOTIVATION
+        motivation_match = re.search(r'MOTIVATION:\s*(.+?)$', response_text, re.DOTALL | re.IGNORECASE)
+        if motivation_match:
+            result['motivation'] = motivation_match.group(1).strip()
         
-        # Performance analysis
-        if avg_score < 50:
-            parts.append(f"Your average score of {avg_score:.1f}% indicates you're struggling with course content.")
-        elif avg_score < 70:
-            parts.append(f"Your {avg_score:.1f}% average shows developing understanding that needs strengthening.")
-        else:
-            parts.append(f"Your {avg_score:.1f}% average demonstrates solid grasp of course material.")
+        # Fallback: use raw sections if parsing fails
+        if not result['explanation']:
+            lines = [l.strip() for l in response_text.split('\n') if l.strip()]
+            result['explanation'] = lines[0] if lines else "Based on your learning patterns, here's what we recommend."
         
-        # Submission timing
-        if late_count > 3:
-            parts.append(f"Time management is a concern with {late_count} late submissions.")
-        elif late_count > 0:
-            parts.append(f"You have {late_count} late submission(s) - maintaining deadlines is important.")
+        if not result['action_steps']:
+            result['action_steps'] = [
+                "Increase daily engagement with course materials",
+                "Complete all assessments on time",
+                "Seek help from instructors when needed"
+            ]
         
-        # Improvement trend
-        if is_improving:
-            parts.append("Positively, your recent patterns show improvement!")
+        if not result['motivation']:
+            result['motivation'] = "You can succeed with consistent effort and support!"
         
-        return ' '.join(parts)
-    
-    
-    def _build_action_steps(self, data, risk_factors, risk_level):
-        """
-        Build specific, actionable steps based on analysis
-        """
-        steps = []
-        factor_types = [f['factor'] for f in risk_factors]
-        
-        total_clicks = data.get('total_clicks', 0)
-        avg_score = data.get('avg_score', 0)
-        late_count = data.get('late_submission_count', 0)
-        completion_rate = data.get('completion_rate', 0)
-        
-        # Engagement actions
-        if total_clicks < 2000 or any('engagement' in f or 'click' in f or 'activity' in f for f in factor_types):
-            if total_clicks < 1000:
-                steps.append("Set a goal to log in daily and interact with course materials for at least 45 minutes")
-                steps.append("Complete all unfinished course activities and watch remaining lecture videos")
-            else:
-                steps.append("Increase your daily platform activity to at least 30 minutes of focused study")
-                steps.append("Engage with all available learning resources including forums and practice materials")
-        
-        # Performance actions
-        if avg_score < 70 or any('performance' in f or 'score' in f for f in factor_types):
-            if avg_score < 50:
-                steps.append("Schedule urgent meetings with your instructor to discuss struggling topics")
-                steps.append("Attend all tutoring sessions and form a study group with high-performing classmates")
-                steps.append("Review and redo all previous assessments to identify knowledge gaps")
-            else:
-                steps.append("Review course content thoroughly before each assessment using active learning techniques")
-                steps.append("Create summary notes and practice questions for challenging topics")
-        
-        # Completion actions
-        if completion_rate < 0.7 or any('completion' in f for f in factor_types):
-            steps.append("Prioritize completing all pending assessments immediately - focus on submission over perfection")
-            steps.append("Break large assignments into smaller daily tasks with specific completion targets")
-        
-        # Timing actions
-        if late_count > 2 or any('late' in f or 'timing' in f for f in factor_types):
-            if late_count > 5:
-                steps.append("Create a detailed weekly schedule with assignment deadlines highlighted and set multiple reminders")
-                steps.append("Start every assignment the day it's assigned, even if just reading requirements")
-            else:
-                steps.append("Build a buffer by starting assignments 5-7 days before deadlines")
-                steps.append("Use a calendar app with alerts set 3 days, 1 day, and 6 hours before each deadline")
-        
-        # Previous attempts
-        if any('previous' in f or 'attempt' in f for f in factor_types):
-            steps.append("Reflect on what didn't work in your previous attempt and create a new strategy")
-            steps.append("Seek additional support resources that weren't used before")
-        
-        # General high-priority actions if specific ones don't apply
-        if len(steps) == 0:
-            if risk_level == 'high':
-                steps.extend([
-                    "Meet with your academic advisor immediately to create an action plan",
-                    "Dedicate at least 2 hours daily to this course for the next two weeks",
-                    "Eliminate distractions during study time and use focused study techniques"
-                ])
-            elif risk_level == 'medium':
-                steps.extend([
-                    "Increase your study time by 30 minutes per day",
-                    "Actively participate in all class discussions and group activities",
-                    "Complete practice problems and self-tests regularly"
-                ])
-            else:
-                steps.extend([
-                    "Maintain your current positive study habits and engagement level",
-                    "Continue submitting work early and reviewing feedback carefully",
-                    "Consider helping peers to reinforce your own understanding"
-                ])
-        
-        # Ensure we have enough actionable steps
-        if len(steps) < 3:
-            steps.append("Check the course announcements and syllabus daily for any updates")
-            steps.append("Reach out to your instructor if you're unsure about any requirements")
-        
-        return steps[:6]  # Return top 6 most relevant actions
-    
-    
-    def _build_motivation(self, risk_level, is_improving, num_risk_factors):
-        """
-        Build encouraging, contextual motivation message
-        """
-        if is_improving:
-            return "Great progress! Your recent improvements show you're capable of success. Keep up this positive momentum and stay consistent with your efforts!"
-        
-        if risk_level == 'high':
-            if num_risk_factors >= 4:
-                return "This is challenging, but not impossible! Many students have recovered from similar situations. Take it one task at a time, ask for help, and don't give up. Your instructors want to see you succeed!"
-            else:
-                return "You can turn this around! Focus on the specific actions above, reach out for support, and commit to daily progress. Success is within your reach!"
-        
-        elif risk_level == 'medium':
-            return "You're in a good position to improve! Small, consistent changes in your study habits will lead to significant results. Stay focused and proactive!"
-        
-        else:
-            return "Excellent work! Your dedication and consistent efforts are clearly paying off. Keep maintaining these strong habits and you'll continue to excel!"
+        return result
     
     
     def _update_student_history(self, student_id, prediction_result):
-        """
-        Track student history for trend analysis
-        """
+        """Track student history for trend analysis"""
         if student_id not in self.student_history:
             self.student_history[student_id] = []
         
@@ -241,28 +246,8 @@ class LLMRecommendationService:
             'risk_level': prediction_result.get('risk_level', 'unknown')
         })
         
-        # Keep only last 10 predictions
         if len(self.student_history[student_id]) > 10:
             self.student_history[student_id] = self.student_history[student_id][-10:]
-    
-    
-    def _basic_recommendations(self, prediction_result):
-        """
-        Basic fallback if something goes wrong
-        """
-        risk_level = prediction_result.get('risk_level', 'medium')
-        
-        return {
-            'explanation': f"You are currently at {risk_level} risk based on your learning patterns.",
-            'action_steps': [
-                "Review course materials regularly",
-                "Complete assignments on time",
-                "Seek help when needed"
-            ],
-            'motivation': "Stay consistent and reach out for support!",
-            'generated_at': datetime.utcnow().isoformat(),
-            'source': 'basic_fallback'
-        }
 
 
 llm_service = LLMRecommendationService()
