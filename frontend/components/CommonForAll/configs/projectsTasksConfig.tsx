@@ -1,0 +1,319 @@
+import React from 'react';
+import {
+  LayoutGrid,
+  Trello,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Users,
+  BarChart3,
+  Lightbulb,
+  LayoutDashboard,
+  ListTodo,
+  Settings,
+  FileText,
+} from 'lucide-react';
+
+interface SubSection {
+  id: string;
+  label: string;
+  badge?: number;
+  href?: string;
+}
+
+interface NavItem {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  description?: string;
+  badge?: number | string;
+  href?: string;
+  subsections?: SubSection[];
+}
+
+interface Notification {
+  id: number;
+  message: string;
+  time: string;
+  type: 'alert' | 'warning' | 'info' | 'success';
+  icon: React.ComponentType<any>;
+}
+
+interface SidebarConfig {
+  roleLabel?: string;
+  showStats?: boolean;
+  stats?: {
+    total: number;
+    dueSoon: number;
+  };
+  navItems: NavItem[];
+  showTip?: boolean;
+  tipContent?: {
+    title: string;
+    description: string;
+  };
+}
+
+interface HeaderConfig {
+  courseCode: string;
+  courseName: string;
+  searchPlaceholder: string;
+  avatarColor: string;
+  primaryColor: string;
+  notifications: Notification[];
+  showPendingTasks?: boolean;
+  pendingTasksCount?: number;
+}
+
+interface ModuleConfig {
+  header: HeaderConfig;
+  sidebar: SidebarConfig;
+}
+
+export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = {
+  student: {
+    header: {
+      courseCode: 'IT22001',
+      courseName: 'Software Engineering - Semester 1',
+      searchPlaceholder: 'Search tasks, teammates, projects...',
+      avatarColor: 'from-green-500 to-green-600',
+      primaryColor: 'green',
+      showPendingTasks: true,
+      pendingTasksCount: 5,
+      notifications: [
+        {
+          id: 1,
+          message: 'Task "UI Design" is overdue',
+          time: '2 hours ago',
+          type: 'alert',
+          icon: AlertCircle,
+        },
+        {
+          id: 2,
+          message: 'Reminder: Deadline for "API Integration" in 24 hours',
+          time: '1 hour ago',
+          type: 'warning',
+          icon: Clock,
+        },
+        {
+          id: 3,
+          message: 'Team member "Sandhya" commented on "Database Design"',
+          time: '30 minutes ago',
+          type: 'info',
+          icon: AlertCircle,
+        },
+      ],
+    },
+    sidebar: {
+      showStats: true,
+      stats: {
+        total: 12,
+        dueSoon: 5,
+      },
+      navItems: [
+        {
+          id: 'my-tasks',
+          label: 'My Tasks',
+          icon: <LayoutGrid size={20} />,
+          description: 'Your personal task board',
+          badge: 5,
+          href: '/projects-and-tasks/student/tasks',
+          subsections: [
+            { id: 'all-tasks', label: 'All Tasks', badge: 12 },
+            { id: 'in-progress', label: 'In Progress', badge: 4 },
+            { id: 'pending', label: 'Pending', badge: 5 },
+            { id: 'completed', label: 'Completed', badge: 3 },
+          ],
+        },
+        {
+          id: 'projects',
+          label: 'Group Projects',
+          icon: <Trello size={20} />,
+          description: 'Team collaboration boards',
+          badge: 3,
+          href: '/projects-and-tasks/student/projects',
+          subsections: [
+            { id: 'active-projects', label: 'Active Projects' },
+            { id: 'upcoming', label: 'Upcoming' },
+            { id: 'archived', label: 'Archived' },
+          ],
+        },
+        {
+          id: 'deadlines',
+          label: 'Upcoming Deadlines',
+          icon: <Clock size={20} />,
+          description: 'Timeline & reminders',
+          badge: 5,
+          href: '/projects-and-tasks/student/deadlines',
+          subsections: [
+            { id: 'this-week', label: 'This Week', badge: 2 },
+            { id: 'next-week', label: 'Next Week', badge: 3 },
+            { id: 'this-month', label: 'This Month', badge: 5 },
+          ],
+        },
+        {
+          id: 'at-risk',
+          label: 'Tasks at Risk',
+          icon: <AlertCircle size={20} />,
+          description: 'Overdue & warnings',
+          badge: 1,
+          href: '/projects-and-tasks/student/at-risk',
+        },
+        {
+          id: 'team-view',
+          label: 'Team Collaboration',
+          icon: <Users size={20} />,
+          description: 'See team progress',
+          href: '/projects-and-tasks/student/team',
+          subsections: [
+            { id: 'team-members', label: 'Team Members' },
+            { id: 'team-workload', label: 'Workload Distribution' },
+            { id: 'team-timeline', label: 'Team Timeline' },
+            { id: 'comments', label: 'Comments & Updates' },
+          ],
+        },
+        {
+          id: 'analytics',
+          label: 'My Progress',
+          icon: <BarChart3 size={20} />,
+          description: 'Performance insights',
+          href: '/projects-and-tasks/student/progress',
+          subsections: [
+            { id: 'completion-rate', label: 'Completion Rate' },
+            { id: 'productivity-trends', label: 'Productivity Trends' },
+            { id: 'time-management', label: 'Time Management' },
+          ],
+        },
+        {
+          id: 'help',
+          label: 'Tips & Learning',
+          icon: <Lightbulb size={20} />,
+          description: 'How to manage tasks effectively',
+          href: '/projects-and-tasks/student/help',
+          subsections: [
+            { id: 'getting-started', label: 'Getting Started' },
+            { id: 'kanban-guide', label: 'Kanban Guide' },
+            { id: 'best-practices', label: 'Best Practices' },
+          ],
+        },
+      ],
+      showTip: true,
+      tipContent: {
+        title: 'Daily Tip',
+        description: 'Break large tasks into smaller subtasks. This helps you stay organized and track progress more effectively.',
+      },
+    },
+  },
+  lecture: {
+    header: {
+      courseCode: 'IT22001',
+      courseName: 'Software Engineering - Semester 1',
+      searchPlaceholder: 'Search tasks, students, projects...',
+      avatarColor: 'from-blue-500 to-blue-600',
+      primaryColor: 'blue',
+      notifications: [
+        {
+          id: 1,
+          message: 'Team "Group A" has completed milestone 1',
+          time: '2 hours ago',
+          type: 'success',
+          icon: AlertCircle,
+        },
+        {
+          id: 2,
+          message: 'Workload imbalance detected in "Group B"',
+          time: '1 hour ago',
+          type: 'warning',
+          icon: AlertCircle,
+        },
+        {
+          id: 3,
+          message: 'Task bottleneck in "Project X"',
+          time: '30 minutes ago',
+          type: 'alert',
+          icon: Clock,
+        },
+      ],
+    },
+    sidebar: {
+      roleLabel: 'Lecturer',
+      navItems: [
+        {
+          id: 'dashboard',
+          label: 'Dashboard',
+          icon: <LayoutDashboard size={22} />,
+          href: '/projects-and-tasks/lecturer/dashboard',
+        },
+        {
+          id: 'projects',
+          label: 'Projects & Tasks',
+          icon: <ListTodo size={22} />,
+          href: '/projects-and-tasks/lecturer/projects',
+          subsections: [
+            { id: 'all-projects', label: 'All Projects', href: '/projects-and-tasks/lecturer/projects' },
+            { id: 'create-project', label: 'Create Project', href: '/projects-and-tasks/lecturer/projects' },
+            { id: 'templates', label: 'Templates', href: '/projects-and-tasks/lecturer/projects' },
+          ],
+        },
+        {
+          id: 'analytics',
+          label: 'Analytics',
+          icon: <BarChart3 size={22} />,
+          badge: 3,
+          href: '/projects-and-tasks/lecturer/analytics',
+          subsections: [
+            { id: 'activity-heatmap', label: 'Activity Heatmap' },
+            { id: 'workload-distribution', label: 'Workload' },
+            { id: 'completion-trends', label: 'Trends' },
+            { id: 'deadline-adherence', label: 'Deadlines' },
+          ],
+        },
+        {
+          id: 'teams',
+          label: 'Teams',
+          icon: <Users size={22} />,
+          href: '/projects-and-tasks/lecturer/teams',
+          subsections: [
+            { id: 'all-teams', label: 'All Teams' },
+            { id: 'team-performance', label: 'Performance' },
+            { id: 'collaboration-metrics', label: 'Collaboration' },
+          ],
+        },
+        {
+          id: 'interventions',
+          label: 'Alerts',
+          icon: <AlertCircle size={22} />,
+          badge: 2,
+          href: '/projects-and-tasks/lecturer/interventions',
+          subsections: [
+            { id: 'at-risk-projects', label: 'At-Risk' },
+            { id: 'inactivity-alerts', label: 'Inactivity' },
+            { id: 'deadline-warnings', label: 'Warnings' },
+          ],
+        },
+        {
+          id: 'reports',
+          label: 'Reports',
+          icon: <FileText size={22} />,
+          href: '/projects-and-tasks/lecturer/reports',
+          subsections: [
+            { id: 'project-summary', label: 'Summary' },
+            { id: 'student-progress', label: 'Progress' },
+            { id: 'export-data', label: 'Export' },
+          ],
+        },
+        {
+          id: 'settings',
+          label: 'Settings',
+          icon: <Settings size={22} />,
+          href: '/projects-and-tasks/lecturer/settings',
+          subsections: [
+            { id: 'notification-settings', label: 'Notifications' },
+            { id: 'assignment-linking', label: 'Assignments' },
+            { id: 'grading-rubrics', label: 'Grading' },
+          ],
+        },
+      ],
+    },
+  },
+};

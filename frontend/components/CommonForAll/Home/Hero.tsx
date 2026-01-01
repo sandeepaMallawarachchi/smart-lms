@@ -86,7 +86,7 @@ const HeroSection: React.FC = () => {
                 <Image src="/commonforall/hero/4.svg" alt="Learning Progress & Insights" width={48} height={48} />
             ),
             label: 'Learning Progress & Insights',
-            route: '/learning-progress',
+            route: '/learning-analytics',
         },
     ];
     // ===== END EMBEDDED DATA =====
@@ -174,6 +174,16 @@ const HeroSection: React.FC = () => {
                 router.push('/projects-and-tasks/student');
             } else if (userRole === 'lecture') {
                 router.push('/projects-and-tasks/lecturer');
+            } else {
+                // Fallback
+                router.push(route);
+            }
+            return;
+        } else if (route === '/learning-analytics') {
+            if (userRole === 'student') {
+                router.push('/learning-analytics/student');
+            } else if (userRole === 'lecture') {
+                router.push('/learning-analytics/lecturer');
             } else {
                 // Fallback
                 router.push(route);

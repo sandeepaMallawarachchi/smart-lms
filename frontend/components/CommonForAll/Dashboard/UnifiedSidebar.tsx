@@ -25,6 +25,7 @@ import {
   UserCog,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useModuleConfig } from '@/hooks/useModuleConfig';
 
 type UserRole = 'student' | 'lecture' | 'superadmin';
 
@@ -60,278 +61,98 @@ interface RoleConfig {
   };
 }
 
-const roleConfigs: Record<UserRole, RoleConfig> = {
-  student: {
-    showStats: true,
-    stats: {
-      total: 12,
-      dueSoon: 5,
+// Fallback config for superadmin
+const superadminConfig: RoleConfig = {
+  roleLabel: 'Super Admin',
+  navItems: [
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      icon: <LayoutDashboard size={22} />,
+      href: '/admin/',
     },
-    navItems: [
-      {
-        id: 'my-tasks',
-        label: 'My Tasks',
-        icon: <LayoutGrid size={20} />,
-        description: 'Your personal task board',
-        badge: 5,
-        href: '/student/tasks',
-        subsections: [
-          { id: 'all-tasks', label: 'All Tasks', badge: 12 },
-          { id: 'in-progress', label: 'In Progress', badge: 4 },
-          { id: 'pending', label: 'Pending', badge: 5 },
-          { id: 'completed', label: 'Completed', badge: 3 },
-        ],
-      },
-      {
-        id: 'projects',
-        label: 'Group Projects',
-        icon: <Trello size={20} />,
-        description: 'Team collaboration boards',
-        badge: 3,
-        href: '/student/projects',
-        subsections: [
-          { id: 'active-projects', label: 'Active Projects' },
-          { id: 'upcoming', label: 'Upcoming' },
-          { id: 'archived', label: 'Archived' },
-        ],
-      },
-      {
-        id: 'deadlines',
-        label: 'Upcoming Deadlines',
-        icon: <Clock size={20} />,
-        description: 'Timeline & reminders',
-        badge: 5,
-        href: '/student/deadlines',
-        subsections: [
-          { id: 'this-week', label: 'This Week', badge: 2 },
-          { id: 'next-week', label: 'Next Week', badge: 3 },
-          { id: 'this-month', label: 'This Month', badge: 5 },
-        ],
-      },
-      {
-        id: 'at-risk',
-        label: 'Tasks at Risk',
-        icon: <AlertCircle size={20} />,
-        description: 'Overdue & warnings',
-        badge: 1,
-        href: '/student/at-risk',
-      },
-      {
-        id: 'team-view',
-        label: 'Team Collaboration',
-        icon: <Users size={20} />,
-        description: 'See team progress',
-        href: '/student/team',
-        subsections: [
-          { id: 'team-members', label: 'Team Members' },
-          { id: 'team-workload', label: 'Workload Distribution' },
-          { id: 'team-timeline', label: 'Team Timeline' },
-          { id: 'comments', label: 'Comments & Updates' },
-        ],
-      },
-      {
-        id: 'analytics',
-        label: 'My Progress',
-        icon: <BarChart3 size={20} />,
-        description: 'Performance insights',
-        href: '/student/progress',
-        subsections: [
-          { id: 'completion-rate', label: 'Completion Rate' },
-          { id: 'productivity-trends', label: 'Productivity Trends' },
-          { id: 'time-management', label: 'Time Management' },
-        ],
-      },
-      {
-        id: 'help',
-        label: 'Tips & Learning',
-        icon: <Lightbulb size={20} />,
-        description: 'How to manage tasks effectively',
-        href: '/student/help',
-        subsections: [
-          { id: 'getting-started', label: 'Getting Started' },
-          { id: 'kanban-guide', label: 'Kanban Guide' },
-          { id: 'best-practices', label: 'Best Practices' },
-        ],
-      },
-    ],
-    showTip: true,
-    tipContent: {
-      title: 'Daily Tip',
-      description: 'Break large tasks into smaller subtasks. This helps you stay organized and track progress more effectively.',
+    {
+      id: 'user-management',
+      label: 'User Management',
+      icon: <UserCog size={22} />,
+      badge: 0,
+      href: '/admin/users',
+      subsections: [
+        { id: 'all-users', label: 'All Users', href: '/admin/users' },
+        { id: 'students', label: 'Students', href: '/admin/users?filter=students' },
+        { id: 'lecturers', label: 'Lecturers', href: '/admin/users?filter=lecturers' },
+        { id: 'pending-approvals', label: 'Pending Approvals', href: '/admin/users?filter=pending', badge: 0 },
+      ],
     },
-  },
-  lecture: {
-    roleLabel: 'Lecturer',
-    navItems: [
-      {
-        id: 'dashboard',
-        label: 'Dashboard',
-        icon: <LayoutDashboard size={22} />,
-        href: '/lecturer/dashboard',
-      },
-      {
-        id: 'projects',
-        label: 'Projects & Tasks',
-        icon: <ListTodo size={22} />,
-        href: '/lecturer/projects',
-        subsections: [
-          { id: 'all-projects', label: 'All Projects', href: '/lecturer/projects' },
-          { id: 'create-project', label: 'Create Project', href: '/lecturer/projects' },
-          { id: 'templates', label: 'Templates', href: '/lecturer/projects' },
-        ],
-      },
-      {
-        id: 'analytics',
-        label: 'Analytics',
-        icon: <BarChart3 size={22} />,
-        badge: 3,
-        href: '/lecturer/analytics',
-        subsections: [
-          { id: 'activity-heatmap', label: 'Activity Heatmap' },
-          { id: 'workload-distribution', label: 'Workload' },
-          { id: 'completion-trends', label: 'Trends' },
-          { id: 'deadline-adherence', label: 'Deadlines' },
-        ],
-      },
-      {
-        id: 'teams',
-        label: 'Teams',
-        icon: <Users size={22} />,
-        href: '/lecturer/teams',
-        subsections: [
-          { id: 'all-teams', label: 'All Teams' },
-          { id: 'team-performance', label: 'Performance' },
-          { id: 'collaboration-metrics', label: 'Collaboration' },
-        ],
-      },
-      {
-        id: 'interventions',
-        label: 'Alerts',
-        icon: <AlertCircle size={22} />,
-        badge: 2,
-        href: '/lecturer/interventions',
-        subsections: [
-          { id: 'at-risk-projects', label: 'At-Risk' },
-          { id: 'inactivity-alerts', label: 'Inactivity' },
-          { id: 'deadline-warnings', label: 'Warnings' },
-        ],
-      },
-      {
-        id: 'reports',
-        label: 'Reports',
-        icon: <FileText size={22} />,
-        href: '/lecturer/reports',
-        subsections: [
-          { id: 'project-summary', label: 'Summary' },
-          { id: 'student-progress', label: 'Progress' },
-          { id: 'export-data', label: 'Export' },
-        ],
-      },
-      {
-        id: 'settings',
-        label: 'Settings',
-        icon: <Settings size={22} />,
-        href: '/lecturer/settings',
-        subsections: [
-          { id: 'notification-settings', label: 'Notifications' },
-          { id: 'assignment-linking', label: 'Assignments' },
-          { id: 'grading-rubrics', label: 'Grading' },
-        ],
-      },
-    ],
-  },
-  superadmin: {
-    roleLabel: 'Super Admin',
-    navItems: [
-      {
-        id: 'dashboard',
-        label: 'Dashboard',
-        icon: <LayoutDashboard size={22} />,
-        href: '/admin/',
-      },
-      {
-        id: 'user-management',
-        label: 'User Management',
-        icon: <UserCog size={22} />,
-        badge: 0,
-        href: '/admin/users',
-        subsections: [
-          { id: 'all-users', label: 'All Users', href: '/admin/users' },
-          { id: 'students', label: 'Students', href: '/admin/users?filter=students' },
-          { id: 'lecturers', label: 'Lecturers', href: '/admin/users?filter=lecturers' },
-          { id: 'pending-approvals', label: 'Pending Approvals', href: '/admin/users?filter=pending', badge: 0 },
-        ],
-      },
-      {
-        id: 'courses',
-        label: 'Course Management',
-        icon: <ListTodo size={22} />,
-        href: '/admin/courses',
-        subsections: [
-          { id: 'all-courses', label: 'All Courses', href: '/admin/courses' },
-          { id: 'active-courses', label: 'Active', href: '/admin/courses?filter=active' },
-          { id: 'archived-courses', label: 'Archived', href: '/admin/courses?filter=archived' },
-        ],
-      },
-      {
-        id: 'system-analytics',
-        label: 'System Analytics',
-        icon: <Activity size={22} />,
-        href: '/admin/analytics',
-        subsections: [
-          { id: 'platform-usage', label: 'Platform Usage' },
-          { id: 'performance-metrics', label: 'Performance' },
-          { id: 'user-engagement', label: 'Engagement' },
-        ],
-      },
-      {
-        id: 'database',
-        label: 'Database',
-        icon: <Database size={22} />,
-        href: '/admin/database',
-        subsections: [
-          { id: 'backups', label: 'Backups' },
-          { id: 'data-integrity', label: 'Data Integrity' },
-          { id: 'maintenance', label: 'Maintenance' },
-        ],
-      },
-      {
-        id: 'security',
-        label: 'Security & Logs',
-        icon: <Shield size={22} />,
-        badge: 2,
-        href: '/admin/security',
-        subsections: [
-          { id: 'access-logs', label: 'Access Logs' },
-          { id: 'security-alerts', label: 'Security Alerts', badge: 2 },
-          { id: 'permissions', label: 'Permissions' },
-        ],
-      },
-      {
-        id: 'reports',
-        label: 'Reports',
-        icon: <FileText size={22} />,
-        href: '/admin/reports',
-        subsections: [
-          { id: 'system-reports', label: 'System Reports' },
-          { id: 'user-reports', label: 'User Reports' },
-          { id: 'export-data', label: 'Export Data' },
-        ],
-      },
-      {
-        id: 'settings',
-        label: 'System Settings',
-        icon: <Settings size={22} />,
-        href: '/admin/settings',
-        subsections: [
-          { id: 'general-settings', label: 'General' },
-          { id: 'email-settings', label: 'Email Config' },
-          { id: 'notification-settings', label: 'Notifications' },
-          { id: 'backup-settings', label: 'Backup Config' },
-        ],
-      },
-    ],
-  },
+    {
+      id: 'courses',
+      label: 'Course Management',
+      icon: <ListTodo size={22} />,
+      href: '/admin/courses',
+      subsections: [
+        { id: 'all-courses', label: 'All Courses', href: '/admin/courses' },
+        { id: 'active-courses', label: 'Active', href: '/admin/courses?filter=active' },
+        { id: 'archived-courses', label: 'Archived', href: '/admin/courses?filter=archived' },
+      ],
+    },
+    {
+      id: 'system-analytics',
+      label: 'System Analytics',
+      icon: <Activity size={22} />,
+      href: '/admin/analytics',
+      subsections: [
+        { id: 'platform-usage', label: 'Platform Usage' },
+        { id: 'performance-metrics', label: 'Performance' },
+        { id: 'user-engagement', label: 'Engagement' },
+      ],
+    },
+    {
+      id: 'database',
+      label: 'Database',
+      icon: <Database size={22} />,
+      href: '/admin/database',
+      subsections: [
+        { id: 'backups', label: 'Backups' },
+        { id: 'data-integrity', label: 'Data Integrity' },
+        { id: 'maintenance', label: 'Maintenance' },
+      ],
+    },
+    {
+      id: 'security',
+      label: 'Security & Logs',
+      icon: <Shield size={22} />,
+      badge: 2,
+      href: '/admin/security',
+      subsections: [
+        { id: 'access-logs', label: 'Access Logs' },
+        { id: 'security-alerts', label: 'Security Alerts', badge: 2 },
+        { id: 'permissions', label: 'Permissions' },
+      ],
+    },
+    {
+      id: 'reports',
+      label: 'Reports',
+      icon: <FileText size={22} />,
+      href: '/admin/reports',
+      subsections: [
+        { id: 'system-reports', label: 'System Reports' },
+        { id: 'user-reports', label: 'User Reports' },
+        { id: 'export-data', label: 'Export Data' },
+      ],
+    },
+    {
+      id: 'settings',
+      label: 'System Settings',
+      icon: <Settings size={22} />,
+      href: '/admin/settings',
+      subsections: [
+        { id: 'general-settings', label: 'General' },
+        { id: 'email-settings', label: 'Email Config' },
+        { id: 'notification-settings', label: 'Notifications' },
+        { id: 'backup-settings', label: 'Backup Config' },
+      ],
+    },
+  ],
 };
 
 interface UnifiedSidebarProps {
@@ -340,10 +161,14 @@ interface UnifiedSidebarProps {
 
 export default function UnifiedSidebar({ userRole }: UnifiedSidebarProps) {
   const router = useRouter();
+  const { sidebarConfig } = useModuleConfig(userRole);
   const [expandedSections, setExpandedSections] = useState<string[]>(['dashboard', 'my-tasks']);
   const [activeSection, setActiveSection] = useState(userRole === 'student' ? 'my-tasks' : 'dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+
+  // Use module config if available, otherwise use superadmin config
+  const config = sidebarConfig || superadminConfig;
 
   const toggleSection = (id: string) => {
     setExpandedSections((prev) =>
@@ -384,9 +209,7 @@ export default function UnifiedSidebar({ userRole }: UnifiedSidebarProps) {
     }
   };
 
-  const config = roleConfigs[userRole];
-
-  // Update the config to use dynamic badge count
+  // Update the config to use dynamic badge count for superadmin
   const updatedNavItems = config.navItems.map(item => {
     if (userRole === 'superadmin' && item.id === 'user-management') {
       return {

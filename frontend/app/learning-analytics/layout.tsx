@@ -2,11 +2,11 @@ import ModuleLayout from '@/components/CommonForAll/ModuleLayout';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Smart LMS - Projects & Tasks',
-  description: 'Project & Task Management Module',
+  title: 'Smart LMS - Learning Analytics',
+  description: 'Learning Analytics & Predictions Module',
 };
 
-export default function ProjectsTasksLayout({
+export default function LearningAnalyticsLayout({
   children,
 }: {
   children: React.ReactNode;
