@@ -1,12 +1,12 @@
 enum Type {
-  code,
-  document
+  "code",
+  "document"
 }
 
 type Options = {
   autoComplete: boolean
   externalCopyPaste: boolean
-  intenalCopyPaste: boolean
+  internalCopyPaste: boolean
   analytics: boolean
 }
 
