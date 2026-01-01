@@ -11,7 +11,7 @@ const CodeSpace = ({ data }: Code) => {
   return (
     <div className="grid grid-cols-2">
       <Editor height="90vh" defaultLanguage="javascript" defaultValue="// some comment" />
-
+      
     </div>
   )
 }

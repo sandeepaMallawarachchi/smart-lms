@@ -3,10 +3,17 @@ enum Type {
   document
 }
 
+type Options = {
+  autoComplete: boolean
+  externalCopyPaste: boolean
+  intenalCopyPaste: boolean
+  analytics: boolean
+}
+
 export type Assignment = {
   question: string
   type: Type
   startDateTime: string
   endDateTime: string
-  options?: string[]
+  options?: Options
 }
