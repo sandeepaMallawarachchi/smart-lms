@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/db';
-import Student from '@/model/projects-and-tasks/Student';
+import Student from '@/model/Student';
 import { generateToken } from '@/lib/jwt';
 import { successResponse, errorResponse, serverErrorResponse } from '@/lib/api-response';
 
@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    const { studentIdNumber, name, email, password, passwordConfirmation, gender, dateOfBirth, address, nicNumber, academicYear, specialization } =
+    const { studentIdNumber, name, email, password, passwordConfirmation, gender, dateOfBirth, address, nicNumber, academicYear, semester, specialization } =
       body;
 
     // Validation
@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
     if (!address) errors.address = ['Address is required'];
     if (!nicNumber) errors.nicNumber = ['NIC number is required'];
     if (!academicYear) errors.nicNumber = ['Academic Year is required'];
+    if (!semester) errors.nicNumber = ['Semester is required'];
     if (!specialization) errors.nicNumber = ['Specialization is required'];
 
     if (Object.keys(errors).length > 0) {
@@ -64,6 +65,7 @@ export async function POST(request: NextRequest) {
       address,
       nicNumber,
       academicYear,
+      semester,
       specialization,
     });
 
