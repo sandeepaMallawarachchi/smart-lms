@@ -15,6 +15,7 @@ import {
   Activity,
   Database,
 } from 'lucide-react';
+import { useModuleConfig } from '@/hooks/useModuleConfig';
 
 type UserRole = 'student' | 'lecture' | 'superadmin';
 
@@ -45,99 +46,36 @@ interface RoleConfig {
   pendingTasksCount?: number;
 }
 
-const roleConfigs: Record<UserRole, RoleConfig> = {
-  student: {
-    courseCode: 'IT22001',
-    courseName: 'Software Engineering - Semester 1',
-    searchPlaceholder: 'Search tasks, teammates, projects...',
-    avatarColor: 'from-green-500 to-green-600',
-    primaryColor: 'green',
-    showPendingTasks: true,
-    pendingTasksCount: 5,
-    notifications: [
-      {
-        id: 1,
-        message: 'Task "UI Design" is overdue',
-        time: '2 hours ago',
-        type: 'alert',
-        icon: AlertCircle,
-      },
-      {
-        id: 2,
-        message: 'Reminder: Deadline for "API Integration" in 24 hours',
-        time: '1 hour ago',
-        type: 'warning',
-        icon: Clock,
-      },
-      {
-        id: 3,
-        message: 'Team member "Sandhya" commented on "Database Design"',
-        time: '30 minutes ago',
-        type: 'info',
-        icon: Bell,
-      },
-    ],
-  },
-  lecture: {
-    courseCode: 'IT22001',
-    courseName: 'Software Engineering - Semester 1',
-    searchPlaceholder: 'Search tasks, students, projects...',
-    avatarColor: 'from-blue-500 to-blue-600',
-    primaryColor: 'blue',
-    notifications: [
-      {
-        id: 1,
-        message: 'Team "Group A" has completed milestone 1',
-        time: '2 hours ago',
-        type: 'success',
-        icon: Bell,
-      },
-      {
-        id: 2,
-        message: 'Workload imbalance detected in "Group B"',
-        time: '1 hour ago',
-        type: 'warning',
-        icon: AlertCircle,
-      },
-      {
-        id: 3,
-        message: 'Task bottleneck in "Project X"',
-        time: '30 minutes ago',
-        type: 'alert',
-        icon: Clock,
-      },
-    ],
-  },
-  superadmin: {
-    courseCode: 'ADMIN PANEL',
-    courseName: 'System Administration',
-    searchPlaceholder: 'Search users, courses, system logs...',
-    avatarColor: 'from-purple-500 to-purple-600',
-    primaryColor: 'purple',
-    notifications: [
-      {
-        id: 1,
-        message: 'New lecturer registration pending approval',
-        time: '1 hour ago',
-        type: 'info',
-        icon: Users,
-      },
-      {
-        id: 2,
-        message: 'System backup completed successfully',
-        time: '3 hours ago',
-        type: 'success',
-        icon: Database,
-      },
-      {
-        id: 3,
-        message: 'High server load detected - 85% CPU usage',
-        time: '30 minutes ago',
-        type: 'warning',
-        icon: Activity,
-      },
-    ],
-  },
+// Fallback config for superadmin
+const superadminConfig: RoleConfig = {
+  courseCode: 'ADMIN PANEL',
+  courseName: 'System Administration',
+  searchPlaceholder: 'Search users, courses, system logs...',
+  avatarColor: 'from-purple-500 to-purple-600',
+  primaryColor: 'purple',
+  notifications: [
+    {
+      id: 1,
+      message: 'New lecturer registration pending approval',
+      time: '1 hour ago',
+      type: 'info',
+      icon: Users,
+    },
+    {
+      id: 2,
+      message: 'System backup completed successfully',
+      time: '3 hours ago',
+      type: 'success',
+      icon: Database,
+    },
+    {
+      id: 3,
+      message: 'High server load detected - 85% CPU usage',
+      time: '30 minutes ago',
+      type: 'warning',
+      icon: Activity,
+    },
+  ],
 };
 
 interface UnifiedHeaderProps {
@@ -146,12 +84,14 @@ interface UnifiedHeaderProps {
 
 export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
   const router = useRouter();
+  const { headerConfig } = useModuleConfig(userRole);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const config = roleConfigs[userRole];
+  // Use module config if available, otherwise use superadmin config
+  const config = headerConfig || superadminConfig;
   const unreadNotifications = config.notifications.length;
 
   useEffect(() => {
@@ -159,7 +99,7 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
       try {
         const token = localStorage.getItem('authToken');
         if (!token) {
-          router.push('/projects-and-tasks/login');
+          router.push('/login');
           return;
         }
 

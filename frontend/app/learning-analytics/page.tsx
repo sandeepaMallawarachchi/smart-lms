@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
-export default function ProjectsTasksPage() {
+export default function LearningAnalyticsPage() {
   const router = useRouter();
 
   useEffect(() => {
@@ -16,9 +16,9 @@ export default function ProjectsTasksPage() {
     }
 
     if (userRole === 'student') {
-      router.push('/projects-and-tasks/student');
+      router.push('/learning-analytics/student');
     } else if (userRole === 'lecture') {
-      router.push('/projects-and-tasks/lecturer');
+      router.push('/learning-analytics/lecturer');
     } else {
       router.push('/login');
     }
