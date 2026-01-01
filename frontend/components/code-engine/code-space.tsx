@@ -7,11 +7,20 @@ interface Code {
   assignment: Assignment
 }
 
-const CodeSpace = ({ data }: Code) => {
+function handleChange (value?: string) {
+  console.log('value', value)
+}
+
+const CodeSpace = () => {
   return (
     <div className="grid grid-cols-2">
-      <Editor height="90vh" defaultLanguage="javascript" defaultValue="// some comment" />
-      
+      <Editor 
+        height="90vh" 
+        defaultLanguage="javascript" 
+        defaultValue="// some comment" 
+        onChange={handleChange}  
+      />
+
     </div>
   )
 }
