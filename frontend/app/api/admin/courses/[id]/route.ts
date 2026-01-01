@@ -1,3 +1,5 @@
+// /api/admin/courses/[id]/route.ts
+
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Course from '@/model/Course';

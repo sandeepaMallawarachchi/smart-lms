@@ -14,6 +14,7 @@ import {
   Users,
   Activity,
   Database,
+  BookOpen,
 } from 'lucide-react';
 import { useModuleConfig } from '@/hooks/useModuleConfig';
 
@@ -25,6 +26,24 @@ interface UserData {
   studentIdNumber?: string;
   position?: string;
   role?: string;
+  _id?: string;
+}
+
+interface Course {
+  _id: string;
+  courseName: string;
+  courseCode: string;
+  credits: number;
+  year: number;
+  semester: number;
+  lecturerInCharge: {
+    _id: string;
+    name: string;
+  };
+  lecturers: Array<{
+    _id: string;
+    name: string;
+  }>;
 }
 
 interface Notification {
@@ -87,8 +106,12 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
   const { headerConfig } = useModuleConfig(userRole);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [courseDropdownOpen, setCourseDropdownOpen] = useState(false);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
 
   // Use module config if available, otherwise use superadmin config
   const config = headerConfig || superadminConfig;
@@ -130,10 +153,47 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
     fetchUserData();
   }, [router]);
 
+  // Fetch courses for lecturer
+  useEffect(() => {
+    const fetchCoursesForLecturer = async () => {
+      if (userRole !== 'lecture' || !userData?._id) return;
+
+      setCoursesLoading(true);
+      try {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        const response = await fetch('/api/lecturer/courses', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setCourses(data.data.courses || []);
+        }
+      } catch (error) {
+        console.error('Error fetching courses:', error);
+      } finally {
+        setCoursesLoading(false);
+      }
+    };
+
+    fetchCoursesForLecturer();
+  }, [userRole, userData?._id]);
+
   const handleLogout = () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('userRole');
     router.push('/');
+  };
+
+  const handleSelectCourse = (course: Course) => {
+    setSelectedCourse(course);
+    setCourseDropdownOpen(false);
   };
 
   const displayName = userData?.name || (userRole === 'superadmin' ? 'Super Admin' : userRole === 'lecture' ? 'Lecturer' : 'Student');
@@ -153,6 +213,14 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
     }
   };
 
+  // Separate courses into LIC and regular lecturer courses
+  const licCourses = courses.filter(
+    (course) => course.lecturerInCharge?._id === userData?._id
+  );
+  const regularCourses = courses.filter(
+    (course) => course.lecturerInCharge?._id !== userData?._id
+  );
+
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm" style={{ borderTop: '4px solid #efa300' }}>
       <div className="max-w-full px-4 sm:px-6 lg:px-8">
@@ -164,10 +232,132 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
             >
               <Menu size={20} />
             </button>
-            <div className="hidden sm:flex flex-col">
-              <h1 className="text-sm font-bold text-gray-900">{config.courseCode}</h1>
-              <p className="text-xs text-gray-500">{config.courseName}</p>
-            </div>
+            {/* Course dropdown for lecturer */}
+            {userRole === 'lecture' && courses.length > 0 ? (
+              <div className="relative">
+                <button
+                  onClick={() => setCourseDropdownOpen(!courseDropdownOpen)}
+                  className="hidden sm:flex items-center gap-2 bg-blue-100 rounded-md border border-blue-400 px-3 py-1.5 hover:bg-blue-150 hover:border-blue-500 transition-all duration-200 shadow-sm hover:shadow-md"
+                >
+                  <div className="flex flex-col text-left">
+                    {selectedCourse ? (
+                      <>
+                        <h1 className="text-sm font-bold text-brand-blue truncate max-w-xs">{selectedCourse.courseName}</h1>
+                        <p className="text-xs text-blue-500">Y{selectedCourse.year}S{selectedCourse.semester} • {selectedCourse.credits}cr</p>
+                      </>
+                    ) : (
+                      <>
+                        <h1 className="text-sm font-bold text-brand-blue">My Courses</h1>
+                        <p className="text-xs text-blue-500">{courses.length} course{courses.length !== 1 ? 's' : ''}</p>
+                      </>
+                    )}
+                  </div>
+                  <ChevronDown
+                    size={18}
+                    className={`text-brand-blue transition-transform duration-200 flex-shrink-0 ${courseDropdownOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {courseDropdownOpen && (
+                  <div className="absolute left-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                    <div className="p-4 border-b border-gray-100">
+                      <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                        <BookOpen size={16} />
+                        Assigned Courses
+                      </h3>
+                    </div>
+
+                    <div className="max-h-96 overflow-y-auto">
+                      {/* LIC Courses Section */}
+                      {licCourses.length > 0 && (
+                        <div>
+                          <div className="px-4 py-2 bg-amber-50 border-b border-amber-100">
+                            <p className="text-xs font-semibold text-amber-900 uppercase tracking-wide">
+                              As Lecturer in Charge
+                            </p>
+                          </div>
+                          {licCourses.map((course) => (
+                            <div
+                              key={course._id}
+                              onClick={() => handleSelectCourse(course)}
+                              className={`p-4 border-b border-gray-100 hover:bg-amber-100 cursor-pointer transition-all duration-150 ${
+                                selectedCourse?._id === course._id ? 'bg-amber-100 border-l-4 border-l-amber-500' : 'bg-amber-50/50'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    {course.courseName}
+                                  </p>
+                                  <p className="text-xs text-gray-600 mt-1">
+                                    Year {course.year}, Semester {course.semester} • {course.credits} Credits
+                                  </p>
+                                </div>
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-amber-200 text-amber-800 whitespace-nowrap ml-2">
+                                  LIC
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Regular Courses Section */}
+                      {regularCourses.length > 0 && (
+                        <div>
+                          {licCourses.length > 0 && (
+                            <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+                              <p className="text-xs font-semibold text-blue-900 uppercase tracking-wide">
+                                As Lecturer
+                              </p>
+                            </div>
+                          )}
+                          {regularCourses.map((course) => (
+                            <div
+                              key={course._id}
+                              onClick={() => handleSelectCourse(course)}
+                              className={`p-4 border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition-all duration-150 ${
+                                selectedCourse?._id === course._id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                              }`}
+                            >
+                              <div className="flex-1">
+                                <p className="text-sm font-semibold text-gray-900">
+                                  {course.courseName}
+                                </p>
+                                <p className="text-xs text-gray-600 mt-1">
+                                  Year {course.year}, Semester {course.semester} • {course.credits} Credits
+                                </p>
+                                {course.lecturerInCharge && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    LIC: {course.lecturerInCharge.name}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {coursesLoading && (
+                      <div className="p-4 text-center">
+                        <p className="text-sm text-gray-500">Loading courses...</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Default dropdown for non-lecturer roles - Hidden for students/superadmin */
+              userRole !== 'lecture' && (
+                <button className="hidden sm:flex items-center gap-2 bg-blue-100 rounded-md border border-blue-400 px-3 py-1.5 hover:bg-blue-150 hover:border-blue-500 transition-all duration-200 shadow-sm hover:shadow-md">
+                  <div className="flex flex-col text-left">
+                    <h1 className="text-sm font-bold text-brand-blue">{config.courseCode}</h1>
+                    <p className="text-xs text-blue-500">{config.courseName}</p>
+                  </div>
+                </button>
+              )
+            )}
           </div>
 
           <div className="hidden md:flex flex-1 max-w-md mx-8">
