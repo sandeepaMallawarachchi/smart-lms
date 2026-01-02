@@ -1,7 +1,9 @@
-// enum Type {
-//   "code",
-//   "document"
-// }
+export type TestCase = {
+  id: number
+  input: string
+  expectedOutput: string
+  isHidden?: boolean
+}
 
 type Options = {
   autoComplete: boolean
@@ -17,4 +19,5 @@ export type Assignment = {
   startDateTime: string
   endDateTime: string
   options?: Options
+  testCases?: TestCase[]
 }

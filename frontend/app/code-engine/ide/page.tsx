@@ -12,7 +12,14 @@ const data: Assignment = {
     externalCopyPaste: false,
     internalCopyPaste: true,
     analytics: true
-  }
+  },
+  testCases: [
+    {
+      id: 1,
+      input: "", 
+      expectedOutput: "Hello World"
+    }
+  ]
 }
 
 const CodeEngine = () => {
