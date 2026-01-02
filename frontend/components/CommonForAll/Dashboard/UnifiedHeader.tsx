@@ -174,6 +174,23 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
         if (response.ok) {
           const data = await response.json();
           setCourses(data.data.courses || []);
+          
+          // Restore selected course from localStorage
+          const savedCourse = localStorage.getItem('selectedCourse');
+          if (savedCourse) {
+            try {
+              const parsedCourse = JSON.parse(savedCourse);
+              setSelectedCourse(parsedCourse);
+              
+              // Emit event to notify other components
+              const event = new CustomEvent('courseSelected', {
+                detail: parsedCourse,
+              });
+              window.dispatchEvent(event);
+            } catch (error) {
+              console.error('Error parsing saved course:', error);
+            }
+          }
         }
       } catch (error) {
         console.error('Error fetching courses:', error);
@@ -194,6 +211,29 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
   const handleSelectCourse = (course: Course) => {
     setSelectedCourse(course);
     setCourseDropdownOpen(false);
+    
+    // Persist to localStorage
+    localStorage.setItem('selectedCourse', JSON.stringify({
+      _id: course._id,
+      courseName: course.courseName,
+      courseCode: course.courseCode,
+      year: course.year,
+      semester: course.semester,
+      lecturerInCharge: course.lecturerInCharge,
+    }));
+    
+    // Emit custom event for other components to listen
+    const event = new CustomEvent('courseSelected', {
+      detail: {
+        _id: course._id,
+        courseName: course.courseName,
+        courseCode: course.courseCode,
+        year: course.year,
+        semester: course.semester,
+        lecturerInCharge: course.lecturerInCharge,
+      },
+    });
+    window.dispatchEvent(event);
   };
 
   const displayName = userData?.name || (userRole === 'superadmin' ? 'Super Admin' : userRole === 'lecture' ? 'Lecturer' : 'Student');
