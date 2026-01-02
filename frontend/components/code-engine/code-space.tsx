@@ -25,7 +25,6 @@ const CodeSpace = ({defaultCode, language, assignment}: CodeSpaceProps) => {
           fontSize: 14
         }}
       />
-
     </div>
   )
 }
