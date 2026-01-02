@@ -1,7 +1,7 @@
-enum Type {
-  "code",
-  "document"
-}
+// enum Type {
+//   "code",
+//   "document"
+// }
 
 type Options = {
   autoComplete: boolean
@@ -12,7 +12,8 @@ type Options = {
 
 export type Assignment = {
   question: string
-  type: Type
+  type: string
+  language: string
   startDateTime: string
   endDateTime: string
   options?: Options
