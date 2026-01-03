@@ -24,6 +24,7 @@ export default function StudentRegistrationForm() {
     address: '',
     nicNumber: '',
     academicYear: '',
+    semester: '',
     specialization: '',
   });
 
@@ -72,17 +73,13 @@ export default function StudentRegistrationForm() {
         setIsLoading(false);
         return;
       }
-
-      // Store token
-      localStorage.setItem('authToken', data.data.token);
-      localStorage.setItem('userRole', 'student');
-
+      
       // Show success message before redirecting
       setSuccessMessage('Registration successful! Redirecting to dashboard...');
 
       // Redirect after a short delay
       setTimeout(() => {
-        router.push('/projects-and-tasks/student');
+        router.push('/login');
       }, 1500);
     } catch (err) {
       console.error('Registration error:', err);
@@ -208,7 +205,7 @@ export default function StudentRegistrationForm() {
         </div>
       </div>
 
-      {/* academic year and specialization */}
+      {/* academic year and semester */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label htmlFor="academicYear" className="block text-sm font-medium text-gray-700 mb-2">
@@ -233,28 +230,49 @@ export default function StudentRegistrationForm() {
         </div>
 
         <div>
-          <label htmlFor="specialization" className="block text-sm font-medium text-gray-700 mb-2">
-            Specialization *
+          <label htmlFor="semester" className="block text-sm font-medium text-gray-700 mb-2">
+            Semester *
           </label>
           <select
-            id="specialization"
-            name="specialization"
-            value={formData.specialization}
+            id="semester"
+            name="semester"
+            value={formData.semester}
             onChange={handleChange}
             disabled={isLoading}
             className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed ${errors.specialization ? 'border-red-500' : 'border-gray-300'
               }`}
           >
-            <option value="">Select Specialization</option>
-            <option value="IT">Information Technology</option>
-            <option value="SE">Software Engineering</option>
-            <option value="DS">Data Science</option>
-            <option value="CSNE">Computer System Networking & Engineering</option>
-            <option value="CS">Cyber Security</option>
-            <option value="IM">Interactive Media</option>
+            <option value="">Select Semester</option>
+            <option value="1">Semester 1</option>
+            <option value="2">Semester 2</option>
           </select>
-          {errors.specialization && <p className="text-xs text-red-600 mt-1">{errors.specialization}</p>}
+          {errors.semester && <p className="text-xs text-red-600 mt-1">{errors.semester}</p>}
         </div>
+      </div>
+
+      {/* Specialization */}
+      <div>
+        <label htmlFor="specialization" className="block text-sm font-medium text-gray-700 mb-2">
+          Specialization *
+        </label>
+        <select
+          id="specialization"
+          name="specialization"
+          value={formData.specialization}
+          onChange={handleChange}
+          disabled={isLoading}
+          className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed ${errors.specialization ? 'border-red-500' : 'border-gray-300'
+            }`}
+        >
+          <option value="">Select Specialization</option>
+          <option value="IT">Information Technology</option>
+          <option value="SE">Software Engineering</option>
+          <option value="DS">Data Science</option>
+          <option value="CSNE">Computer System Networking & Engineering</option>
+          <option value="CS">Cyber Security</option>
+          <option value="IM">Interactive Media</option>
+        </select>
+        {errors.specialization && <p className="text-xs text-red-600 mt-1">{errors.specialization}</p>}
       </div>
 
       {/* NIC Number */}
