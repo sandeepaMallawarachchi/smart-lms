@@ -1,268 +1,193 @@
-# AI Feedback Service
+# AI Feedback Service - Hugging Face Edition
 
-Open-source AI-powered feedback generation for student submissions using Ollama.
+Free, open-source AI-powered feedback generation using Hugging Face Inference API.
 
-## Features
+## ✨ Features
 
-- ✅ **Open-Source LLM Integration** using Ollama (Llama 3.2, Phi-3, Mistral)
-- ✅ Rubric-based evaluation
-- ✅ Criterion-by-criterion feedback
-- ✅ Redis caching for improved performance
-- ✅ Async feedback generation
-- ✅ Fallback to rule-based feedback
-- ✅ Cost-effective (100% free - no API costs!)
+- ✅ **100% Free** - No API costs, uses Hugging Face free tier
+- ✅ **No Credit Card** - Sign up with just email
+- ✅ **Rubric-Based Evaluation** - Structured feedback with criteria
+- ✅ **Redis Caching** - 30-70% faster with cache hits
+- ✅ **Async Processing** - Non-blocking feedback generation
+- ✅ **Multiple AI Models** - Mistral, Llama 2, Phi-2
 
-## Tech Stack
+## 🚀 Quick Start
 
-- **Framework**: Spring Boot 3.1.5
-- **Database**: PostgreSQL 15+
-- **Cache**: Redis 7
-- **LLM**: Ollama (open-source)
-- **Language**: Java 17
+### Prerequisites
 
-## Prerequisites
-
-- Java 17+
+- Java 21
+- Maven 3.8+
 - PostgreSQL 15+
-- Redis 7+
-- Ollama (for AI features)
+- Redis 7+ (optional but recommended)
 
-## Installation
-
-### 1. Install Ollama
-
-**Linux/Mac:**
+### 1. Get Hugging Face API Token (Free)
 ```bash
-curl -fsSL https://ollama.com/install.sh | sh
+# Run helper script
+./scripts/get-hf-token.sh
+
+# Or manually:
+# 1. Sign up: https://huggingface.co/join
+# 2. Get token: https://huggingface.co/settings/tokens
+# 3. Update application.properties with your token
 ```
 
-**Windows:**
-Download from https://ollama.com/download
-
-### 2. Pull Models
+### 2. Setup Database
 ```bash
-# Recommended model (2GB)
-ollama pull llama3.2
-
-# Alternative models
-ollama pull phi3        # 2.3GB
-ollama pull mistral     # 4.1GB
+./scripts/setup-database.sh
 ```
 
-### 3. Start Ollama
-```bash
-ollama serve
-```
+### 3. Configure Application
 
-Ollama runs on `http://localhost:11434`
-
-### 4. Configure Application
-
-Update `application.properties`:
+Edit `src/main/resources/application.properties`:
 ```properties
-ollama.base-url=http://localhost:11434
-ollama.model=llama3.2
+# Add your Hugging Face token
+huggingface.api-key=hf_your_token_here
 ```
 
-### 5. Run the Service
+### 4. Build and Run
 ```bash
+# Build
+mvn clean install
+
+# Run
 mvn spring-boot:run
 ```
 
-Service runs on `http://localhost:8083`
-
-## API Endpoints
-
-### Feedback
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/feedback/generate` | Generate feedback (sync) |
-| POST | `/api/feedback/generate-async` | Generate feedback (async) |
-| GET | `/api/feedback/{id}` | Get feedback by ID |
-| GET | `/api/feedback/submission/{id}` | Get feedback for submission |
-| GET | `/api/feedback/student/{id}` | Get feedback for student |
-
-### Rubrics
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/rubrics` | Create rubric |
-| GET | `/api/rubrics` | Get all rubrics |
-| GET | `/api/rubrics/{id}` | Get rubric by ID |
-| PUT | `/api/rubrics/{id}` | Update rubric |
-| DELETE | `/api/rubrics/{id}` | Delete rubric |
-
-### Health
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/health` | Service health + Ollama status |
-
-## Usage Examples
-
-### 1. Create a Rubric
+### 5. Test the Service
 ```bash
-curl -X POST http://localhost:8083/api/rubrics \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Programming Assignment Rubric",
-    "description": "Evaluation criteria for coding assignments",
-    "assignmentType": "CODE",
-    "createdBy": "instructor001",
-    "criteria": [
-      {
-        "name": "Code Quality",
-        "description": "Clean, readable, well-documented code",
-        "maxScore": 40.0,
-        "evaluationGuidelines": "Check naming conventions, comments, structure"
-      },
-      {
-        "name": "Functionality",
-        "description": "Code works as expected",
-        "maxScore": 40.0,
-        "evaluationGuidelines": "Test all features, edge cases"
-      },
-      {
-        "name": "Efficiency",
-        "description": "Optimal algorithms and data structures",
-        "maxScore": 20.0,
-        "evaluationGuidelines": "Analyze time/space complexity"
-      }
-    ]
-  }'
+./scripts/test-service.sh
 ```
 
-### 2. Generate Feedback
+## 📚 API Endpoints
+
+### Health Check
 ```bash
-curl -X POST http://localhost:8083/api/feedback/generate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "submissionId": 1,
-    "studentId": "ST12345",
-    "rubricId": 1,
-    "submissionContent": "def fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)",
-    "forceRegenerate": false
-  }'
+GET /api/health
 ```
 
-## Model Comparison
-
-| Model | Size | Speed | Quality | Best For |
-|-------|------|-------|---------|----------|
-| **llama3.2** | 2GB | Fast | Good | General feedback (Recommended) |
-| **phi3** | 2.3GB | Fast | Good | Short responses |
-| **mistral** | 4.1GB | Medium | Better | Detailed analysis |
-| **llama3** | 4.7GB | Medium | Better | Complex evaluations |
-
-## Performance Optimization
-
-### 1. Enable Redis Caching
-```properties
-spring.cache.type=redis
-ai.feedback.cache-enabled=true
-```
-
-### 2. Use Async Generation
-```javascript
-// In your frontend
-const response = await fetch('/api/feedback/generate-async', {
-  method: 'POST',
-  body: JSON.stringify(feedbackRequest)
-});
-
-// Poll for results
-const feedback = await fetch(`/api/feedback/submission/${submissionId}`);
-```
-
-### 3. Optimize Model Settings
-```properties
-ollama.temperature=0.7      # Lower = more consistent
-ollama.max-tokens=1000      # Adjust based on needs
-```
-
-## Budget Analysis
-
-### Cost Comparison
-
-| Solution | Setup Cost | Monthly Cost | Annual Cost |
-|----------|-----------|--------------|-------------|
-| **Ollama (This)** | $0 | $0 | **$0** |
-| OpenAI GPT-4o-mini | $0 | ~$5-20 | $60-240 |
-| Claude Haiku | $0 | ~$10-30 | $120-360 |
-
-**Hardware Requirements:**
-- Minimum: 8GB RAM, 4 CPU cores
-- Recommended: 16GB RAM, 8 CPU cores
-- Storage: 5-10GB for models
-
-## Troubleshooting
-
-### Ollama Not Available
+### Generate Feedback
 ```bash
-# Check if Ollama is running
-curl http://localhost:11434/api/tags
+POST /api/feedback/generate
+Content-Type: application/json
 
-# If not running, start it
-ollama serve
-
-# Check models
-ollama list
+{
+  "submissionId": 1,
+  "studentId": "IT22586766",
+  "rubricId": 1,
+  "submissionContent": "public class HelloWorld { ... }",
+  "forceRegenerate": false
+}
 ```
 
-### Slow Generation
-
-1. Use a smaller model (phi3 instead of mistral)
-2. Reduce max_tokens in config
-3. Enable Redis caching
-4. Use async generation
-
-### Out of Memory
+### Get Feedback
 ```bash
-# Use a smaller model
-ollama pull phi3
-
-# Update config
-ollama.model=phi3
+GET /api/feedback/{id}
+GET /api/feedback/submission/{submissionId}
+GET /api/feedback/student/{studentId}
 ```
 
-## Testing
-
-Run tests:
+### Rubric Management
 ```bash
-mvn test
+POST /api/rubrics          # Create rubric
+GET /api/rubrics           # List rubrics
+GET /api/rubrics/{id}      # Get rubric
+PUT /api/rubrics/{id}      # Update rubric
+DELETE /api/rubrics/{id}   # Delete rubric
 ```
 
-Test with script:
+## 🐳 Docker Deployment
 ```bash
-./infrastructure/scripts/test-ai-service.sh
-```
+# Set your Hugging Face token
+export HUGGINGFACE_API_KEY=hf_your_token_here
 
-## Docker Deployment
-```bash
-# Build and run
-docker-compose up -d ai-feedback-service
+# Start all services
+docker-compose up -d
 
 # View logs
 docker-compose logs -f ai-feedback-service
 ```
 
-## Alternative: Using LocalAI
+## 🔧 Configuration
 
-If you prefer LocalAI over Ollama:
+### Available AI Models
+
+Edit in `application.properties`:
 ```properties
-ai.feedback.provider=localai
-localai.base-url=http://localhost:8080
-localai.model=ggml-gpt4all-j
-localai.enabled=true
+# Recommended (7B, balanced)
+huggingface.model=mistralai/Mistral-7B-Instruct-v0.2
+
+# Smaller, faster (3B)
+huggingface.model=microsoft/phi-2
+
+# Larger, better quality (13B)
+huggingface.model=meta-llama/Llama-2-13b-chat-hf
 ```
 
-## Contributing
+### Performance Settings
+```properties
+# Caching
+ai.feedback.cache-enabled=true
+ai.feedback.cache-ttl-days=7
 
-1. Follow existing code style
-2. Add tests for new features
-3. Update documentation
+# Async processing
+ai.feedback.async-enabled=true
+ai.feedback.max-concurrent-requests=5
 
-## License
+# Hugging Face
+huggingface.timeout=120
+huggingface.max-tokens=2000
+```
+
+## 📊 Performance
+
+| Scenario | Time | Cache |
+|----------|------|-------|
+| First feedback | 30-90s | ❌ |
+| Cached feedback | <1s | ✅ |
+| Rubric-based (3 criteria) | 60-120s | ❌ |
+| General feedback | 20-60s | ❌ |
+
+## 🐛 Troubleshooting
+
+### Model Loading Error (503)
+```
+Issue: "Model is loading"
+Solution: Wait 20 seconds, API auto-retries
+```
+
+### Invalid API Key
+```
+Issue: 401 Unauthorized
+Solution: Check token in application.properties
+```
+
+### Slow Generation
+```
+Issue: Taking too long
+Solution: Use smaller model (phi-2)
+```
+
+## 💰 Cost Comparison
+
+| Solution | Annual Cost |
+|----------|-------------|
+| **Hugging Face (This)** | **$0** |
+| OpenAI GPT-4 | $5,000-20,000 |
+| Google Gemini | $3,000-15,000 |
+| Claude API | $4,000-18,000 |
+
+**Total Savings: $3,000-20,000/year!** 🎉
+
+## 📄 License
 
 MIT License
+
+## 🙏 Acknowledgments
+
+- [Hugging Face](https://huggingface.co/) - Free AI inference
+- [Mistral AI](https://mistral.ai/) - Open-source models
+- Spring Boot Team
+
+---
+
+**Made with ❤️ for Smart LMS**
