@@ -1,7 +1,8 @@
+// /components/layout/UnifiedHeader.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import {
   Bell,
   Settings,
@@ -9,7 +10,6 @@ import {
   ChevronDown,
   Search,
   Menu,
-  Clock,
   AlertCircle,
   Users,
   Activity,
@@ -65,7 +65,6 @@ interface RoleConfig {
   pendingTasksCount?: number;
 }
 
-// Fallback config for superadmin
 const superadminConfig: RoleConfig = {
   courseCode: 'ADMIN PANEL',
   courseName: 'System Administration',
@@ -103,6 +102,7 @@ interface UnifiedHeaderProps {
 
 export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { headerConfig } = useModuleConfig(userRole);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -113,7 +113,6 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
   const [coursesLoading, setCoursesLoading] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
 
-  // Use module config if available, otherwise use superadmin config
   const config = headerConfig || superadminConfig;
   const unreadNotifications = config.notifications.length;
 
@@ -143,6 +142,7 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
 
         const data = await response.json();
         setUserData(data.data.user);
+        localStorage.setItem('lecturerId', data.data.user._id);
         setIsLoading(false);
       } catch (error) {
         console.error('Error fetching user data:', error);
@@ -153,7 +153,6 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
     fetchUserData();
   }, [router]);
 
-  // Fetch courses for lecturer
   useEffect(() => {
     const fetchCoursesForLecturer = async () => {
       if (userRole !== 'lecture' || !userData?._id) return;
@@ -174,19 +173,12 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
         if (response.ok) {
           const data = await response.json();
           setCourses(data.data.courses || []);
-          
-          // Restore selected course from localStorage
+
           const savedCourse = localStorage.getItem('selectedCourse');
           if (savedCourse) {
             try {
               const parsedCourse = JSON.parse(savedCourse);
               setSelectedCourse(parsedCourse);
-              
-              // Emit event to notify other components
-              const event = new CustomEvent('courseSelected', {
-                detail: parsedCourse,
-              });
-              window.dispatchEvent(event);
             } catch (error) {
               console.error('Error parsing saved course:', error);
             }
@@ -205,35 +197,37 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
   const handleLogout = () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('userRole');
+    localStorage.removeItem('lecturerId');
+    localStorage.removeItem('selectedCourse');
     router.push('/');
   };
 
   const handleSelectCourse = (course: Course) => {
     setSelectedCourse(course);
     setCourseDropdownOpen(false);
-    
-    // Persist to localStorage
-    localStorage.setItem('selectedCourse', JSON.stringify({
+
+    const courseData = {
       _id: course._id,
       courseName: course.courseName,
       courseCode: course.courseCode,
       year: course.year,
       semester: course.semester,
       lecturerInCharge: course.lecturerInCharge,
-    }));
-    
-    // Emit custom event for other components to listen
+    };
+
+    localStorage.setItem('selectedCourse', JSON.stringify(courseData));
+
     const event = new CustomEvent('courseSelected', {
-      detail: {
-        _id: course._id,
-        courseName: course.courseName,
-        courseCode: course.courseCode,
-        year: course.year,
-        semester: course.semester,
-        lecturerInCharge: course.lecturerInCharge,
-      },
+      detail: courseData,
     });
     window.dispatchEvent(event);
+
+    // IMPORTANT: Redirect with course parameters if on create page
+    if (pathname.includes('create-projects-and-tasks')) {
+      router.push(
+        `/projects-and-tasks/lecturer/create-projects-and-tasks?courseId=${course._id}&courseName=${encodeURIComponent(course.courseName)}`
+      );
+    }
   };
 
   const displayName = userData?.name || (userRole === 'superadmin' ? 'Super Admin' : userRole === 'lecture' ? 'Lecturer' : 'Student');
@@ -253,7 +247,6 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
     }
   };
 
-  // Separate courses into LIC and regular lecturer courses
   const licCourses = courses.filter(
     (course) => course.lecturerInCharge?._id === userData?._id
   );
@@ -272,7 +265,7 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
             >
               <Menu size={20} />
             </button>
-            {/* Course dropdown for lecturer */}
+
             {userRole === 'lecture' && courses.length > 0 ? (
               <div className="relative">
                 <button
@@ -308,7 +301,6 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
                     </div>
 
                     <div className="max-h-96 overflow-y-auto">
-                      {/* LIC Courses Section */}
                       {licCourses.length > 0 && (
                         <div>
                           <div className="px-4 py-2 bg-amber-50 border-b border-amber-100">
@@ -342,7 +334,6 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
                         </div>
                       )}
 
-                      {/* Regular Courses Section */}
                       {regularCourses.length > 0 && (
                         <div>
                           {licCourses.length > 0 && (
@@ -388,7 +379,6 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
                 )}
               </div>
             ) : (
-              /* Default dropdown for non-lecturer roles - Hidden for students/superadmin */
               userRole !== 'lecture' && (
                 <button className="hidden sm:flex items-center gap-2 bg-blue-100 rounded-md border border-blue-400 px-3 py-1.5 hover:bg-blue-150 hover:border-blue-500 transition-all duration-200 shadow-sm hover:shadow-md">
                   <div className="flex flex-col text-left">

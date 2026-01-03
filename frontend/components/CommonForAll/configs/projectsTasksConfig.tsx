@@ -250,8 +250,8 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           icon: <ListTodo size={22} />,
           href: '/projects-and-tasks/lecturer/projects',
           subsections: [
-            { id: 'all-projects', label: 'All Projects', href: '/projects-and-tasks/lecturer/projects' },
-            { id: 'create-project-and-task', label: 'Create Project and task ', href: '/projects-and-tasks/lecturer/projects-and-tasks' },
+            { id: 'all-projects-and-tasks', label: 'All Projects and Tasks', href: '/projects-and-tasks/lecturer/all-projects-and-tasks' },
+            { id: 'create-project-and-task', label: 'Create Project and task ', href: '/projects-and-tasks/lecturer/create-projects-and-tasks' },
             { id: 'templates', label: 'Templates', href: '/projects-and-tasks/lecturer/templates' },
           ],
         },
