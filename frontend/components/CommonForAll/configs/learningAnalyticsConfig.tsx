@@ -109,11 +109,7 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
       ],
     },
     sidebar: {
-      showStats: true,
-      stats: {
-        total: 85,
-        dueSoon: 15,
-      },
+      roleLabel: 'Student',
       navItems: [
         {
           id: 'dashboard',

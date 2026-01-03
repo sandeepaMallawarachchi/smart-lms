@@ -5,6 +5,7 @@ export interface ICourse extends Document {
   credits: number;
   year: number;
   semester: number;
+  specializations: string[];
   lecturerInCharge: mongoose.Types.ObjectId;
   lecturers: mongoose.Types.ObjectId[];
   isArchived: boolean;
@@ -36,6 +37,11 @@ const courseSchema = new Schema<ICourse>(
       required: true,
       enum: [1, 2],
     },
+    specializations: [{
+      type: String,
+      required: true,
+      enum:['IT', 'SE', 'DS', 'CSNE', 'CS', 'IM']
+    }],
     lecturerInCharge: {
       type: Schema.Types.ObjectId,
       ref: 'Lecturer',
