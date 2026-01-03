@@ -6,6 +6,8 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, FileText, CheckCircle2, Loader, ChevronDown, ChevronUp, Download, Image as ImageIcon, Sparkles, Zap, AlertCircle, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Edit } from 'lucide-react';
+import EditProjectTaskModal from '@/components/projects-and-tasks/lecturer/view/EditProjectTaskModal';
 
 // ============ INTERFACES ============
 interface Subtask {
@@ -129,6 +131,10 @@ export default function AllProjectsAndTasksPage() {
   const [expandedTasks, setExpandedTasks] = useState<{ [key: string]: boolean }>({});
   const [error, setError] = useState<string | null>(null);
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({});
+
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingData, setEditingData] = useState<any>(null);
+  const [editType, setEditType] = useState<'project' | 'task'>('project');
 
   useEffect(() => {
     try {
@@ -331,6 +337,74 @@ export default function AllProjectsAndTasksPage() {
     visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
   };
 
+  const handleEditClick = (item: any, type: 'project' | 'task') => {
+    setEditingData(item);
+    setEditType(type);
+    setEditModalOpen(true);
+  };
+
+ const handleSaveEdit = async (updatedData: any) => {
+  try {
+    // Validate we have the ID
+    if (!editingData?._id) {
+      throw new Error('Invalid item ID');
+    }
+
+    const token = localStorage.getItem('authToken');
+    if (!token) throw new Error('Authentication required');
+
+    console.log('Saving edit for:', editType, editingData._id);
+    console.log('Data to save:', updatedData);
+
+    // Construct the correct endpoint
+    const endpoint =
+      editType === 'project'
+        ? `/api/projects-and-tasks/lecturer/create-projects-and-tasks/project/${editingData._id}`
+        : `/api/projects-and-tasks/lecturer/create-projects-and-tasks/task/${editingData._id}`;
+
+    console.log('Endpoint:', endpoint);
+
+    const response = await fetch(endpoint, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updatedData),
+    });
+
+    console.log('Response status:', response.status);
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error response:', errorData);
+      throw new Error(errorData.message || `Failed to update ${editType}`);
+    }
+
+    const result = await response.json();
+    console.log('Update successful:', result);
+
+    // Update local state with the returned data
+    const updatedItem = result.data;
+
+    if (editType === 'project') {
+      setProjects(projects.map((p) =>
+        p._id === editingData._id ? updatedItem : p
+      ));
+    } else {
+      setTasks(tasks.map((t) =>
+        t._id === editingData._id ? updatedItem : t
+      ));
+    }
+
+    setEditModalOpen(false);
+    setEditingData(null);
+  } catch (error: any) {
+    console.error('Edit error:', error);
+    throw new Error(error.message || `Failed to update ${editType}`);
+  }
+};
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -463,9 +537,8 @@ export default function AllProjectsAndTasksPage() {
                           key={project._id}
                           variants={itemVariants}
                           whileHover={{ y: -4, boxShadow: '0 20px 25px -5px rgba(59, 130, 246, 0.15)' }}
-                          className={`bg-white border-2 rounded-xl overflow-hidden cursor-pointer transition-all group ${
-                            deadlineStatus.color === 'red' ? 'border-red-300 shadow-lg shadow-red-200' : 'border-gray-200'
-                          }`}
+                          className={`bg-white border-2 rounded-xl overflow-hidden cursor-pointer transition-all group ${deadlineStatus.color === 'red' ? 'border-red-300 shadow-lg shadow-red-200' : 'border-gray-200'
+                            }`}
                         >
                           {/* Deadline Alert Banner for Urgent */}
                           {deadlineStatus.color === 'red' && (
@@ -481,9 +554,8 @@ export default function AllProjectsAndTasksPage() {
 
                           {/* Project Header */}
                           <motion.div
-                            className={`p-6 hover:bg-gradient-to-r hover:from-brand-blue/5 hover:to-transparent transition-all ${
-                              deadlineStatus.color === 'red' ? 'bg-red-50/30' : ''
-                            }`}
+                            className={`p-6 hover:bg-gradient-to-r hover:from-brand-blue/5 hover:to-transparent transition-all ${deadlineStatus.color === 'red' ? 'bg-red-50/30' : ''
+                              }`}
                             onClick={() => setExpandedProjects({ ...expandedProjects, [project._id]: !isExpanded })}
                           >
                             <div className="flex items-start justify-between">
@@ -505,13 +577,12 @@ export default function AllProjectsAndTasksPage() {
                                   {/* Highlighted Deadline */}
                                   <motion.span
                                     whileHover={{ scale: 1.05 }}
-                                    className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold border-2 ${
-                                      deadlineStatus.color === 'red'
-                                        ? 'bg-red-100 border-red-400 text-red-900'
-                                        : deadlineStatus.color === 'orange'
+                                    className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold border-2 ${deadlineStatus.color === 'red'
+                                      ? 'bg-red-100 border-red-400 text-red-900'
+                                      : deadlineStatus.color === 'orange'
                                         ? 'bg-orange-100 border-orange-400 text-orange-900'
                                         : 'bg-green-100 border-green-400 text-green-900'
-                                    }`}
+                                      }`}
                                   >
                                     📅 {project.deadlineDate}
                                   </motion.span>
@@ -524,12 +595,23 @@ export default function AllProjectsAndTasksPage() {
                               <motion.div
                                 animate={{ scale: 1 }}
                                 whileHover={{ scale: 1.1 }}
-                                className={`flex-shrink-0 transition-colors ${
-                                  deadlineStatus.color === 'red' ? 'text-red-500' : 'text-gray-400 group-hover:text-brand-blue'
-                                }`}
+                                className={`flex-shrink-0 transition-colors ${deadlineStatus.color === 'red' ? 'text-red-500' : 'text-gray-400 group-hover:text-brand-blue'
+                                  }`}
                               >
                                 <FileText size={24} />
                               </motion.div>
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditClick(project, 'project');
+                                }}
+                                className="p-1.5 hover:bg-brand-blue/10 rounded-lg transition-colors"
+                                title="Edit project"
+                              >
+                                <Edit size={20} className="text-brand-blue hover:text-blue-700" />
+                              </motion.button>
                             </div>
 
                             {project.description?.text && (
@@ -545,11 +627,10 @@ export default function AllProjectsAndTasksPage() {
                                 animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }}
                                 transition={{ duration: 0.3 }}
-                                className={`border-t p-6 space-y-6 ${
-                                  deadlineStatus.color === 'red'
-                                    ? 'border-red-200 bg-gradient-to-br from-red-50/30 to-gray-50'
-                                    : 'border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-50'
-                                }`}
+                                className={`border-t p-6 space-y-6 ${deadlineStatus.color === 'red'
+                                  ? 'border-red-200 bg-gradient-to-br from-red-50/30 to-gray-50'
+                                  : 'border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-50'
+                                  }`}
                               >
                                 {/* Full Description */}
                                 {project.description?.text && (
@@ -727,9 +808,8 @@ export default function AllProjectsAndTasksPage() {
                           key={task._id}
                           variants={itemVariants}
                           whileHover={{ y: -4, boxShadow: '0 20px 25px -5px rgba(59, 130, 246, 0.15)' }}
-                          className={`bg-white border-2 rounded-xl cursor-pointer transition-all group ${
-                            deadlineStatus?.color === 'red' ? 'border-red-300 shadow-lg shadow-red-200' : 'border-gray-200'
-                          }`}
+                          className={`bg-white border-2 rounded-xl cursor-pointer transition-all group ${deadlineStatus?.color === 'red' ? 'border-red-300 shadow-lg shadow-red-200' : 'border-gray-200'
+                            }`}
                         >
                           {/* Deadline Alert Banner for Urgent */}
                           {deadlineStatus?.color === 'red' && (
@@ -745,9 +825,8 @@ export default function AllProjectsAndTasksPage() {
 
                           {/* Task Header */}
                           <motion.div
-                            className={`p-6 hover:bg-gradient-to-r hover:from-brand-blue/5 hover:to-transparent transition-all ${
-                              deadlineStatus?.color === 'red' ? 'bg-red-50/30' : ''
-                            }`}
+                            className={`p-6 hover:bg-gradient-to-r hover:from-brand-blue/5 hover:to-transparent transition-all ${deadlineStatus?.color === 'red' ? 'bg-red-50/30' : ''
+                              }`}
                             onClick={() => setExpandedTasks({ ...expandedTasks, [task._id]: !isExpanded })}
                           >
                             <div className="flex items-start justify-between">
@@ -763,13 +842,12 @@ export default function AllProjectsAndTasksPage() {
                                 {task.deadlineDate && (
                                   <motion.div className="ml-9 inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold border-2 mb-2">
                                     <div
-                                      className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 inline-flex items-center gap-1 ${
-                                        deadlineStatus?.color === 'red'
-                                          ? 'bg-red-100 border-red-400 text-red-900'
-                                          : deadlineStatus?.color === 'orange'
+                                      className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 inline-flex items-center gap-1 ${deadlineStatus?.color === 'red'
+                                        ? 'bg-red-100 border-red-400 text-red-900'
+                                        : deadlineStatus?.color === 'orange'
                                           ? 'bg-orange-100 border-orange-400 text-orange-900'
                                           : 'bg-green-100 border-green-400 text-green-900'
-                                      }`}
+                                        }`}
                                     >
                                       📅 {task.deadlineDate} ⏰ {task.deadlineTime}
                                     </div>
@@ -779,12 +857,24 @@ export default function AllProjectsAndTasksPage() {
                               <motion.div
                                 animate={{ scale: 1 }}
                                 whileHover={{ scale: 1.1 }}
-                                className={`flex-shrink-0 transition-colors ${
-                                  deadlineStatus?.color === 'red' ? 'text-red-500' : 'text-gray-400 group-hover:text-brand-blue'
-                                }`}
+                                className={`flex-shrink-0 transition-colors ${deadlineStatus?.color === 'red' ? 'text-red-500' : 'text-gray-400 group-hover:text-brand-blue'
+                                  }`}
                               >
                                 <CheckCircle2 size={24} />
                               </motion.div>
+
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditClick(task, 'task');
+                                }}
+                                className="p-1.5 hover:bg-brand-blue/10 rounded-lg transition-colors"
+                                title="Edit task"
+                              >
+                                <Edit size={20} className="text-brand-blue hover:text-blue-700" />
+                              </motion.button>
                             </div>
 
                             {task.description?.text && (
@@ -800,11 +890,10 @@ export default function AllProjectsAndTasksPage() {
                                 animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }}
                                 transition={{ duration: 0.3 }}
-                                className={`border-t p-6 space-y-6 ${
-                                  deadlineStatus?.color === 'red'
-                                    ? 'border-red-200 bg-gradient-to-br from-red-50/30 to-gray-50'
-                                    : 'border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-50'
-                                }`}
+                                className={`border-t p-6 space-y-6 ${deadlineStatus?.color === 'red'
+                                  ? 'border-red-200 bg-gradient-to-br from-red-50/30 to-gray-50'
+                                  : 'border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-50'
+                                  }`}
                               >
                                 {/* Full Description */}
                                 {task.description?.text && (
@@ -820,22 +909,20 @@ export default function AllProjectsAndTasksPage() {
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.08 }}
-                                    className={`p-4 border-2 rounded-lg ml-6 ${
-                                      deadlineStatus?.color === 'red'
-                                        ? 'bg-red-100 border-red-400'
-                                        : deadlineStatus?.color === 'orange'
+                                    className={`p-4 border-2 rounded-lg ml-6 ${deadlineStatus?.color === 'red'
+                                      ? 'bg-red-100 border-red-400'
+                                      : deadlineStatus?.color === 'orange'
                                         ? 'bg-orange-100 border-orange-400'
                                         : 'bg-green-100 border-green-400'
-                                    }`}
+                                      }`}
                                   >
                                     <p
-                                      className={`text-sm font-bold flex items-center gap-2 ${
-                                        deadlineStatus?.color === 'red'
-                                          ? 'text-red-900'
-                                          : deadlineStatus?.color === 'orange'
+                                      className={`text-sm font-bold flex items-center gap-2 ${deadlineStatus?.color === 'red'
+                                        ? 'text-red-900'
+                                        : deadlineStatus?.color === 'orange'
                                           ? 'text-orange-900'
                                           : 'text-green-900'
-                                      }`}
+                                        }`}
                                     >
                                       <Clock size={16} />
                                       {deadlineStatusText}
@@ -964,6 +1051,18 @@ export default function AllProjectsAndTasksPage() {
           <p className="text-gray-400 text-sm font-medium">✨ Manage your course materials efficiently</p>
         </motion.div>
       </div>
+
+      ───────────────────────────────────────
+      <EditProjectTaskModal
+        isOpen={editModalOpen}
+        type={editType}
+        data={editingData}
+        onClose={() => {
+          setEditModalOpen(false);
+          setEditingData(null);
+        }}
+        onSave={handleSaveEdit}
+      />
     </div>
   );
 }
