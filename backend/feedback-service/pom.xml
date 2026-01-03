@@ -7,14 +7,14 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.0.0</version>
-		<relativePath/> <!-- lookup parent from repository -->
+		<version>3.2.0</version>
+		<relativePath/>
 	</parent>
 
 	<groupId>com.smartlms</groupId>
-	<artifactId>ai-feedback-service</artifactId>
+	<artifactId>feedback-service</artifactId>
 	<version>1.0.0</version>
-	<name>ai-feedback-service</name>
+	<name>feedback-service</name>
 	<description>AI Feedback Service for Smart LMS using Hugging Face API</description>
 
 	<properties>
@@ -45,12 +45,6 @@
 			<artifactId>spring-boot-starter-data-redis</artifactId>
 		</dependency>
 
-<!--		&lt;!&ndash; WebFlux for WebClient (Ollama if needed) &ndash;&gt;-->
-<!--		<dependency>-->
-<!--			<groupId>org.springframework.boot</groupId>-->
-<!--			<artifactId>spring-boot-starter-webflux</artifactId>-->
-<!--		</dependency>-->
-
 		<!-- Database -->
 		<dependency>
 			<groupId>org.postgresql</groupId>
@@ -65,12 +59,6 @@
 			<optional>true</optional>
 		</dependency>
 
-		<!-- JSON Processing -->
-		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
-			<artifactId>jackson-databind</artifactId>
-		</dependency>
-
 		<!-- HTTP Client for Hugging Face API -->
 		<dependency>
 			<groupId>com.squareup.okhttp3</groupId>
@@ -78,13 +66,13 @@
 			<version>4.12.0</version>
 		</dependency>
 
-		<!-- Apache Commons -->
+		<!-- JSON Processing -->
 		<dependency>
-			<groupId>commons-io</groupId>
-			<artifactId>commons-io</artifactId>
-			<version>2.16.0</version>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
 		</dependency>
 
+		<!-- Commons -->
 		<dependency>
 			<groupId>commons-codec</groupId>
 			<artifactId>commons-codec</artifactId>
@@ -103,12 +91,6 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-
-		<dependency>
-			<groupId>io.projectreactor</groupId>
-			<artifactId>reactor-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 
