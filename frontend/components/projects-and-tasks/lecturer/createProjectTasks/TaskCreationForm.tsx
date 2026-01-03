@@ -3,7 +3,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, Trash2, Loader, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Loader, AlertCircle, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import RichTextEditor from '../RichTextEditor';
 
@@ -37,6 +37,11 @@ export default function TaskCreationForm({
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
+  // File upload states
+  const [templateDocs, setTemplateDocs] = useState<File[]>([]);
+  const [otherDocs, setOtherDocs] = useState<File[]>([]);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+
   const [formState, setFormState] = useState<FormState>({
     taskName: '',
     description: { html: '', text: '' },
@@ -58,7 +63,7 @@ export default function TaskCreationForm({
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handle submit
+  // Handle submit with files
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -69,6 +74,29 @@ export default function TaskCreationForm({
 
     setIsSubmitting(true);
     try {
+      const formData = new FormData();
+
+      // Add form fields
+      formData.append('courseId', courseId);
+      formData.append('lecturerId', lecturerId);
+      formData.append('taskName', formState.taskName);
+      formData.append('description', JSON.stringify(formState.description));
+      formData.append('deadlineDate', formState.deadlineDate);
+      formData.append('deadlineTime', formState.deadlineTime);
+      formData.append('specialNotes', JSON.stringify(formState.specialNotes));
+      formData.append('subtasks', JSON.stringify(formState.subtasks));
+
+      // Add files
+      templateDocs.forEach((file) => {
+        formData.append('templateDocuments', file);
+      });
+      otherDocs.forEach((file) => {
+        formData.append('otherDocuments', file);
+      });
+      imageFiles.forEach((file) => {
+        formData.append('images', file);
+      });
+
       const token = localStorage.getItem('authToken');
 
       const response = await fetch(
@@ -76,19 +104,9 @@ export default function TaskCreationForm({
         {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            courseId,
-            lecturerId,
-            taskName: formState.taskName,
-            description: formState.description,
-            deadlineDate: formState.deadlineDate,
-            deadlineTime: formState.deadlineTime,
-            specialNotes: formState.specialNotes,
-            subtasks: formState.subtasks,
-          }),
+          body: formData,
         }
       );
 
@@ -135,6 +153,45 @@ export default function TaskCreationForm({
       ...formState,
       subtasks: formState.subtasks.filter((task) => task.id !== id),
     });
+  };
+
+  // File handlers
+  const handleFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    type: 'template' | 'other' | 'image'
+  ) => {
+    const files = Array.from(e.target.files || []);
+    const maxSize = type === 'image' ? 10 : 50; // MB
+
+    const validFiles = files.filter((file) => {
+      if (file.size > maxSize * 1024 * 1024) {
+        toast.error(`${file.name} exceeds ${maxSize}MB limit`);
+        return false;
+      }
+      return true;
+    });
+
+    if (type === 'template') {
+      setTemplateDocs([...templateDocs, ...validFiles]);
+    } else if (type === 'other') {
+      setOtherDocs([...otherDocs, ...validFiles]);
+    } else {
+      setImageFiles([...imageFiles, ...validFiles]);
+    }
+  };
+
+  // Remove file
+  const removeFile = (
+    fileName: string,
+    type: 'template' | 'other' | 'image'
+  ) => {
+    if (type === 'template') {
+      setTemplateDocs(templateDocs.filter((f) => f.name !== fileName));
+    } else if (type === 'other') {
+      setOtherDocs(otherDocs.filter((f) => f.name !== fileName));
+    } else {
+      setImageFiles(imageFiles.filter((f) => f.name !== fileName));
+    }
   };
 
   return (
@@ -289,6 +346,124 @@ export default function TaskCreationForm({
             Add
           </button>
         </div>
+      </div>
+
+      {/* Template Documents Upload */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <label className="block text-sm font-semibold text-gray-900 mb-4">
+          Template Documents (Optional)
+        </label>
+
+        {templateDocs.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {templateDocs.map((file) => (
+              <div
+                key={file.name}
+                className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg"
+              >
+                <span className="text-sm text-gray-700">{file.name}</span>
+                <button
+                  type="button"
+                  onClick={() => removeFile(file.name, 'template')}
+                  className="p-1 text-red-600 hover:bg-red-50 rounded"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <label className="flex items-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400 transition-colors">
+          <Upload size={20} className="text-gray-600" />
+          <span className="text-sm text-gray-700">Click to upload templates (max 50MB each)</span>
+          <input
+            type="file"
+            multiple
+            onChange={(e) => handleFileChange(e, 'template')}
+            className="hidden"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+          />
+        </label>
+      </div>
+
+      {/* Other Documents Upload */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <label className="block text-sm font-semibold text-gray-900 mb-4">
+          Other Documents (Optional)
+        </label>
+
+        {otherDocs.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {otherDocs.map((file) => (
+              <div
+                key={file.name}
+                className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg"
+              >
+                <span className="text-sm text-gray-700">{file.name}</span>
+                <button
+                  type="button"
+                  onClick={() => removeFile(file.name, 'other')}
+                  className="p-1 text-red-600 hover:bg-red-50 rounded"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <label className="flex items-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400 transition-colors">
+          <Upload size={20} className="text-gray-600" />
+          <span className="text-sm text-gray-700">Click to upload documents (max 50MB each)</span>
+          <input
+            type="file"
+            multiple
+            onChange={(e) => handleFileChange(e, 'other')}
+            className="hidden"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+          />
+        </label>
+      </div>
+
+      {/* Images Upload */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <label className="block text-sm font-semibold text-gray-900 mb-4">
+          Images (Optional)
+        </label>
+
+        {imageFiles.length > 0 && (
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            {imageFiles.map((file) => (
+              <div key={file.name} className="relative group">
+                <img
+                  src={URL.createObjectURL(file)}
+                  alt={file.name}
+                  className="w-full h-32 object-cover rounded-lg border border-gray-200"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeFile(file.name, 'image')}
+                  className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <label className="flex items-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400 transition-colors">
+          <Upload size={20} className="text-gray-600" />
+          <span className="text-sm text-gray-700">Click to upload images (max 10MB each)</span>
+          <input
+            type="file"
+            multiple
+            onChange={(e) => handleFileChange(e, 'image')}
+            className="hidden"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+          />
+        </label>
       </div>
 
       {/* Submit Button */}

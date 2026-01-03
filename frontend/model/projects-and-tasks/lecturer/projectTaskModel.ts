@@ -2,6 +2,21 @@
 
 import mongoose, { Schema, Document } from 'mongoose';
 
+// Subtask interface
+interface ISubtask {
+  id: string;
+  title: string;
+  description?: string;
+}
+
+// Main Task interface (with nested subtasks)
+interface IMainTask {
+  id: string;
+  title: string;
+  description?: string;
+  subtasks?: ISubtask[];
+}
+
 // Project Model
 export interface IProject extends Document {
   courseId: string;
@@ -15,16 +30,7 @@ export interface IProject extends Document {
   templateDocuments: Array<{ url: string; name: string; fileSize: number }>;
   otherDocuments: Array<{ url: string; name: string; fileSize: number }>;
   images: Array<{ url: string; name: string; fileSize: number }>;
-  mainTasks: Array<{
-    id: string;
-    title: string;
-    description?: string;
-    subtasks?: Array<{
-      id: string;
-      title: string;
-      description?: string;
-    }>;
-  }>;
+  mainTasks: IMainTask[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -40,14 +46,51 @@ export interface ITask extends Document {
   templateDocuments: Array<{ url: string; name: string; fileSize: number }>;
   otherDocuments: Array<{ url: string; name: string; fileSize: number }>;
   images: Array<{ url: string; name: string; fileSize: number }>;
-  subtasks: Array<{
-    id: string;
-    title: string;
-    description?: string;
-  }>;
+  subtasks: ISubtask[];
   createdAt: Date;
   updatedAt: Date;
 }
+
+// Subtask Schema (for reusability)
+const subtaskSchema = new Schema<ISubtask>(
+  {
+    id: String,
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: [200, 'Subtask title cannot exceed 200 characters'],
+    },
+    description: String,
+  },
+  { _id: false }
+);
+
+// Main Task Schema (with nested subtasks)
+const mainTaskSchema = new Schema<IMainTask>(
+  {
+    id: String,
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: [200, 'Main task title cannot exceed 200 characters'],
+    },
+    description: String,
+    subtasks: [subtaskSchema],
+  },
+  { _id: false }
+);
+
+// Document Schema (for template, other, images)
+const documentSchema = new Schema(
+  {
+    url: String,
+    name: String,
+    fileSize: Number,
+  },
+  { _id: false }
+);
 
 // Project Schema
 const projectSchema = new Schema<IProject>(
@@ -89,41 +132,10 @@ const projectSchema = new Schema<IProject>(
       html: { type: String, default: '' },
       text: { type: String, default: '' },
     },
-    templateDocuments: [
-      {
-        url: String,
-        name: String,
-        fileSize: Number,
-      },
-    ],
-    otherDocuments: [
-      {
-        url: String,
-        name: String,
-        fileSize: Number,
-      },
-    ],
-    images: [
-      {
-        url: String,
-        name: String,
-        fileSize: Number,
-      },
-    ],
-    mainTasks: [
-      {
-        id: String,
-        title: String,
-        description: String,
-        subtasks: [
-          {
-            id: String,
-            title: String,
-            description: String,
-          },
-        ],
-      },
-    ],
+    templateDocuments: [documentSchema],
+    otherDocuments: [documentSchema],
+    images: [documentSchema],
+    mainTasks: [mainTaskSchema],
   },
   { timestamps: true }
 );
@@ -163,34 +175,10 @@ const taskSchema = new Schema<ITask>(
       html: { type: String, default: '' },
       text: { type: String, default: '' },
     },
-    templateDocuments: [
-      {
-        url: String,
-        name: String,
-        fileSize: Number,
-      },
-    ],
-    otherDocuments: [
-      {
-        url: String,
-        name: String,
-        fileSize: Number,
-      },
-    ],
-    images: [
-      {
-        url: String,
-        name: String,
-        fileSize: Number,
-      },
-    ],
-    subtasks: [
-      {
-        id: String,
-        title: String,
-        description: String,
-      },
-    ],
+    templateDocuments: [documentSchema],
+    otherDocuments: [documentSchema],
+    images: [documentSchema],
+    subtasks: [subtaskSchema],
   },
   { timestamps: true }
 );

@@ -158,7 +158,7 @@ export default function CreateProjectsAndTasksPage() {
                   courseId={courseId}
                   lecturerId={lecturerId}
                   onSuccess={() => {
-                    router.push(`/projects-and-tasks/lecturer/projects?courseId=${courseId}`);
+                    router.push(`/projects-and-tasks/lecturer/project?courseId=${courseId}`);
                   }}
                 />
               )}
@@ -169,7 +169,7 @@ export default function CreateProjectsAndTasksPage() {
                   courseId={courseId}
                   lecturerId={lecturerId}
                   onSuccess={() => {
-                    router.push(`/projects-and-tasks/lecturer/projects?courseId=${courseId}`);
+                    router.push(`/projects-and-tasks/lecturer/project?courseId=${courseId}`);
                   }}
                 />
               )}
