@@ -11,6 +11,7 @@ import {
   AlertCircle,
   CheckCircle2
 } from 'lucide-react';
+import Link from 'next/link';
 
 interface StudentData {
   studentIdNumber: string;
@@ -368,17 +369,17 @@ export default function StudentDashboard() {
             <h2 className="text-xl font-bold text-gray-900 mb-4">
               Quick Actions
             </h2>
-            <div className="space-y-3">
-              <button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
+            <div className="flex flex-col space-y-3 text-center">
+              <Link href={"/learning-analytics/student/full-report"} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
                 <BookOpen size={18} />
                 View Full Report
-              </button>
-              <button className="w-full border border-gray-300 hover:border-gray-400 text-gray-700 py-2 rounded-lg font-medium transition-colors">
+              </Link>
+              <Link href={'#'} className="w-full border border-gray-300 hover:border-gray-400 text-gray-700 py-2 rounded-lg font-medium transition-colors">
                 Set New Goal
-              </button>
-              <button className="w-full border border-gray-300 hover:border-gray-400 text-gray-700 py-2 rounded-lg font-medium transition-colors">
+              </Link>
+              <Link href={'#'} className="w-full border border-gray-300 hover:border-gray-400 text-gray-700 py-2 rounded-lg font-medium transition-colors">
                 Compare with Peers
-              </button>
+              </Link>
             </div>
           </div>
 
