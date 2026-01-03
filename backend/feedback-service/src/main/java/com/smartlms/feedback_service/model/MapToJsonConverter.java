@@ -27,12 +27,13 @@ public class MapToJsonConverter implements AttributeConverter<Map<String, Object
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public Map<String, Object> convertToEntityAttribute(String dbData) {
         if (dbData == null || dbData.isEmpty()) {
             return new HashMap<>();
         }
         try {
-            return objectMapper.readValue(dbData, Map.class);
+            return objectMapper.readValue(dbData, HashMap.class);
         } catch (IOException e) {
             throw new RuntimeException("Error converting JSON to Map", e);
         }

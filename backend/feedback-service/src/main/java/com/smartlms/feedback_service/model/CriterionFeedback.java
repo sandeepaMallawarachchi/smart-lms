@@ -17,6 +17,8 @@ public class CriterionFeedback {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // Explicit setter for feedback (Lombok should generate this, but adding explicitly)
+    @Setter
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "feedback_id", nullable = false)
     @JsonIgnore
@@ -48,4 +50,5 @@ public class CriterionFeedback {
 
     @Column(name = "suggestions", columnDefinition = "TEXT")
     private String suggestions;
+
 }

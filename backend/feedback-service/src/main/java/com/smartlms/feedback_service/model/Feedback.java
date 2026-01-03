@@ -85,12 +85,33 @@ public class Feedback {
 
     // Helper methods
     public void addCriterionFeedback(CriterionFeedback criterionFeedback) {
+        if (criterionFeedbacks == null) {
+            criterionFeedbacks = new ArrayList<>();
+        }
         criterionFeedbacks.add(criterionFeedback);
         criterionFeedback.setFeedback(this);
     }
 
     public void removeCriterionFeedback(CriterionFeedback criterionFeedback) {
-        criterionFeedbacks.remove(criterionFeedback);
-        criterionFeedback.setFeedback(null);
+        if (criterionFeedbacks != null) {
+            criterionFeedbacks.remove(criterionFeedback);
+            criterionFeedback.setFeedback(null);
+        }
+    }
+
+    // Explicit getter for criterionFeedbacks
+    public List<CriterionFeedback> getCriterionFeedbacks() {
+        if (criterionFeedbacks == null) {
+            criterionFeedbacks = new ArrayList<>();
+        }
+        return criterionFeedbacks;
+    }
+
+    // Explicit getter for metadata
+    public Map<String, Object> getMetadata() {
+        if (metadata == null) {
+            metadata = new HashMap<>();
+        }
+        return metadata;
     }
 }

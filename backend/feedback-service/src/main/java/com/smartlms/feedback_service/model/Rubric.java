@@ -55,18 +55,35 @@ public class Rubric {
 
     // Helper methods
     public void addCriterion(RubricCriterion criterion) {
+        if (criteria == null) {
+            criteria = new ArrayList<>();
+        }
         criteria.add(criterion);
         criterion.setRubric(this);
     }
 
     public void removeCriterion(RubricCriterion criterion) {
-        criteria.remove(criterion);
-        criterion.setRubric(null);
+        if (criteria != null) {
+            criteria.remove(criterion);
+            criterion.setRubric(null);
+        }
     }
 
     public Double calculateTotalPoints() {
+        if (criteria == null || criteria.isEmpty()) {
+            return 0.0;
+        }
         return criteria.stream()
+                .filter(c -> c.getMaxScore() != null)
                 .mapToDouble(RubricCriterion::getMaxScore)
                 .sum();
+    }
+
+    // Explicit getter for criteria
+    public List<RubricCriterion> getCriteria() {
+        if (criteria == null) {
+            criteria = new ArrayList<>();
+        }
+        return criteria;
     }
 }
