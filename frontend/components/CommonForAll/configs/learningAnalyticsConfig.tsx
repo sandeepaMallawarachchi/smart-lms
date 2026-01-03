@@ -122,7 +122,7 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
           description: 'Your learning overview',
           href: '/learning-analytics/student',
           subsections: [
-            { id: 'overview', label: 'Overview' },
+            { id: 'overview', label: 'Overview', href: '/learning-analytics/student/' },
             { id: 'weekly-summary', label: 'Weekly Summary' },
             { id: 'monthly-report', label: 'Monthly Report' },
           ],
