@@ -1,8 +1,13 @@
+// /projects-and-tasks/lecturer/all-projects-and-tasks/page.tsx
+// FINAL VERSION - Deadline highlighting and task emphasis
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, FileText, CheckCircle2, Loader, ChevronDown, ChevronUp, Download, Image as ImageIcon } from 'lucide-react';
+import { ChevronRight, FileText, CheckCircle2, Loader, ChevronDown, ChevronUp, Download, Image as ImageIcon, Sparkles, Zap, AlertCircle, Clock } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
+// ============ INTERFACES ============
 interface Subtask {
   id: string;
   title: string;
@@ -62,6 +67,56 @@ interface SelectedCourse {
   credits: number;
 }
 
+// ============ HELPER FUNCTIONS ============
+const getDeadlineStatus = (deadlineDate: string, deadlineTime: string = '23:59') => {
+  try {
+    const deadline = new Date(`${deadlineDate}T${deadlineTime}`);
+    const now = new Date();
+    const hoursUntil = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    if (hoursUntil < 0) {
+      return { status: 'overdue', color: 'red', bgColor: 'bg-red-50', borderColor: 'border-red-300', textColor: 'text-red-900', icon: '⏰' };
+    } else if (hoursUntil < 24) {
+      return { status: 'urgent', color: 'red', bgColor: 'bg-red-50', borderColor: 'border-red-300', textColor: 'text-red-900', icon: '🔴' };
+    } else if (hoursUntil < 72) {
+      return { status: 'warning', color: 'orange', bgColor: 'bg-orange-50', borderColor: 'border-orange-300', textColor: 'text-orange-900', icon: '🟠' };
+    } else {
+      return { status: 'ok', color: 'green', bgColor: 'bg-green-50', borderColor: 'border-green-300', textColor: 'text-green-900', icon: '🟢' };
+    }
+  } catch (error) {
+    return { status: 'unknown', color: 'gray', bgColor: 'bg-gray-50', borderColor: 'border-gray-300', textColor: 'text-gray-900', icon: '⭕' };
+  }
+};
+
+const getDeadlineStatusText = (deadlineDate: string, deadlineTime: string = '23:59') => {
+  try {
+    const deadline = new Date(`${deadlineDate}T${deadlineTime}`);
+    const now = new Date();
+    const msUntil = deadline.getTime() - now.getTime();
+    const hoursUntil = msUntil / (1000 * 60 * 60);
+    const daysUntil = Math.floor(hoursUntil / 24);
+
+    if (msUntil < 0) {
+      return `⏰ Overdue by ${Math.abs(daysUntil)} days`;
+    } else if (hoursUntil < 1) {
+      return `🔴 Due in less than 1 hour!`;
+    } else if (hoursUntil < 24) {
+      return `🔴 Due in ${Math.floor(hoursUntil)} hours!`;
+    } else if (daysUntil === 0) {
+      return `🔴 Due today!`;
+    } else if (daysUntil === 1) {
+      return `🟠 Due tomorrow`;
+    } else if (daysUntil < 7) {
+      return `🟠 Due in ${daysUntil} days`;
+    } else {
+      return `🟢 Due in ${daysUntil} days`;
+    }
+  } catch (error) {
+    return '⭕ Invalid date';
+  }
+};
+
+// ============ MAIN COMPONENT ============
 export default function AllProjectsAndTasksPage() {
   const [activeTab, setActiveTab] = useState<'project' | 'task'>('project');
   const [selectedCourse, setSelectedCourse] = useState<SelectedCourse | null>(null);
@@ -71,6 +126,7 @@ export default function AllProjectsAndTasksPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState<{ [key: string]: boolean }>({});
+  const [expandedTasks, setExpandedTasks] = useState<{ [key: string]: boolean }>({});
   const [error, setError] = useState<string | null>(null);
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({});
 
@@ -227,411 +283,686 @@ export default function AllProjectsAndTasksPage() {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
-  // ✅ FIXED: Proper document download handler
   const handleDocumentDownload = (url: string, fileName: string) => {
     try {
-      // Create a temporary anchor element
       const link = document.createElement('a');
       link.href = url;
       link.download = fileName;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      
-      // Trigger download
+
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     } catch (error) {
       console.error('Download error:', error);
-      // Fallback: open in new tab if download fails
       window.open(url, '_blank');
     }
   };
 
-  // ✅ FIXED: Image error handler
   const handleImageError = (imageUrl: string) => {
     setImageErrors(prev => ({ ...prev, [imageUrl]: true }));
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-gray-50 flex items-center justify-center">
+        <motion.div animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 2, repeat: Infinity }}>
+          <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 2, repeat: Infinity }} className="inline-block">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-r from-brand-blue to-brand-yellow flex items-center justify-center shadow-lg shadow-brand-blue/30">
+              <Loader className="animate-spin text-white" size={32} />
+            </div>
+          </motion.div>
+          <motion.p animate={{ opacity: [0.6, 1] }} transition={{ duration: 1.5, repeat: Infinity }} className="text-gray-600 font-semibold mt-4 text-center">
+            Loading your content...
+          </motion.p>
+        </motion.div>
       </div>
     );
   }
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 15 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <nav className="flex items-center gap-2 text-sm text-gray-600 mb-8">
-          <span className="text-gray-700 font-medium">Projects & Tasks</span>
-          <ChevronRight size={16} className="text-gray-400" />
-          <span className="text-gray-700">
-            {selectedCourse ? selectedCourse.courseName : 'No Course Selected'}
-          </span>
-          <ChevronRight size={16} className="text-gray-400" />
-          <span className="text-gray-900 font-semibold">
-            {activeTab === 'project' ? 'All Projects' : 'All Tasks'}
-          </span>
-        </nav>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <motion.div animate={{ y: [0, 30, 0] }} transition={{ duration: 8, repeat: Infinity }} className="absolute top-10 right-20 w-96 h-96 bg-gradient-to-r from-brand-blue/5 to-brand-yellow/5 rounded-full blur-3xl" />
+        <motion.div animate={{ y: [0, -30, 0] }} transition={{ duration: 8, repeat: Infinity, delay: 1 }} className="absolute -bottom-32 -left-32 w-96 h-96 bg-gradient-to-r from-brand-yellow/5 to-brand-blue/5 rounded-full blur-3xl" />
+      </div>
 
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            {activeTab === 'project' ? 'All Projects' : 'All Tasks'}
-          </h1>
-          <p className="text-gray-600">
-            {selectedCourse
-              ? `Viewing ${activeTab === 'project' ? 'projects' : 'tasks'} for ${selectedCourse.courseName}`
-              : 'Select a course to view content'}
-          </p>
-        </div>
+      <div className="relative max-w-7xl mx-auto px-4 py-8">
+        {/* Header */}
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="mb-10">
+          <motion.nav className="flex items-center gap-2 text-sm text-gray-600 mb-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+            <span className="text-gray-700 font-medium">Projects & Tasks</span>
+            <motion.div animate={{ x: [0, 2, 0] }} transition={{ duration: 2, repeat: Infinity }}>
+              <ChevronRight size={16} className="text-gray-400" />
+            </motion.div>
+            <span className="text-gray-700">{selectedCourse ? selectedCourse.courseName : 'No Course Selected'}</span>
+            <ChevronRight size={16} className="text-gray-400" />
+            <span className="text-gray-900 font-semibold">{activeTab === 'project' ? 'All Projects' : 'All Tasks'}</span>
+          </motion.nav>
 
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-700">{error}</p>
-          </div>
-        )}
+          <motion.div className="flex items-center gap-4 mb-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
+            <motion.div animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}>
+              {activeTab === 'project' ? <FileText size={36} className="text-brand-blue" /> : <CheckCircle2 size={36} className="text-brand-blue" />}
+            </motion.div>
+            <h1 className="text-5xl font-bold bg-gradient-to-r from-brand-blue to-brand-blue/70 bg-clip-text text-transparent">
+              {activeTab === 'project' ? 'All Projects' : 'All Tasks'}
+            </h1>
+          </motion.div>
 
+          <motion.p className="text-gray-600 text-lg ml-16" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
+            {selectedCourse ? `Viewing ${activeTab === 'project' ? 'projects' : 'tasks'} for ${selectedCourse.courseName}` : 'Select a course to view content'}
+          </motion.p>
+        </motion.div>
+
+        {/* Error Message */}
+        <AnimatePresence>
+          {error && (
+            <motion.div initial={{ opacity: 0, y: -10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -10 }} className="mb-6 p-4 bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-xl shadow-sm flex items-center gap-3">
+              <AlertCircle className="text-red-600 flex-shrink-0" size={20} />
+              <p className="text-red-700 font-semibold">{error}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Course Info Card */}
         {selectedCourse && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-gradient-to-r from-brand-blue/8 via-brand-yellow/3 to-brand-blue/8 rounded-xl border border-brand-blue/20 p-6 mb-8 shadow-sm hover:shadow-md transition-shadow" whileHover={{ y: -2 }}>
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-bold text-gray-900">{selectedCourse.courseName}</h2>
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm text-gray-600 mt-2">
                   {selectedCourse.courseCode} • Year {selectedCourse.year}, Semester {selectedCourse.semester} • {selectedCourse.credits} Credits
                 </p>
               </div>
+              <motion.div animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}>
+                <Sparkles size={28} className="text-brand-yellow" />
+              </motion.div>
             </div>
-          </div>
+          </motion.div>
         )}
 
-        <div className="bg-white rounded-t-lg border border-gray-200 border-b-0 p-6 mb-0">
+        {/* Tabs */}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="bg-white/60 backdrop-blur-lg rounded-t-2xl border border-gray-200 border-b-0 p-6 shadow-lg">
           <div className="flex gap-8 border-b border-gray-200">
-            <button
-              onClick={() => setActiveTab('project')}
-              className={`flex items-center gap-2 pb-4 font-medium transition-colors ${
-                activeTab === 'project'
-                  ? 'text-brand-blue border-b-2 border-brand-blue'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <FileText size={18} />
-              Projects ({projects.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('task')}
-              className={`flex items-center gap-2 pb-4 font-medium transition-colors ${
-                activeTab === 'task'
-                  ? 'text-brand-blue border-b-2 border-brand-blue'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <CheckCircle2 size={18} />
-              Tasks ({tasks.length})
-            </button>
+            <motion.button onClick={() => setActiveTab('project')} whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} className={`relative pb-4 font-semibold transition-all flex items-center gap-2.5 group ${activeTab === 'project' ? 'text-brand-blue' : 'text-gray-600 hover:text-gray-900'}`}>
+              <motion.div animate={{ rotate: activeTab === 'project' ? 0 : -15 }} transition={{ duration: 0.3 }} className="group-hover:text-brand-blue transition-colors">
+                <FileText size={20} strokeWidth={2.5} />
+              </motion.div>
+              <span>Projects</span>
+              <motion.span animate={{ scale: activeTab === 'project' ? 1 : 0.8, opacity: activeTab === 'project' ? 1 : 0.6 }} className="bg-brand-blue/20 text-brand-blue text-xs font-bold px-2.5 py-1 rounded-full">
+                {projects.length}
+              </motion.span>
+              {activeTab === 'project' && <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-brand-blue to-brand-blue/50 rounded-full" transition={{ duration: 0.3 }} />}
+            </motion.button>
+
+            <motion.button onClick={() => setActiveTab('task')} whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} className={`relative pb-4 font-semibold transition-all flex items-center gap-2.5 group ${activeTab === 'task' ? 'text-brand-blue' : 'text-gray-600 hover:text-gray-900'}`}>
+              <motion.div animate={{ rotate: activeTab === 'task' ? 0 : -15 }} transition={{ duration: 0.3 }} className="group-hover:text-brand-blue transition-colors">
+                <CheckCircle2 size={20} strokeWidth={2.5} />
+              </motion.div>
+              <span>Tasks</span>
+              <motion.span animate={{ scale: activeTab === 'task' ? 1 : 0.8, opacity: activeTab === 'task' ? 1 : 0.6 }} className="bg-brand-blue/20 text-brand-blue text-xs font-bold px-2.5 py-1 rounded-full">
+                {tasks.length}
+              </motion.span>
+              {activeTab === 'task' && <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-brand-blue to-brand-blue/50 rounded-full" transition={{ duration: 0.3 }} />}
+            </motion.button>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="bg-white rounded-b-lg border border-gray-200 p-6">
-          {!selectedCourse ? (
-            <div className="text-center py-12">
-              <p className="text-gray-600 text-lg mb-2">No Course Selected</p>
-              <p className="text-gray-500">Please select a course from the dropdown at the top to view content</p>
-            </div>
-          ) : isFetching ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader className="animate-spin text-brand-blue mr-2" size={24} />
-              <p className="text-gray-600">Loading {activeTab === 'project' ? 'projects' : 'tasks'}...</p>
-            </div>
-          ) : activeTab === 'project' ? (
-            <>
-              {projects.length === 0 ? (
-                <div className="text-center py-12">
-                  <FileText className="mx-auto mb-4 text-gray-400" size={48} />
-                  <p className="text-gray-600 text-lg mb-2">No Projects Yet</p>
-                  <p className="text-gray-500">Create a new project to get started</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {projects.map((project) => {
-                    const mainTasks = getMainTasks(project);
-                    const templateDocs = getDocuments(project.templateDocuments);
-                    const otherDocs = getDocuments(project.otherDocuments);
-                    const images = getDocuments(project.images);
+        {/* Content */}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="bg-white/80 backdrop-blur-sm rounded-b-2xl border border-gray-200 p-8 shadow-lg">
+          <AnimatePresence mode="wait">
+            {!selectedCourse ? (
+              <motion.div key="no-course" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center py-20">
+                <motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+                  <Sparkles size={56} className="text-gray-400 mx-auto mb-4" />
+                </motion.div>
+                <p className="text-gray-600 text-lg mb-2 font-semibold">No Course Selected</p>
+                <p className="text-gray-500">Please select a course from the dropdown to view content</p>
+              </motion.div>
+            ) : isFetching ? (
+              <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center justify-center py-20">
+                <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 2, repeat: Infinity }} className="mr-4">
+                  <Loader className="animate-spin text-brand-blue" size={32} />
+                </motion.div>
+                <p className="text-gray-600 font-semibold">Loading {activeTab === 'project' ? 'projects' : 'tasks'}...</p>
+              </motion.div>
+            ) : activeTab === 'project' ? (
+              <motion.div key="projects" variants={containerVariants} initial="hidden" animate="visible">
+                {projects.length === 0 ? (
+                  <motion.div variants={itemVariants} className="text-center py-20">
+                    <motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+                      <FileText className="mx-auto mb-4 text-gray-400" size={56} />
+                    </motion.div>
+                    <p className="text-gray-600 text-lg mb-2 font-semibold">No Projects Yet</p>
+                    <p className="text-gray-500">Create a new project to get started</p>
+                  </motion.div>
+                ) : (
+                  <div className="space-y-4">
+                    {projects.map((project) => {
+                      const mainTasks = getMainTasks(project);
+                      const templateDocs = getDocuments(project.templateDocuments);
+                      const otherDocs = getDocuments(project.otherDocuments);
+                      const images = getDocuments(project.images);
+                      const isExpanded = expandedProjects[project._id];
+                      const deadlineStatus = getDeadlineStatus(project.deadlineDate, project.deadlineTime);
+                      const deadlineStatusText = getDeadlineStatusText(project.deadlineDate, project.deadlineTime);
 
-                    return (
-                      <div
-                        key={project._id}
-                        className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
-                      >
-                        <div
-                          className="p-6 cursor-pointer hover:bg-gray-50"
-                          onClick={() =>
-                            setExpandedProjects({
-                              ...expandedProjects,
-                              [project._id]: !expandedProjects[project._id],
-                            })
-                          }
+                      return (
+                        <motion.div
+                          key={project._id}
+                          variants={itemVariants}
+                          whileHover={{ y: -4, boxShadow: '0 20px 25px -5px rgba(59, 130, 246, 0.15)' }}
+                          className={`bg-white border-2 rounded-xl overflow-hidden cursor-pointer transition-all group ${
+                            deadlineStatus.color === 'red' ? 'border-red-300 shadow-lg shadow-red-200' : 'border-gray-200'
+                          }`}
                         >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                {expandedProjects[project._id] ? (
-                                  <ChevronDown size={20} className="text-gray-600" />
-                                ) : (
-                                  <ChevronUp size={20} className="text-gray-600" />
+                          {/* Deadline Alert Banner for Urgent */}
+                          {deadlineStatus.color === 'red' && (
+                            <motion.div
+                              animate={{ opacity: [1, 0.8, 1] }}
+                              transition={{ duration: 2, repeat: Infinity }}
+                              className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-2 flex items-center gap-2"
+                            >
+                              <Clock size={16} />
+                              <span className="font-semibold text-sm">{deadlineStatusText}</span>
+                            </motion.div>
+                          )}
+
+                          {/* Project Header */}
+                          <motion.div
+                            className={`p-6 hover:bg-gradient-to-r hover:from-brand-blue/5 hover:to-transparent transition-all ${
+                              deadlineStatus.color === 'red' ? 'bg-red-50/30' : ''
+                            }`}
+                            onClick={() => setExpandedProjects({ ...expandedProjects, [project._id]: !isExpanded })}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-3">
+                                  <motion.div animate={{ rotate: isExpanded ? 180 : 0 }} transition={{ duration: 0.3 }}>
+                                    {isExpanded ? <ChevronDown size={22} className="text-brand-blue" /> : <ChevronUp size={22} className="text-gray-600 group-hover:text-brand-blue transition-colors" />}
+                                  </motion.div>
+                                  <h3 className="font-bold text-gray-900 text-lg group-hover:text-brand-blue transition-colors">{project.projectName}</h3>
+                                </div>
+                                <div className="flex items-center gap-2 ml-9 flex-wrap gap-y-2">
+                                  <motion.span
+                                    whileHover={{ scale: 1.05 }}
+                                    className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-r from-brand-blue/20 to-brand-blue/10 text-brand-blue border border-brand-blue/20"
+                                  >
+                                    {project.projectType === 'group' ? '👥 Group' : '👤 Individual'}
+                                  </motion.span>
+
+                                  {/* Highlighted Deadline */}
+                                  <motion.span
+                                    whileHover={{ scale: 1.05 }}
+                                    className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold border-2 ${
+                                      deadlineStatus.color === 'red'
+                                        ? 'bg-red-100 border-red-400 text-red-900'
+                                        : deadlineStatus.color === 'orange'
+                                        ? 'bg-orange-100 border-orange-400 text-orange-900'
+                                        : 'bg-green-100 border-green-400 text-green-900'
+                                    }`}
+                                  >
+                                    📅 {project.deadlineDate}
+                                  </motion.span>
+
+                                  <span className="text-xs text-gray-500 font-medium">
+                                    ⏰ {project.deadlineTime}
+                                  </span>
+                                </div>
+                              </div>
+                              <motion.div
+                                animate={{ scale: 1 }}
+                                whileHover={{ scale: 1.1 }}
+                                className={`flex-shrink-0 transition-colors ${
+                                  deadlineStatus.color === 'red' ? 'text-red-500' : 'text-gray-400 group-hover:text-brand-blue'
+                                }`}
+                              >
+                                <FileText size={24} />
+                              </motion.div>
+                            </div>
+
+                            {project.description?.text && (
+                              <p className="text-sm text-gray-600 mt-3 ml-9 line-clamp-2 group-hover:text-gray-700 transition-colors">{project.description.text}</p>
+                            )}
+                          </motion.div>
+
+                          {/* Expanded Project Details */}
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.3 }}
+                                className={`border-t p-6 space-y-6 ${
+                                  deadlineStatus.color === 'red'
+                                    ? 'border-red-200 bg-gradient-to-br from-red-50/30 to-gray-50'
+                                    : 'border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-50'
+                                }`}
+                              >
+                                {/* Full Description */}
+                                {project.description?.text && (
+                                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+                                    <h4 className="font-semibold text-gray-900 mb-2">📝 Description</h4>
+                                    <p className="text-sm text-gray-700 ml-6 whitespace-pre-wrap">{project.description.text}</p>
+                                  </motion.div>
                                 )}
-                                <h3 className="font-bold text-gray-900 text-lg">{project.projectName}</h3>
-                              </div>
-                              <div className="flex items-center gap-2 ml-7">
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-                                  {project.projectType === 'group' ? 'Group Project' : 'Individual'}
-                                </span>
-                                <span className="text-xs text-gray-500">
-                                  Deadline: {project.deadlineDate} {project.deadlineTime}
-                                </span>
-                              </div>
-                            </div>
-                            <FileText className="text-gray-400" size={20} />
-                          </div>
 
-                          {project.description?.text && (
-                            <p className="text-sm text-gray-600 mt-3 ml-7 line-clamp-2">{project.description.text}</p>
-                          )}
-                        </div>
+                                {/* Main Tasks - Highlighted */}
+                                {mainTasks.length > 0 && (
+                                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="p-4 bg-blue-50/70 border-2 border-blue-300 rounded-lg">
+                                    <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2 text-lg">
+                                      <Zap size={20} className="text-blue-600" />
+                                      Main Tasks ({mainTasks.length}) - Key Deliverables
+                                    </h4>
+                                    <div className="space-y-3 ml-6">
+                                      {mainTasks.map((task, idx) => {
+                                        const subtasks = getSubtasks(task);
+                                        return (
+                                          <motion.div
+                                            key={task.id}
+                                            initial={{ opacity: 0, x: -10 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ delay: 0.12 + idx * 0.05 }}
+                                            className="bg-white p-4 rounded-lg border-2 border-blue-200 hover:border-blue-400 transition-colors shadow-sm"
+                                          >
+                                            <p className="text-sm font-bold text-blue-900">📌 {task.title}</p>
+                                            {task.description && <p className="text-xs text-gray-600 mt-1 italic">{task.description}</p>}
+                                            {subtasks.length > 0 && (
+                                              <div className="ml-4 space-y-1 mt-2 p-2 bg-blue-50 rounded">
+                                                <p className="text-xs font-semibold text-blue-800 mb-1">Sub-components:</p>
+                                                {subtasks.map((subtask, stIdx) => (
+                                                  <p key={subtask.id} className="text-xs text-blue-700">
+                                                    {String.fromCharCode(97 + stIdx)}) {subtask.title}
+                                                  </p>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </motion.div>
+                                        );
+                                      })}
+                                    </div>
+                                  </motion.div>
+                                )}
 
-                        {expandedProjects[project._id] && (
-                          <div className="border-t border-gray-200 p-6 bg-gray-50 space-y-4">
-                            {mainTasks.length > 0 && (
-                              <div>
-                                <h4 className="font-semibold text-gray-900 mb-3">Main Tasks ({mainTasks.length})</h4>
-                                <div className="space-y-2 ml-4">
-                                  {mainTasks.map((task) => {
-                                    const subtasks = getSubtasks(task);
-                                    return (
-                                      <div key={task.id}>
-                                        <p className="text-sm font-medium text-gray-700">• {task.title}</p>
-                                        {subtasks.length > 0 && (
-                                          <div className="ml-4 space-y-1 mt-1">
-                                            {subtasks.map((subtask) => (
-                                              <p key={subtask.id} className="text-xs text-gray-600">
-                                                ◦ {subtask.title}
-                                              </p>
-                                            ))}
+                                {/* Template Documents */}
+                                {templateDocs.length > 0 && (
+                                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+                                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                      <FileText size={18} className="text-blue-600" />
+                                      Template Documents ({templateDocs.length})
+                                    </h4>
+                                    <div className="space-y-2 ml-6">
+                                      {templateDocs.map((doc) => (
+                                        <motion.button
+                                          key={doc.url}
+                                          whileHover={{ x: 4 }}
+                                          onClick={() => handleDocumentDownload(doc.url, doc.name)}
+                                          className="w-full flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg hover:border-brand-blue hover:bg-blue-100 transition-all text-left group"
+                                        >
+                                          <Download size={16} className="text-brand-blue flex-shrink-0 group-hover:scale-110 transition-transform" />
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-gray-900 truncate">{doc.name}</p>
+                                            <p className="text-xs text-gray-500">{formatFileSize(doc.fileSize)}</p>
                                           </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-
-                            {templateDocs.length > 0 && (
-                              <div>
-                                <h4 className="font-semibold text-gray-900 mb-2">Template Documents</h4>
-                                <div className="space-y-2 ml-4">
-                                  {templateDocs.map((doc) => (
-                                    <button
-                                      key={doc.url}
-                                      onClick={() => handleDocumentDownload(doc.url, doc.name)}
-                                      className="flex items-center gap-2 text-sm text-brand-blue hover:underline hover:text-blue-700 transition-colors text-left"
-                                    >
-                                      <Download size={14} />
-                                      <span>{doc.name}</span>
-                                      <span className="text-xs text-gray-500">({formatFileSize(doc.fileSize)})</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {otherDocs.length > 0 && (
-                              <div>
-                                <h4 className="font-semibold text-gray-900 mb-2">Documents</h4>
-                                <div className="space-y-2 ml-4">
-                                  {otherDocs.map((doc) => (
-                                    <button
-                                      key={doc.url}
-                                      onClick={() => handleDocumentDownload(doc.url, doc.name)}
-                                      className="flex items-center gap-2 text-sm text-brand-blue hover:underline hover:text-blue-700 transition-colors text-left"
-                                    >
-                                      <Download size={14} />
-                                      <span>{doc.name}</span>
-                                      <span className="text-xs text-gray-500">({formatFileSize(doc.fileSize)})</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {images.length > 0 && (
-                              <div>
-                                <h4 className="font-semibold text-gray-900 mb-2">Images ({images.length})</h4>
-                                <div className="grid grid-cols-3 gap-2 ml-4">
-                                  {images.map((img) => (
-                                    <div key={img.url} className="relative group">
-                                      {!imageErrors[img.url] ? (
-                                        <img
-                                          src={img.url}
-                                          alt={img.name}
-                                          onError={() => handleImageError(img.url)}
-                                          className="w-20 h-20 object-cover rounded border border-gray-300 hover:opacity-75 transition-opacity cursor-pointer"
-                                          onClick={() => window.open(img.url, '_blank')}
-                                        />
-                                      ) : (
-                                        <div className="w-20 h-20 bg-gray-200 rounded border border-gray-300 flex items-center justify-center flex-col gap-1">
-                                          <ImageIcon size={16} className="text-gray-400" />
-                                          <span className="text-xs text-gray-500">Failed</span>
-                                        </div>
-                                      )}
-                                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 rounded transition-colors flex items-center justify-center">
-                                        <Download size={14} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                      </div>
+                                          <ChevronRight size={16} className="text-gray-400 flex-shrink-0" />
+                                        </motion.button>
+                                      ))}
                                     </div>
-                                  ))}
-                                </div>
-                              </div>
+                                  </motion.div>
+                                )}
+
+                                {/* Other Documents */}
+                                {otherDocs.length > 0 && (
+                                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                      <FileText size={18} className="text-green-600" />
+                                      Documents ({otherDocs.length})
+                                    </h4>
+                                    <div className="space-y-2 ml-6">
+                                      {otherDocs.map((doc) => (
+                                        <motion.button
+                                          key={doc.url}
+                                          whileHover={{ x: 4 }}
+                                          onClick={() => handleDocumentDownload(doc.url, doc.name)}
+                                          className="w-full flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg hover:border-brand-blue hover:bg-green-100 transition-all text-left group"
+                                        >
+                                          <Download size={16} className="text-green-600 flex-shrink-0 group-hover:scale-110 transition-transform" />
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-gray-900 truncate">{doc.name}</p>
+                                            <p className="text-xs text-gray-500">{formatFileSize(doc.fileSize)}</p>
+                                          </div>
+                                          <ChevronRight size={16} className="text-gray-400 flex-shrink-0" />
+                                        </motion.button>
+                                      ))}
+                                    </div>
+                                  </motion.div>
+                                )}
+
+                                {/* Images */}
+                                {images.length > 0 && (
+                                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+                                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                      <ImageIcon size={18} className="text-purple-600" />
+                                      Images ({images.length})
+                                    </h4>
+                                    <div className="grid grid-cols-4 md:grid-cols-5 gap-3 ml-6">
+                                      {images.map((img) => (
+                                        <motion.div key={img.url} whileHover={{ scale: 1.05 }} className="relative group cursor-pointer">
+                                          {!imageErrors[img.url] ? (
+                                            <>
+                                              <img
+                                                src={img.url}
+                                                alt={img.name}
+                                                onError={() => handleImageError(img.url)}
+                                                className="w-full h-20 object-cover rounded-lg border border-gray-200 group-hover:border-brand-blue transition-all"
+                                                onClick={() => window.open(img.url, '_blank')}
+                                              />
+                                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 rounded-lg transition-all flex items-center justify-center">
+                                                <Download size={12} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                              </div>
+                                            </>
+                                          ) : (
+                                            <div className="w-full h-20 bg-gray-200 rounded-lg border border-gray-200 flex items-center justify-center flex-col gap-1">
+                                              <ImageIcon size={14} className="text-gray-400" />
+                                              <span className="text-xs text-gray-500">Failed</span>
+                                            </div>
+                                          )}
+                                        </motion.div>
+                                      ))}
+                                    </div>
+                                  </motion.div>
+                                )}
+
+                                {/* Special Notes */}
+                                {project.specialNotes?.text && (
+                                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="p-4 bg-yellow-50/70 border-2 border-yellow-300 rounded-lg ml-6">
+                                    <h4 className="font-bold text-yellow-900 text-sm mb-2">⚠️ Special Notes - Important</h4>
+                                    <p className="text-sm text-yellow-800 whitespace-pre-wrap">{project.specialNotes.text}</p>
+                                  </motion.div>
+                                )}
+                              </motion.div>
                             )}
+                          </AnimatePresence>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div key="tasks" variants={containerVariants} initial="hidden" animate="visible">
+                {tasks.length === 0 ? (
+                  <motion.div variants={itemVariants} className="text-center py-20">
+                    <motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+                      <CheckCircle2 className="mx-auto mb-4 text-gray-400" size={56} />
+                    </motion.div>
+                    <p className="text-gray-600 text-lg mb-2 font-semibold">No Tasks Yet</p>
+                    <p className="text-gray-500">Create a new task to get started</p>
+                  </motion.div>
+                ) : (
+                  <div className="space-y-4">
+                    {tasks.map((task) => {
+                      const subtasks = getTaskSubtasks(task);
+                      const templateDocs = getDocuments(task.templateDocuments);
+                      const otherDocs = getDocuments(task.otherDocuments);
+                      const images = getDocuments(task.images);
+                      const isExpanded = expandedTasks[task._id];
+                      const deadlineStatus = task.deadlineDate ? getDeadlineStatus(task.deadlineDate, task.deadlineTime) : null;
+                      const deadlineStatusText = task.deadlineDate ? getDeadlineStatusText(task.deadlineDate, task.deadlineTime) : null;
 
-                            {project.specialNotes?.text && (
-                              <div className="pt-4 border-t border-gray-200">
-                                <h4 className="font-semibold text-gray-900 mb-2">Special Notes</h4>
-                                <p className="text-sm text-gray-700 ml-4">{project.specialNotes.text}</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              {tasks.length === 0 ? (
-                <div className="text-center py-12">
-                  <CheckCircle2 className="mx-auto mb-4 text-gray-400" size={48} />
-                  <p className="text-gray-600 text-lg mb-2">No Tasks Yet</p>
-                  <p className="text-gray-500">Create a new task to get started</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {tasks.map((task) => {
-                    const subtasks = getTaskSubtasks(task);
-                    const templateDocs = getDocuments(task.templateDocuments);
-                    const otherDocs = getDocuments(task.otherDocuments);
-                    const images = getDocuments(task.images);
-
-                    return (
-                      <div
-                        key={task._id}
-                        className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <h3 className="font-bold text-gray-900 text-lg">{task.taskName}</h3>
-                          <CheckCircle2 className="text-gray-400 flex-shrink-0" size={20} />
-                        </div>
-
-                        {task.description?.text && (
-                          <p className="text-sm text-gray-600 mb-3">{task.description.text}</p>
-                        )}
-
-                        <div className="space-y-2 mb-3">
-                          {task.deadlineDate && (
-                            <p className="text-xs text-gray-500">
-                              <span className="font-semibold">Deadline:</span> {task.deadlineDate} {task.deadlineTime || '23:59'}
-                            </p>
+                      return (
+                        <motion.div
+                          key={task._id}
+                          variants={itemVariants}
+                          whileHover={{ y: -4, boxShadow: '0 20px 25px -5px rgba(59, 130, 246, 0.15)' }}
+                          className={`bg-white border-2 rounded-xl cursor-pointer transition-all group ${
+                            deadlineStatus?.color === 'red' ? 'border-red-300 shadow-lg shadow-red-200' : 'border-gray-200'
+                          }`}
+                        >
+                          {/* Deadline Alert Banner for Urgent */}
+                          {deadlineStatus?.color === 'red' && (
+                            <motion.div
+                              animate={{ opacity: [1, 0.8, 1] }}
+                              transition={{ duration: 2, repeat: Infinity }}
+                              className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-2 flex items-center gap-2"
+                            >
+                              <Clock size={16} />
+                              <span className="font-semibold text-sm">{deadlineStatusText}</span>
+                            </motion.div>
                           )}
-                        </div>
 
-                        {subtasks.length > 0 && (
-                          <div className="mb-3 p-3 bg-blue-50 rounded border border-blue-200">
-                            <h4 className="font-semibold text-gray-900 text-sm mb-2">Subtasks ({subtasks.length})</h4>
-                            <div className="space-y-1 ml-4">
-                              {subtasks.map((subtask) => (
-                                <p key={subtask.id} className="text-sm text-gray-700">
-                                  ✓ {subtask.title}
-                                </p>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {(templateDocs.length > 0 || otherDocs.length > 0 || images.length > 0) && (
-                          <div className="pt-3 border-t border-gray-200 space-y-2">
-                            {templateDocs.length > 0 && (
-                              <div>
-                                <p className="text-xs font-semibold text-gray-700 mb-1">Templates:</p>
-                                <div className="space-y-1 ml-2">
-                                  {templateDocs.map((doc) => (
-                                    <button
-                                      key={doc.url}
-                                      onClick={() => handleDocumentDownload(doc.url, doc.name)}
-                                      className="flex items-center gap-1 text-xs text-brand-blue hover:underline transition-colors text-left"
-                                    >
-                                      <Download size={12} />
-                                      {doc.name}
-                                    </button>
-                                  ))}
+                          {/* Task Header */}
+                          <motion.div
+                            className={`p-6 hover:bg-gradient-to-r hover:from-brand-blue/5 hover:to-transparent transition-all ${
+                              deadlineStatus?.color === 'red' ? 'bg-red-50/30' : ''
+                            }`}
+                            onClick={() => setExpandedTasks({ ...expandedTasks, [task._id]: !isExpanded })}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-3">
+                                  <motion.div animate={{ rotate: isExpanded ? 180 : 0 }} transition={{ duration: 0.3 }}>
+                                    {isExpanded ? <ChevronDown size={22} className="text-brand-blue" /> : <ChevronUp size={22} className="text-gray-600 group-hover:text-brand-blue transition-colors" />}
+                                  </motion.div>
+                                  <h3 className="font-bold text-gray-900 text-lg group-hover:text-brand-blue transition-colors">{task.taskName}</h3>
                                 </div>
-                              </div>
-                            )}
 
-                            {otherDocs.length > 0 && (
-                              <div>
-                                <p className="text-xs font-semibold text-gray-700 mb-1">Documents:</p>
-                                <div className="space-y-1 ml-2">
-                                  {otherDocs.map((doc) => (
-                                    <button
-                                      key={doc.url}
-                                      onClick={() => handleDocumentDownload(doc.url, doc.name)}
-                                      className="flex items-center gap-1 text-xs text-brand-blue hover:underline transition-colors text-left"
+                                {/* Highlighted Deadline for Tasks */}
+                                {task.deadlineDate && (
+                                  <motion.div className="ml-9 inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold border-2 mb-2">
+                                    <div
+                                      className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 inline-flex items-center gap-1 ${
+                                        deadlineStatus?.color === 'red'
+                                          ? 'bg-red-100 border-red-400 text-red-900'
+                                          : deadlineStatus?.color === 'orange'
+                                          ? 'bg-orange-100 border-orange-400 text-orange-900'
+                                          : 'bg-green-100 border-green-400 text-green-900'
+                                      }`}
                                     >
-                                      <Download size={12} />
-                                      {doc.name}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {images.length > 0 && (
-                              <div>
-                                <p className="text-xs font-semibold text-gray-700 mb-1">Images ({images.length})</p>
-                                <div className="flex gap-2">
-                                  {images.map((img) => (
-                                    <div key={img.url} className="relative group">
-                                      {!imageErrors[img.url] ? (
-                                        <img
-                                          src={img.url}
-                                          alt={img.name}
-                                          onError={() => handleImageError(img.url)}
-                                          className="w-12 h-12 object-cover rounded border border-gray-300 hover:opacity-75 transition-opacity cursor-pointer"
-                                          onClick={() => window.open(img.url, '_blank')}
-                                        />
-                                      ) : (
-                                        <div className="w-12 h-12 bg-gray-200 rounded border border-gray-300 flex items-center justify-center">
-                                          <ImageIcon size={12} className="text-gray-400" />
-                                        </div>
-                                      )}
+                                      📅 {task.deadlineDate} ⏰ {task.deadlineTime}
                                     </div>
-                                  ))}
-                                </div>
+                                  </motion.div>
+                                )}
                               </div>
+                              <motion.div
+                                animate={{ scale: 1 }}
+                                whileHover={{ scale: 1.1 }}
+                                className={`flex-shrink-0 transition-colors ${
+                                  deadlineStatus?.color === 'red' ? 'text-red-500' : 'text-gray-400 group-hover:text-brand-blue'
+                                }`}
+                              >
+                                <CheckCircle2 size={24} />
+                              </motion.div>
+                            </div>
+
+                            {task.description?.text && (
+                              <p className="text-sm text-gray-600 mt-3 ml-9 line-clamp-2 group-hover:text-gray-700 transition-colors">{task.description.text}</p>
                             )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </>
-          )}
-        </div>
+                          </motion.div>
+
+                          {/* Expanded Task Details */}
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.3 }}
+                                className={`border-t p-6 space-y-6 ${
+                                  deadlineStatus?.color === 'red'
+                                    ? 'border-red-200 bg-gradient-to-br from-red-50/30 to-gray-50'
+                                    : 'border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-50'
+                                }`}
+                              >
+                                {/* Full Description */}
+                                {task.description?.text && (
+                                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+                                    <h4 className="font-semibold text-gray-900 mb-2">📝 Description</h4>
+                                    <p className="text-sm text-gray-700 ml-6 whitespace-pre-wrap">{task.description.text}</p>
+                                  </motion.div>
+                                )}
+
+                                {/* Deadline Highlight */}
+                                {task.deadlineDate && (
+                                  <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.08 }}
+                                    className={`p-4 border-2 rounded-lg ml-6 ${
+                                      deadlineStatus?.color === 'red'
+                                        ? 'bg-red-100 border-red-400'
+                                        : deadlineStatus?.color === 'orange'
+                                        ? 'bg-orange-100 border-orange-400'
+                                        : 'bg-green-100 border-green-400'
+                                    }`}
+                                  >
+                                    <p
+                                      className={`text-sm font-bold flex items-center gap-2 ${
+                                        deadlineStatus?.color === 'red'
+                                          ? 'text-red-900'
+                                          : deadlineStatus?.color === 'orange'
+                                          ? 'text-orange-900'
+                                          : 'text-green-900'
+                                      }`}
+                                    >
+                                      <Clock size={16} />
+                                      {deadlineStatusText}
+                                    </p>
+                                  </motion.div>
+                                )}
+
+                                {/* Subtasks - Highlighted */}
+                                {subtasks.length > 0 && (
+                                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="p-4 bg-green-50 border-2 border-green-300 rounded-lg ml-6">
+                                    <h4 className="font-bold text-gray-900 text-sm mb-2">✓ Subtasks ({subtasks.length}) - Required Steps</h4>
+                                    <div className="space-y-1 ml-2">
+                                      {subtasks.map((subtask, idx) => (
+                                        <p key={subtask.id} className="text-sm text-green-900 font-medium">
+                                          {idx + 1}. {subtask.title}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  </motion.div>
+                                )}
+
+                                {/* Template Documents */}
+                                {templateDocs.length > 0 && (
+                                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+                                    <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                                      <FileText size={16} className="text-blue-600" />
+                                      Templates ({templateDocs.length})
+                                    </h4>
+                                    <div className="space-y-2 ml-6">
+                                      {templateDocs.map((doc) => (
+                                        <motion.button
+                                          key={doc.url}
+                                          whileHover={{ x: 2 }}
+                                          onClick={() => handleDocumentDownload(doc.url, doc.name)}
+                                          className="flex items-center gap-2 text-sm text-brand-blue hover:text-blue-700 transition-colors text-left w-full p-2 rounded hover:bg-blue-50"
+                                        >
+                                          <Download size={14} />
+                                          <span className="truncate">{doc.name}</span>
+                                          <span className="text-xs text-gray-500 flex-shrink-0">({formatFileSize(doc.fileSize)})</span>
+                                        </motion.button>
+                                      ))}
+                                    </div>
+                                  </motion.div>
+                                )}
+
+                                {/* Other Documents */}
+                                {otherDocs.length > 0 && (
+                                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                                    <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                                      <FileText size={16} className="text-green-600" />
+                                      Documents ({otherDocs.length})
+                                    </h4>
+                                    <div className="space-y-2 ml-6">
+                                      {otherDocs.map((doc) => (
+                                        <motion.button
+                                          key={doc.url}
+                                          whileHover={{ x: 2 }}
+                                          onClick={() => handleDocumentDownload(doc.url, doc.name)}
+                                          className="flex items-center gap-2 text-sm text-brand-blue hover:text-blue-700 transition-colors text-left w-full p-2 rounded hover:bg-blue-50"
+                                        >
+                                          <Download size={14} />
+                                          <span className="truncate">{doc.name}</span>
+                                          <span className="text-xs text-gray-500 flex-shrink-0">({formatFileSize(doc.fileSize)})</span>
+                                        </motion.button>
+                                      ))}
+                                    </div>
+                                  </motion.div>
+                                )}
+
+                                {/* Images */}
+                                {images.length > 0 && (
+                                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+                                    <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                                      <ImageIcon size={16} className="text-purple-600" />
+                                      Images ({images.length})
+                                    </h4>
+                                    <div className="flex gap-3 flex-wrap ml-6">
+                                      {images.map((img) => (
+                                        <motion.div key={img.url} whileHover={{ scale: 1.05 }} className="relative group">
+                                          {!imageErrors[img.url] ? (
+                                            <>
+                                              <img
+                                                src={img.url}
+                                                alt={img.name}
+                                                onError={() => handleImageError(img.url)}
+                                                className="w-16 h-16 object-cover rounded border border-gray-300 group-hover:border-brand-blue transition-all cursor-pointer"
+                                                onClick={() => window.open(img.url, '_blank')}
+                                              />
+                                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 rounded transition-all flex items-center justify-center">
+                                                <Download size={12} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                              </div>
+                                            </>
+                                          ) : (
+                                            <div className="w-16 h-16 bg-gray-200 rounded border border-gray-300 flex items-center justify-center">
+                                              <ImageIcon size={12} className="text-gray-400" />
+                                            </div>
+                                          )}
+                                        </motion.div>
+                                      ))}
+                                    </div>
+                                  </motion.div>
+                                )}
+
+                                {/* Special Notes */}
+                                {task.specialNotes?.text && (
+                                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg ml-6">
+                                    <p className="text-xs font-bold text-yellow-900 mb-1">⚠️ Special Notes:</p>
+                                    <p className="text-xs text-yellow-800 whitespace-pre-wrap">{task.specialNotes.text}</p>
+                                  </motion.div>
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+
+        {/* Footer */}
+        <motion.div animate={{ y: [0, 8, 0] }} transition={{ duration: 4, repeat: Infinity }} className="mt-16 text-center">
+          <p className="text-gray-400 text-sm font-medium">✨ Manage your course materials efficiently</p>
+        </motion.div>
       </div>
     </div>
   );
