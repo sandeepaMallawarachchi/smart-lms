@@ -5,15 +5,17 @@ import { successResponse, notFoundResponse, serverErrorResponse } from '@/lib/ap
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { studentId: string } }
+  { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
     await connectDB();
 
-    const { studentId } = params;
+    const { studentId } = await params;
 
     // Find student by student ID number
-    const student = await Student.findOne({ studentIdNumber: studentId.toLowerCase() })
+    const student = await Student.findOne({ 
+      studentIdNumber: studentId.toLowerCase() 
+    })
       .select('studentIdNumber name email gender dateOfBirth address nicNumber userRole academicYear semester specialization isVerified createdAt updatedAt')
       .lean();
 

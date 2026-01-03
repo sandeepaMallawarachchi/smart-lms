@@ -6,15 +6,16 @@ import mongoose from 'mongoose';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
 
-    const { id } = params;
+    const { id } = await params;
 
+    // Validate if id is a valid MongoDB ObjectId
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return notFoundResponse('Student not found');
+      return notFoundResponse('Invalid student ID format');
     }
 
     // Find student by ID
