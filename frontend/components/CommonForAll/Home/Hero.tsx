@@ -114,7 +114,7 @@ const HeroSection: React.FC = () => {
                         setUserRole(role);
 
                         const data = await response.json();
-                        setIsVerified(data.data?.isVerified || false);
+                        setIsVerified(data.data?.user?.isVerified || false);
                     } else {
                         // Token invalid, clear storage
                         localStorage.removeItem('authToken');
