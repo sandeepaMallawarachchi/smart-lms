@@ -36,6 +36,7 @@ interface Course {
   credits: number;
   year: number;
   semester: number;
+  specializations?: string[];  // ✅ Added specializations
   lecturerInCharge: {
     _id: string;
     name: string;
@@ -94,6 +95,17 @@ const superadminConfig: RoleConfig = {
       icon: Activity,
     },
   ],
+};
+
+// ✅ Helper function to get specialization badge color
+const getSpecializationColor = (spec: string): string => {
+  const colors: { [key: string]: string } = {
+    'SE': 'bg-blue-100 text-blue-800',
+    'IT': 'bg-purple-100 text-purple-800',
+    'DS': 'bg-green-100 text-green-800',
+    'CS': 'bg-orange-100 text-orange-800',
+  };
+  return colors[spec] || 'bg-gray-100 text-gray-800';
 };
 
 interface UnifiedHeaderProps {
@@ -212,6 +224,7 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
       courseCode: course.courseCode,
       year: course.year,
       semester: course.semester,
+      specializations: course.specializations,  // ✅ Include specializations
       lecturerInCharge: course.lecturerInCharge,
     };
 
@@ -324,6 +337,20 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
                                   <p className="text-xs text-gray-600 mt-1">
                                     Year {course.year}, Semester {course.semester} • {course.credits} Credits
                                   </p>
+                                  
+                                  {/* ✅ Specializations Display */}
+                                  {course.specializations && course.specializations.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-1.5">
+                                      {course.specializations.map((spec) => (
+                                        <span
+                                          key={spec}
+                                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getSpecializationColor(spec)}`}
+                                        >
+                                          {spec}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-amber-200 text-amber-800 whitespace-nowrap ml-2">
                                   LIC
@@ -358,6 +385,21 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
                                 <p className="text-xs text-gray-600 mt-1">
                                   Year {course.year}, Semester {course.semester} • {course.credits} Credits
                                 </p>
+                                
+                                {/* ✅ Specializations Display */}
+                                {course.specializations && course.specializations.length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {course.specializations.map((spec) => (
+                                      <span
+                                        key={spec}
+                                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getSpecializationColor(spec)}`}
+                                      >
+                                        {spec}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                
                                 {course.lecturerInCharge && (
                                   <p className="text-xs text-gray-500 mt-1">
                                     LIC: {course.lecturerInCharge.name}
