@@ -424,6 +424,10 @@ export default function StudentProjectsAndTasksPage() {
                 break;
             case 'inprogress':
                 setInProgressItems(prev => [...prev, updatedItem]);
+
+                if (draggedItem.type === 'project') {
+                    scheduleReminders(draggedItem._id);
+                }
                 break;
             case 'done':
                 setDoneItems(prev => [...prev, updatedItem]);
@@ -431,6 +435,23 @@ export default function StudentProjectsAndTasksPage() {
         }
 
         setDraggedItem(null);
+    };
+
+    const scheduleReminders = async (projectId: string) => {
+        try {
+            const token = localStorage.getItem('authToken');
+
+            await fetch('/api/projects-and-tasks/notifications/scheduled-reminders', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ projectId }),
+            });
+        } catch (error) {
+            console.error('Error scheduling reminders:', error);
+        }
     };
 
     const handleTaskUpdate = (projectId: string, mainTasks: any) => {
@@ -508,29 +529,6 @@ export default function StudentProjectsAndTasksPage() {
                             </p>
                         </div>
                     </div>
-
-                    {selectedCourse && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="bg-blue-50 border-l-4 border-brand-blue rounded-lg p-4 flex items-center justify-between"
-                        >
-                            <div>
-                                <p className="text-xs font-semibold text-blue-600 mb-1">VIEWING MODULE</p>
-                                <p className="text-lg font-bold text-gray-900">{selectedCourse.courseName}</p>
-                                <p className="text-sm text-gray-600">
-                                    {selectedCourse.courseCode} • Year {selectedCourse.year}, Semester {selectedCourse.semester} • {selectedCourse.credits} Credits
-                                </p>
-                            </div>
-                            <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                onClick={() => setSelectedCourse(null)}
-                                className="px-4 py-2 bg-white border border-blue-200 text-brand-blue rounded-lg hover:bg-blue-100 transition-colors font-medium"
-                            >
-                                Clear Filter
-                            </motion.button>
-                        </motion.div>
-                    )}
                 </motion.div>
 
                 {error && (
@@ -708,6 +706,29 @@ export default function StudentProjectsAndTasksPage() {
                     </motion.div>
                 )}
             </div>
+
+            {selectedCourse && (
+                <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-blue-50 border-l-4 border-brand-blue rounded-lg p-4 flex items-center justify-between"
+                >
+                    <div>
+                        <p className="text-xs font-semibold text-blue-600 mb-1">VIEWING MODULE</p>
+                        <p className="text-lg font-bold text-gray-900">{selectedCourse.courseName}</p>
+                        <p className="text-sm text-gray-600">
+                            {selectedCourse.courseCode} • Year {selectedCourse.year}, Semester {selectedCourse.semester} • {selectedCourse.credits} Credits
+                        </p>
+                    </div>
+                    <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        onClick={() => setSelectedCourse(null)}
+                        className="px-4 py-2 bg-white border border-blue-200 text-brand-blue rounded-lg hover:bg-blue-100 transition-colors font-medium"
+                    >
+                        Clear Filter
+                    </motion.button>
+                </motion.div>
+            )}
 
             <StudentDetailPanel
                 item={selectedItem}
