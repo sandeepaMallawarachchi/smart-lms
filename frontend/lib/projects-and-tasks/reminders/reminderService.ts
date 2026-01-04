@@ -62,7 +62,7 @@ export const projectReminderConfig: ReminderConfig = {
         const percentageMillis = (totalMillis * percentage) / 100;
         return new Date(now.getTime() + percentageMillis);
     },
-    
+
     generateMessage: (percentage: number, itemName: string): string => {
         if (percentage === 25) {
             return `⏰ Time to start! ${itemName} deadline is approaching. You have 75% of time left - start working now!`;
@@ -70,10 +70,8 @@ export const projectReminderConfig: ReminderConfig = {
             return `⚠️ Halfway there! ${itemName} is 50% through its deadline. Complete half of the work!`;
         } else if (percentage === 75) {
             return `🚨 Deadline is near! ${itemName} deadline is just around the corner. Finish up!`;
-        } else if (percentage === 100) {
-            return `📅 Today is the deadline for ${itemName}!`;
         } else {
-            return `🚨 Deadline is overdue! ${itemName} deadline is overdured. Finish up!`;
+            return `📅 Today is the deadline for ${itemName}!`;
         }
     },
 };

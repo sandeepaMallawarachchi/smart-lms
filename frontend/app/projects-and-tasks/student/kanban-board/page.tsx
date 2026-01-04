@@ -299,6 +299,13 @@ export default function StudentProjectsAndTasksPage() {
                     });
                 }
 
+                for (const item of [...projectItems, ...taskItems]) {
+                    if (item.item.deadlineDate && item.status !== 'done') {
+                        const id = item.type === 'project' ? item._id : item._id;
+                        scheduleReminders(id);
+                    }
+                }
+
                 const todoProjects = projectItems.filter(p => p.status === 'todo');
                 const inProgressProjects = projectItems.filter(p => p.status === 'inprogress');
                 const doneProjects = projectItems.filter(p => p.status === 'done');
