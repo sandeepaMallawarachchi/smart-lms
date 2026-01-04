@@ -284,7 +284,7 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
                                                         </div>
                                                     </div>
                                                     {version.comment && (
-                                                        <p className="text-sm text-gray-700 italic">"{version.comment}"</p>
+                                                        <p className="text-sm text-gray-700 italic">&#34;{version.comment}&#34;</p>
                                                     )}
                                                 </div>
 
