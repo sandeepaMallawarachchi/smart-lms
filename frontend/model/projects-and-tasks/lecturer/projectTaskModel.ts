@@ -1,23 +1,20 @@
-// /models/projects-and-tasks/lecturer/projectTaskModel.ts
-
 import mongoose, { Schema, Document } from 'mongoose';
 
-// Subtask interface
 interface ISubtask {
   id: string;
   title: string;
   description?: string;
+  completed?: boolean;
 }
 
-// Main Task interface (with nested subtasks)
 interface IMainTask {
   id: string;
   title: string;
   description?: string;
   subtasks?: ISubtask[];
+  completed?: boolean;
 }
 
-// Project Model
 export interface IProject extends Document {
   courseId: string;
   lecturerId: string;
@@ -51,7 +48,24 @@ export interface ITask extends Document {
   updatedAt: Date;
 }
 
-// Subtask Schema (for reusability)
+export interface IStudentProjectProgress extends Document {
+  studentId: string;
+  projectId: string;
+  status: 'todo' | 'inprogress' | 'done';
+  mainTasks: IMainTask[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IStudentTaskProgress extends Document {
+  studentId: string;
+  taskId: string;
+  status: 'todo' | 'inprogress' | 'done';
+  subtasks: ISubtask[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 const subtaskSchema = new Schema<ISubtask>(
   {
     id: String,
@@ -62,11 +76,14 @@ const subtaskSchema = new Schema<ISubtask>(
       maxlength: [200, 'Subtask title cannot exceed 200 characters'],
     },
     description: String,
+    completed: {
+      type: Boolean,
+      default: false,
+    },
   },
   { _id: false }
 );
 
-// Main Task Schema (with nested subtasks)
 const mainTaskSchema = new Schema<IMainTask>(
   {
     id: String,
@@ -78,11 +95,14 @@ const mainTaskSchema = new Schema<IMainTask>(
     },
     description: String,
     subtasks: [subtaskSchema],
+    completed: {
+      type: Boolean,
+      default: false,
+    },
   },
   { _id: false }
 );
 
-// Document Schema (for template, other, images)
 const documentSchema = new Schema(
   {
     url: String,
@@ -92,7 +112,6 @@ const documentSchema = new Schema(
   { _id: false }
 );
 
-// Project Schema
 const projectSchema = new Schema<IProject>(
   {
     courseId: {
@@ -140,7 +159,6 @@ const projectSchema = new Schema<IProject>(
   { timestamps: true }
 );
 
-// Task Schema
 const taskSchema = new Schema<ITask>(
   {
     courseId: {
@@ -183,7 +201,54 @@ const taskSchema = new Schema<ITask>(
   { timestamps: true }
 );
 
-// Create or get models
+const studentProjectProgressSchema = new Schema<IStudentProjectProgress>(
+  {
+    studentId: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    projectId: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    status: {
+      type: String,
+      enum: ['todo', 'inprogress', 'done'],
+      default: 'todo',
+    },
+    mainTasks: [mainTaskSchema],
+  },
+  { timestamps: true }
+);
+
+const studentTaskProgressSchema = new Schema<IStudentTaskProgress>(
+  {
+    studentId: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    taskId: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    status: {
+      type: String,
+      enum: ['todo', 'inprogress', 'done'],
+      default: 'todo',
+    },
+    subtasks: [subtaskSchema],
+  },
+  { timestamps: true }
+);
+
 export const Project =
   mongoose.models.Project || mongoose.model<IProject>('Project', projectSchema);
 export const Task = mongoose.models.Task || mongoose.model<ITask>('Task', taskSchema);
+export const StudentProjectProgress =
+  mongoose.models.StudentProjectProgress || mongoose.model<IStudentProjectProgress>('StudentProjectProgress', studentProjectProgressSchema);
+export const StudentTaskProgress =
+  mongoose.models.StudentTaskProgress || mongoose.model<IStudentTaskProgress>('StudentTaskProgress', studentTaskProgressSchema);

@@ -112,14 +112,22 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
       },
       navItems: [
         {
-          id: 'my-tasks',
-          label: 'My Tasks',
+          id: 'dashboard',
+          label: 'Dashboard',
           icon: <LayoutGrid size={20} />,
           description: 'Your personal task board',
+          href: '/projects-and-tasks/student/',
+          subsections: [],
+        },
+        {
+          id: 'my-tasks',
+          label: 'My Project & Tasks',
+          icon: <FileText size={20} />,
+          description: 'Your personal project & task board',
           badge: 5,
           href: '/projects-and-tasks/student/tasks',
           subsections: [
-            { id: 'all-tasks', label: 'All Tasks', badge: 12 },
+            { id: 'all-tasks-projects', label: 'All Projects & Tasks', badge: 12, href: '/projects-and-tasks/student/kanban-board' },
             { id: 'in-progress', label: 'In Progress', badge: 4 },
             { id: 'pending', label: 'Pending', badge: 5 },
             { id: 'completed', label: 'Completed', badge: 3 },

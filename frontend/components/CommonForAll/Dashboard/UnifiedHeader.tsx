@@ -27,6 +27,9 @@ interface UserData {
   position?: string;
   role?: string;
   _id?: string;
+  academicYear?: string;
+  semester?: string;
+  specialization?: string;
 }
 
 interface Course {
@@ -36,7 +39,7 @@ interface Course {
   credits: number;
   year: number;
   semester: number;
-  specializations?: string[];  // ✅ Added specializations
+  specializations?: string[];
   lecturerInCharge: {
     _id: string;
     name: string;
@@ -119,11 +122,15 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [courseDropdownOpen, setCourseDropdownOpen] = useState(false);
+  const [studentCourseDropdownOpen, setStudentCourseDropdownOpen] = useState(false);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [studentCourses, setStudentCourses] = useState<Course[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(false);
+  const [studentCoursesLoading, setStudentCoursesLoading] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [selectedStudentCourse, setSelectedStudentCourse] = useState<Course | null>(null);
 
   const config = headerConfig || superadminConfig;
   const unreadNotifications = config.notifications.length;
@@ -165,6 +172,7 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
     fetchUserData();
   }, [router]);
 
+  // ✅ LECTURER COURSES FETCH (unchanged)
   useEffect(() => {
     const fetchCoursesForLecturer = async () => {
       if (userRole !== 'lecture' || !userData?._id) return;
@@ -206,11 +214,55 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
     fetchCoursesForLecturer();
   }, [userRole, userData?._id]);
 
+  // ✅ NEW: STUDENT COURSES FETCH
+  useEffect(() => {
+    const fetchCoursesForStudent = async () => {
+      if (userRole !== 'student' || !userData?._id) return;
+
+      setStudentCoursesLoading(true);
+      try {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        const response = await fetch('/api/student/get-courses', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setStudentCourses(data.data.courses || []);
+
+          // Load saved student course from localStorage
+          const savedStudentCourse = localStorage.getItem('selectedStudentCourse');
+          if (savedStudentCourse) {
+            try {
+              const parsedCourse = JSON.parse(savedStudentCourse);
+              setSelectedStudentCourse(parsedCourse);
+            } catch (error) {
+              console.error('Error parsing saved student course:', error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching student courses:', error);
+      } finally {
+        setStudentCoursesLoading(false);
+      }
+    };
+
+    fetchCoursesForStudent();
+  }, [userRole, userData?._id]);
+
   const handleLogout = () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('userRole');
     localStorage.removeItem('lecturerId');
     localStorage.removeItem('selectedCourse');
+    localStorage.removeItem('selectedStudentCourse');
     router.push('/');
   };
 
@@ -224,7 +276,7 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
       courseCode: course.courseCode,
       year: course.year,
       semester: course.semester,
-      specializations: course.specializations,  // ✅ Include specializations
+      specializations: course.specializations,
       lecturerInCharge: course.lecturerInCharge,
     };
 
@@ -235,12 +287,34 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
     });
     window.dispatchEvent(event);
 
-    // IMPORTANT: Redirect with course parameters if on create page
+    // Redirect with course parameters if on create page
     if (pathname.includes('create-projects-and-tasks')) {
       router.push(
         `/projects-and-tasks/lecturer/create-projects-and-tasks?courseId=${course._id}&courseName=${encodeURIComponent(course.courseName)}`
       );
     }
+  };
+
+  // ✅ NEW: Handle student course selection
+  const handleSelectStudentCourse = (course: Course) => {
+    setSelectedStudentCourse(course);
+    setStudentCourseDropdownOpen(false);
+
+    const courseData = {
+      _id: course._id,
+      courseName: course.courseName,
+      courseCode: course.courseCode,
+      year: course.year,
+      semester: course.semester,
+      specializations: course.specializations,
+    };
+
+    localStorage.setItem('selectedStudentCourse', JSON.stringify(courseData));
+
+    const event = new CustomEvent('studentCourseSelected', {
+      detail: courseData,
+    });
+    window.dispatchEvent(event);
   };
 
   const displayName = userData?.name || (userRole === 'superadmin' ? 'Super Admin' : userRole === 'lecture' ? 'Lecturer' : 'Student');
@@ -279,6 +353,7 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
               <Menu size={20} />
             </button>
 
+            {/* ✅ LECTURER COURSE DROPDOWN (unchanged) */}
             {userRole === 'lecture' && courses.length > 0 ? (
               <div className="relative">
                 <button
@@ -300,7 +375,7 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
                   </div>
                   <ChevronDown
                     size={18}
-                    className={`text-brand-blue transition-transform duration-200 flex-shrink-0 ${courseDropdownOpen ? 'rotate-180' : ''}`}
+                    className={`text-brand-blue transition-transform duration-200 shrink-0 ${courseDropdownOpen ? 'rotate-180' : ''}`}
                   />
                 </button>
 
@@ -338,7 +413,6 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
                                     Year {course.year}, Semester {course.semester} • {course.credits} Credits
                                   </p>
                                   
-                                  {/* ✅ Specializations Display */}
                                   {course.specializations && course.specializations.length > 0 && (
                                     <div className="mt-2 flex flex-wrap gap-1.5">
                                       {course.specializations.map((spec) => (
@@ -386,7 +460,6 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
                                   Year {course.year}, Semester {course.semester} • {course.credits} Credits
                                 </p>
                                 
-                                {/* ✅ Specializations Display */}
                                 {course.specializations && course.specializations.length > 0 && (
                                   <div className="mt-2 flex flex-wrap gap-1.5">
                                     {course.specializations.map((spec) => (
@@ -420,8 +493,102 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
                   </div>
                 )}
               </div>
+            ) : userRole === 'student' && studentCourses.length > 0 ? (
+              // ✅ NEW: STUDENT COURSE DROPDOWN
+              <div className="relative">
+                <button
+                  onClick={() => setStudentCourseDropdownOpen(!studentCourseDropdownOpen)}
+                  className="hidden sm:flex items-center gap-2 bg-blue-100 rounded-md border border-blue-400 px-3 py-1.5 hover:bg-blue-150 hover:border-blue-500 transition-all duration-200 shadow-sm hover:shadow-md"
+                >
+                  <div className="flex flex-col text-left">
+                    {selectedStudentCourse ? (
+                      <>
+                        <h1 className="text-sm font-bold text-brand-blue truncate max-w-xs">{selectedStudentCourse.courseName}</h1>
+                        <p className="text-xs text-blue-500">Y{selectedStudentCourse.year}S{selectedStudentCourse.semester} • {selectedStudentCourse.credits}cr</p>
+                      </>
+                    ) : (
+                      <>
+                        <h1 className="text-sm font-bold text-brand-blue">My Modules</h1>
+                        <p className="text-xs text-blue-500">{studentCourses.length} course{studentCourses.length !== 1 ? 's' : ''}</p>
+                      </>
+                    )}
+                  </div>
+                  <ChevronDown
+                    size={18}
+                    className={`text-brand-blue transition-transform duration-200 shrink-0 ${studentCourseDropdownOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {studentCourseDropdownOpen && (
+                  <div className="absolute left-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                    <div className="p-4 border-b border-gray-100">
+                      <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                        <BookOpen size={16} />
+                        My Modules
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Year {userData?.academicYear}, Semester {userData?.semester} • {userData?.specialization}
+                      </p>
+                    </div>
+
+                    <div className="max-h-96 overflow-y-auto">
+                      {studentCourses.length > 0 ? (
+                        <div>
+                          {studentCourses.map((course) => (
+                            <div
+                              key={course._id}
+                              onClick={() => handleSelectStudentCourse(course)}
+                              className={`p-4 border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition-all duration-150 ${
+                                selectedStudentCourse?._id === course._id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                              }`}
+                            >
+                              <div className="flex-1">
+                                <p className="text-sm font-semibold text-gray-900">
+                                  {course.courseName}
+                                </p>
+                                <p className="text-xs text-gray-600 mt-1">
+                                  {course.courseCode} • {course.credits} Credits
+                                </p>
+                                
+                                {course.specializations && course.specializations.length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {course.specializations.map((spec) => (
+                                      <span
+                                        key={spec}
+                                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getSpecializationColor(spec)}`}
+                                      >
+                                        {spec}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                
+                                {course.lecturerInCharge && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Instructor: {course.lecturerInCharge.name}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 text-center">
+                          <p className="text-sm text-gray-500">No modules assigned</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {studentCoursesLoading && (
+                      <div className="p-4 text-center">
+                        <p className="text-sm text-gray-500">Loading modules...</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             ) : (
-              userRole !== 'lecture' && (
+              userRole !== 'lecture' && userRole !== 'student' && (
                 <button className="hidden sm:flex items-center gap-2 bg-blue-100 rounded-md border border-blue-400 px-3 py-1.5 hover:bg-blue-150 hover:border-blue-500 transition-all duration-200 shadow-sm hover:shadow-md">
                   <div className="flex flex-col text-left">
                     <h1 className="text-sm font-bold text-brand-blue">{config.courseCode}</h1>
@@ -483,7 +650,7 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
                           className="p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
                         >
                           <div className="flex gap-3">
-                            <div className={`mt-1 flex-shrink-0 p-2 rounded ${getNotificationColor(notif.type)}`}>
+                            <div className={`mt-1 shrink-0 p-2 rounded ${getNotificationColor(notif.type)}`}>
                               <IconComponent size={16} />
                             </div>
                             <div className="flex-1">
