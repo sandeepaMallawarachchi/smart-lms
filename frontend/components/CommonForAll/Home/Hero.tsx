@@ -21,6 +21,7 @@ const HeroSection: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [currentSlide, setCurrentSlide] = useState(0);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [isVerified, setIsVerified] = useState(false);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [isCheckingAuth, setIsCheckingAuth] = useState(true);
     const router = useRouter();
@@ -111,6 +112,9 @@ const HeroSection: React.FC = () => {
                     if (response.ok) {
                         setIsAuthenticated(true);
                         setUserRole(role);
+
+                        const data = await response.json();
+                        setIsVerified(data.data?.user?.isVerified || false);
                     } else {
                         // Token invalid, clear storage
                         localStorage.removeItem('authToken');
@@ -163,6 +167,12 @@ const HeroSection: React.FC = () => {
 
         // Check if user is authenticated
         if (!isAuthenticated) {
+            // Redirect to login
+            router.push('/login');
+            return;
+        }
+
+        if (!isVerified) {
             // Redirect to login
             router.push('/login');
             return;

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/db';
-import Student from '@/model/projects-and-tasks/Student';
+import Student from '@/model/Student';
 import { generateToken } from '@/lib/jwt';
 import { successResponse, errorResponse, serverErrorResponse } from '@/lib/api-response';
 
@@ -10,8 +10,20 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    const { studentIdNumber, name, email, password, passwordConfirmation, gender, dateOfBirth, address, nicNumber, academicYear, specialization } =
-      body;
+    const { 
+      studentIdNumber, 
+      name, 
+      email, 
+      password, 
+      passwordConfirmation, 
+      gender, 
+      dateOfBirth, 
+      address, 
+      nicNumber, 
+      academicYear, 
+      semester, 
+      specialization 
+    } = body;
 
     // Validation
     const errors: Record<string, string[]> = {};
@@ -28,8 +40,20 @@ export async function POST(request: NextRequest) {
     if (!dateOfBirth) errors.dateOfBirth = ['Date of birth is required'];
     if (!address) errors.address = ['Address is required'];
     if (!nicNumber) errors.nicNumber = ['NIC number is required'];
-    if (!academicYear) errors.nicNumber = ['Academic Year is required'];
-    if (!specialization) errors.nicNumber = ['Specialization is required'];
+    if (!academicYear) errors.academicYear = ['Academic Year is required'];
+    if (!semester) errors.semester = ['Semester is required'];
+    if (!specialization) errors.specialization = ['Specialization is required'];
+
+    // Validate enum values
+    if (academicYear && !['1', '2', '3', '4'].includes(academicYear)) {
+      errors.academicYear = ['Academic year must be 1, 2, 3, or 4'];
+    }
+    if (semester && !['1', '2'].includes(semester)) {
+      errors.semester = ['Semester must be 1 or 2'];
+    }
+    if (specialization && !['IT', 'SE', 'DS', 'CSNE', 'CS', 'IM'].includes(specialization)) {
+      errors.specialization = ['Invalid specialization'];
+    }
 
     if (Object.keys(errors).length > 0) {
       return errorResponse('Validation failed', errors, 400);
@@ -37,14 +61,18 @@ export async function POST(request: NextRequest) {
 
     // Check if student already exists
     const existingStudent = await Student.findOne({
-      $or: [{ email: email.toLowerCase() }, { studentIdNumber }, { nicNumber }],
+      $or: [
+        { email: email.toLowerCase() }, 
+        { studentIdNumber: studentIdNumber.toLowerCase() },
+        { nicNumber }
+      ],
     });
 
     if (existingStudent) {
       if (existingStudent.email === email.toLowerCase()) {
         errors.email = ['Email is already registered'];
       }
-      if (existingStudent.studentIdNumber === studentIdNumber) {
+      if (existingStudent.studentIdNumber === studentIdNumber.toLowerCase()) {
         errors.studentIdNumber = ['Student ID is already registered'];
       }
       if (existingStudent.nicNumber === nicNumber) {
@@ -55,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     // Create new student
     const student = new Student({
-      studentIdNumber: studentIdNumber.toUpperCase(),
+      studentIdNumber,
       name,
       email: email.toLowerCase(),
       password,
@@ -64,10 +92,25 @@ export async function POST(request: NextRequest) {
       address,
       nicNumber,
       academicYear,
+      semester,
       specialization,
     });
 
-    await student.save();
+    // Save and handle validation errors
+    try {
+      await student.save();
+    } catch (saveError: any) {
+      console.error('Mongoose validation error:', saveError);
+      
+      if (saveError.name === 'ValidationError') {
+        const validationErrors: Record<string, string[]> = {};
+        for (const field in saveError.errors) {
+          validationErrors[field] = [saveError.errors[field].message];
+        }
+        return errorResponse('Validation failed', validationErrors, 400);
+      }
+      throw saveError;
+    }
 
     // Generate JWT token
     const token = generateToken({
@@ -76,9 +119,8 @@ export async function POST(request: NextRequest) {
       userRole: 'student',
     });
 
-    // Remove password from response
-    const studentData = student.toObject();
-    delete studentData.password;
+    // Get student data without password
+    const studentData = await Student.findById(student._id).select('-password').lean();
 
     return successResponse('Student registered successfully', {
       student: studentData,

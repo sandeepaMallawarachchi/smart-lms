@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { courseName, credits, year, semester, lecturerInCharge, lecturers } = body;
+    const { courseName, credits, year, semester, specializations, lecturerInCharge, lecturers } = body;
 
     // Validation
     const errors: any = {};
@@ -82,6 +82,9 @@ export async function POST(request: NextRequest) {
     if (!credits || credits < 1 || credits > 10) errors.credits = ['Credits must be between 1 and 10'];
     if (!year || year < 1 || year > 4) errors.year = ['Year must be between 1 and 4'];
     if (!semester || ![1, 2].includes(semester)) errors.semester = ['Semester must be 1 or 2'];
+    if (!specializations || !Array.isArray(specializations) || specializations.length === 0) {
+      errors.specializations = ['At least one specialization is required'];
+    }
     if (!lecturerInCharge) errors.lecturerInCharge = ['Lecturer in charge is required'];
 
     if (Object.keys(errors).length > 0) {
@@ -103,6 +106,7 @@ export async function POST(request: NextRequest) {
       credits,
       year,
       semester,
+      specializations,
       lecturerInCharge,
       lecturers: allLecturers,
     });

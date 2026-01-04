@@ -109,11 +109,7 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
       ],
     },
     sidebar: {
-      showStats: true,
-      stats: {
-        total: 85,
-        dueSoon: 15,
-      },
+      roleLabel: 'Student',
       navItems: [
         {
           id: 'dashboard',
@@ -122,9 +118,9 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
           description: 'Your learning overview',
           href: '/learning-analytics/student',
           subsections: [
-            { id: 'overview', label: 'Overview' },
-            { id: 'weekly-summary', label: 'Weekly Summary' },
-            { id: 'monthly-report', label: 'Monthly Report' },
+            { id: 'overview', label: 'Overview', href: '/learning-analytics/student/' },
+            { id: 'weekly-summary', label: 'Weekly Summary', href: '/learning-analytics/student/weekly-summary' },
+            { id: 'monthly-report', label: 'Monthly Report', href: '/learning-analytics/student/monthly-report' },
           ],
         },
         {
