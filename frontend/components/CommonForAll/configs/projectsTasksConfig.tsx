@@ -148,6 +148,14 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           ],
         },
         {
+          id: 'heatmap',
+          label: 'Activity Heatmap',
+          icon: <AlertCircle size={20} />,
+          description: 'Activity HeatMap Overview',
+          badge: 1,
+          href: '/projects-and-tasks/student/heatmap',
+        },
+        {
           id: 'deadlines',
           label: 'Upcoming Deadlines',
           icon: <Clock size={20} />,
