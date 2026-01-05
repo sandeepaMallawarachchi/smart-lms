@@ -390,7 +390,7 @@ export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubt
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
             className="fixed right-0 top-0 h-full w-full md:w-[500px] bg-white shadow-2xl z-50 overflow-y-auto"
           >
-            <div className="sticky top-0 bg-gradient-to-r from-brand-blue to-brand-blue/80 text-white p-6 flex items-center justify-between">
+            <div className="sticky top-0 bg-linear-to-r from-brand-blue to-brand-blue/80 text-white p-6 flex items-center justify-between">
               <div className="flex-1">
                 <p className="text-xs text-blue-100 mb-1">
                   {isProject ? '📋 PROJECT' : '✓ TASK'}
@@ -417,7 +417,7 @@ export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubt
               </div>
 
               {item.item.deadlineDate && (
-                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4">
+                <div className="bg-linear-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <Calendar size={16} className="text-amber-600" />
                     <p className="text-sm font-semibold text-amber-900">DEADLINE</p>

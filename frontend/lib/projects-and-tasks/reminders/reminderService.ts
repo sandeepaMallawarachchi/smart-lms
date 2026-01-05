@@ -39,19 +39,15 @@ export const projectReminderConfig: ReminderConfig = {
         const deadline = new Date(deadlineDate);
         const now = new Date();
 
-        // TESTING: Reminders trigger at:
-        // 25% - 10 seconds from now
-        // 50% - 20 seconds from now
-        // 75% - 30 seconds from now
-        // 100% - 40 seconds from now
+        // TESTING: More spread out timings
         const testMode = true;
 
         if (testMode) {
             const delaySeconds = {
-                25: 10,
-                50: 20,
-                75: 30,
-                100: 40,
+                25: 10,   // 10 seconds from now
+                50: 30,   // 30 seconds from now
+                75: 60,   // 1 minute from now
+                100: 90,  // 1.5 minutes from now
             } as Record<number, number>;
 
             return new Date(now.getTime() + (delaySeconds[percentage] || 10) * 1000);

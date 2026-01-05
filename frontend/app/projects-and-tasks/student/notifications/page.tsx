@@ -44,7 +44,7 @@ export default function NotificationsPage() {
     try {
       setIsLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch('/api/projects-and-tasks/notifications/scheduled-reminders', {
+      const response = await fetch('/api/projects-and-tasks/student/notifications/scheduled-reminders', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
