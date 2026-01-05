@@ -350,7 +350,7 @@ export default function GuidelinesPage() {
                 <h3 className="text-2xl font-bold text-purple-900 mb-3">Need Help?</h3>
                 <p className="text-purple-800 mb-6">
                     If you have questions about academic integrity or need clarification on plagiarism,
-                    don't hesitate to reach out to your instructor or academic advisor.
+                    don&#39;t hesitate to reach out to your instructor or academic advisor.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                     <button className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium">
