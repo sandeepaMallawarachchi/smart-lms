@@ -1,0 +1,767 @@
+// /components/layout/UnifiedHeader.tsx
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import {
+  Bell,
+  Settings,
+  LogOut,
+  ChevronDown,
+  Search,
+  Menu,
+  AlertCircle,
+  Users,
+  Activity,
+  Database,
+  BookOpen,
+} from 'lucide-react';
+import { useModuleConfig } from '@/hooks/useModuleConfig';
+
+type UserRole = 'student' | 'lecture' | 'superadmin';
+
+interface UserData {
+  name: string;
+  email: string;
+  studentIdNumber?: string;
+  position?: string;
+  role?: string;
+  _id?: string;
+  academicYear?: string;
+  semester?: string;
+  specialization?: string;
+}
+
+interface Course {
+  _id: string;
+  courseName: string;
+  courseCode: string;
+  credits: number;
+  year: number;
+  semester: number;
+  specializations?: string[];
+  lecturerInCharge: {
+    _id: string;
+    name: string;
+  };
+  lecturers: Array<{
+    _id: string;
+    name: string;
+  }>;
+}
+
+interface Notification {
+  id: number;
+  message: string;
+  time: string;
+  type: 'alert' | 'warning' | 'info' | 'success';
+  icon: React.ElementType;
+}
+
+interface RoleConfig {
+  courseCode: string;
+  courseName: string;
+  searchPlaceholder: string;
+  avatarColor: string;
+  primaryColor: string;
+  notifications: Notification[];
+  showPendingTasks?: boolean;
+  pendingTasksCount?: number;
+}
+
+const superadminConfig: RoleConfig = {
+  courseCode: 'ADMIN PANEL',
+  courseName: 'System Administration',
+  searchPlaceholder: 'Search users, courses, system logs...',
+  avatarColor: 'from-purple-500 to-purple-600',
+  primaryColor: 'purple',
+  notifications: [
+    {
+      id: 1,
+      message: 'New lecturer registration pending approval',
+      time: '1 hour ago',
+      type: 'info',
+      icon: Users,
+    },
+    {
+      id: 2,
+      message: 'System backup completed successfully',
+      time: '3 hours ago',
+      type: 'success',
+      icon: Database,
+    },
+    {
+      id: 3,
+      message: 'High server load detected - 85% CPU usage',
+      time: '30 minutes ago',
+      type: 'warning',
+      icon: Activity,
+    },
+  ],
+};
+
+// ✅ Helper function to get specialization badge color
+const getSpecializationColor = (spec: string): string => {
+  const colors: { [key: string]: string } = {
+    'SE': 'bg-blue-100 text-blue-800',
+    'IT': 'bg-purple-100 text-purple-800',
+    'DS': 'bg-green-100 text-green-800',
+    'CS': 'bg-orange-100 text-orange-800',
+  };
+  return colors[spec] || 'bg-gray-100 text-gray-800';
+};
+
+interface UnifiedHeaderProps {
+  userRole: UserRole;
+}
+
+export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { headerConfig } = useModuleConfig(userRole);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [courseDropdownOpen, setCourseDropdownOpen] = useState(false);
+  const [studentCourseDropdownOpen, setStudentCourseDropdownOpen] = useState(false);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [studentCourses, setStudentCourses] = useState<Course[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [studentCoursesLoading, setStudentCoursesLoading] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [selectedStudentCourse, setSelectedStudentCourse] = useState<Course | null>(null);
+
+  const config = headerConfig || superadminConfig;
+  const unreadNotifications = config.notifications.length;
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+          router.push('/login');
+          return;
+        }
+
+        const response = await fetch('/api/auth/verify', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('userRole');
+          router.push('/login');
+          return;
+        }
+
+        const data = await response.json();
+        setUserData(data.data.user);
+        localStorage.setItem('lecturerId', data.data.user._id);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+        setIsLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, [router]);
+
+  // ✅ LECTURER COURSES FETCH (unchanged)
+  useEffect(() => {
+    const fetchCoursesForLecturer = async () => {
+      if (userRole !== 'lecture' || !userData?._id) return;
+
+      setCoursesLoading(true);
+      try {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        const response = await fetch('/api/lecturer/courses', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setCourses(data.data.courses || []);
+
+          const savedCourse = localStorage.getItem('selectedCourse');
+          if (savedCourse) {
+            try {
+              const parsedCourse = JSON.parse(savedCourse);
+              setSelectedCourse(parsedCourse);
+            } catch (error) {
+              console.error('Error parsing saved course:', error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching courses:', error);
+      } finally {
+        setCoursesLoading(false);
+      }
+    };
+
+    fetchCoursesForLecturer();
+  }, [userRole, userData?._id]);
+
+  // ✅ NEW: STUDENT COURSES FETCH
+  useEffect(() => {
+    const fetchCoursesForStudent = async () => {
+      if (userRole !== 'student' || !userData?._id) return;
+
+      setStudentCoursesLoading(true);
+      try {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        const response = await fetch('/api/student/get-courses', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setStudentCourses(data.data.courses || []);
+
+          // Load saved student course from localStorage
+          const savedStudentCourse = localStorage.getItem('selectedStudentCourse');
+          if (savedStudentCourse) {
+            try {
+              const parsedCourse = JSON.parse(savedStudentCourse);
+              setSelectedStudentCourse(parsedCourse);
+            } catch (error) {
+              console.error('Error parsing saved student course:', error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching student courses:', error);
+      } finally {
+        setStudentCoursesLoading(false);
+      }
+    };
+
+    fetchCoursesForStudent();
+  }, [userRole, userData?._id]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('lecturerId');
+    localStorage.removeItem('selectedCourse');
+    localStorage.removeItem('selectedStudentCourse');
+    router.push('/');
+  };
+
+  const handleSelectCourse = (course: Course) => {
+    setSelectedCourse(course);
+    setCourseDropdownOpen(false);
+
+    const courseData = {
+      _id: course._id,
+      courseName: course.courseName,
+      courseCode: course.courseCode,
+      year: course.year,
+      semester: course.semester,
+      specializations: course.specializations,
+      lecturerInCharge: course.lecturerInCharge,
+    };
+
+    localStorage.setItem('selectedCourse', JSON.stringify(courseData));
+
+    const event = new CustomEvent('courseSelected', {
+      detail: courseData,
+    });
+    window.dispatchEvent(event);
+
+    // Redirect with course parameters if on create page
+    if (pathname.includes('create-projects-and-tasks')) {
+      router.push(
+        `/projects-and-tasks/lecturer/create-projects-and-tasks?courseId=${course._id}&courseName=${encodeURIComponent(course.courseName)}`
+      );
+    }
+  };
+
+  // ✅ NEW: Handle student course selection
+  const handleSelectStudentCourse = (course: Course) => {
+    setSelectedStudentCourse(course);
+    setStudentCourseDropdownOpen(false);
+
+    const courseData = {
+      _id: course._id,
+      courseName: course.courseName,
+      courseCode: course.courseCode,
+      year: course.year,
+      semester: course.semester,
+      specializations: course.specializations,
+    };
+
+    localStorage.setItem('selectedStudentCourse', JSON.stringify(courseData));
+
+    const event = new CustomEvent('studentCourseSelected', {
+      detail: courseData,
+    });
+    window.dispatchEvent(event);
+  };
+
+  const displayName = userData?.name || (userRole === 'superadmin' ? 'Super Admin' : userRole === 'lecture' ? 'Lecturer' : 'Student');
+  const displayId = userData?.studentIdNumber;
+  const displayPosition = userData?.position;
+
+  const getNotificationColor = (type: string) => {
+    switch (type) {
+      case 'alert':
+        return 'bg-red-100 text-red-600';
+      case 'warning':
+        return 'bg-amber-100 text-amber-600';
+      case 'success':
+        return 'bg-green-100 text-green-600';
+      default:
+        return 'bg-blue-100 text-blue-600';
+    }
+  };
+
+  const licCourses = courses.filter(
+    (course) => course.lecturerInCharge?._id === userData?._id
+  );
+  const regularCourses = courses.filter(
+    (course) => course.lecturerInCharge?._id !== userData?._id
+  );
+
+  return (
+    <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm" style={{ borderTop: '4px solid #efa300' }}>
+      <div className="max-w-full px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          <div className="flex items-center gap-4">
+            <button
+              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg lg:hidden"
+              aria-label="Toggle menu"
+            >
+              <Menu size={20} />
+            </button>
+
+            {/* ✅ LECTURER COURSE DROPDOWN (unchanged) */}
+            {userRole === 'lecture' && courses.length > 0 ? (
+              <div className="relative">
+                <button
+                  onClick={() => setCourseDropdownOpen(!courseDropdownOpen)}
+                  className="hidden sm:flex items-center gap-2 bg-blue-100 rounded-md border border-blue-400 px-3 py-1.5 hover:bg-blue-150 hover:border-blue-500 transition-all duration-200 shadow-sm hover:shadow-md"
+                >
+                  <div className="flex flex-col text-left">
+                    {selectedCourse ? (
+                      <>
+                        <h1 className="text-sm font-bold text-brand-blue truncate max-w-xs">{selectedCourse.courseName}</h1>
+                        <p className="text-xs text-blue-500">Y{selectedCourse.year}S{selectedCourse.semester} • {selectedCourse.credits}cr</p>
+                      </>
+                    ) : (
+                      <>
+                        <h1 className="text-sm font-bold text-brand-blue">My Courses</h1>
+                        <p className="text-xs text-blue-500">{courses.length} course{courses.length !== 1 ? 's' : ''}</p>
+                      </>
+                    )}
+                  </div>
+                  <ChevronDown
+                    size={18}
+                    className={`text-brand-blue transition-transform duration-200 shrink-0 ${courseDropdownOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {courseDropdownOpen && (
+                  <div className="absolute left-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                    <div className="p-4 border-b border-gray-100">
+                      <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                        <BookOpen size={16} />
+                        Assigned Courses
+                      </h3>
+                    </div>
+
+                    <div className="max-h-96 overflow-y-auto">
+                      {licCourses.length > 0 && (
+                        <div>
+                          <div className="px-4 py-2 bg-amber-50 border-b border-amber-100">
+                            <p className="text-xs font-semibold text-amber-900 uppercase tracking-wide">
+                              As Lecturer in Charge
+                            </p>
+                          </div>
+                          {licCourses.map((course) => (
+                            <div
+                              key={course._id}
+                              onClick={() => handleSelectCourse(course)}
+                              className={`p-4 border-b border-gray-100 hover:bg-amber-100 cursor-pointer transition-all duration-150 ${
+                                selectedCourse?._id === course._id ? 'bg-amber-100 border-l-4 border-l-amber-500' : 'bg-amber-50/50'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    {course.courseName}
+                                  </p>
+                                  <p className="text-xs text-gray-600 mt-1">
+                                    Year {course.year}, Semester {course.semester} • {course.credits} Credits
+                                  </p>
+                                  
+                                  {course.specializations && course.specializations.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-1.5">
+                                      {course.specializations.map((spec) => (
+                                        <span
+                                          key={spec}
+                                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getSpecializationColor(spec)}`}
+                                        >
+                                          {spec}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-amber-200 text-amber-800 whitespace-nowrap ml-2">
+                                  LIC
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {regularCourses.length > 0 && (
+                        <div>
+                          {licCourses.length > 0 && (
+                            <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+                              <p className="text-xs font-semibold text-blue-900 uppercase tracking-wide">
+                                As Lecturer
+                              </p>
+                            </div>
+                          )}
+                          {regularCourses.map((course) => (
+                            <div
+                              key={course._id}
+                              onClick={() => handleSelectCourse(course)}
+                              className={`p-4 border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition-all duration-150 ${
+                                selectedCourse?._id === course._id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                              }`}
+                            >
+                              <div className="flex-1">
+                                <p className="text-sm font-semibold text-gray-900">
+                                  {course.courseName}
+                                </p>
+                                <p className="text-xs text-gray-600 mt-1">
+                                  Year {course.year}, Semester {course.semester} • {course.credits} Credits
+                                </p>
+                                
+                                {course.specializations && course.specializations.length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {course.specializations.map((spec) => (
+                                      <span
+                                        key={spec}
+                                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getSpecializationColor(spec)}`}
+                                      >
+                                        {spec}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                
+                                {course.lecturerInCharge && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    LIC: {course.lecturerInCharge.name}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {coursesLoading && (
+                      <div className="p-4 text-center">
+                        <p className="text-sm text-gray-500">Loading courses...</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : userRole === 'student' && studentCourses.length > 0 ? (
+              // ✅ NEW: STUDENT COURSE DROPDOWN
+              <div className="relative">
+                <button
+                  onClick={() => setStudentCourseDropdownOpen(!studentCourseDropdownOpen)}
+                  className="hidden sm:flex items-center gap-2 bg-blue-100 rounded-md border border-blue-400 px-3 py-1.5 hover:bg-blue-150 hover:border-blue-500 transition-all duration-200 shadow-sm hover:shadow-md"
+                >
+                  <div className="flex flex-col text-left">
+                    {selectedStudentCourse ? (
+                      <>
+                        <h1 className="text-sm font-bold text-brand-blue truncate max-w-xs">{selectedStudentCourse.courseName}</h1>
+                        <p className="text-xs text-blue-500">Y{selectedStudentCourse.year}S{selectedStudentCourse.semester} • {selectedStudentCourse.credits}cr</p>
+                      </>
+                    ) : (
+                      <>
+                        <h1 className="text-sm font-bold text-brand-blue">My Modules</h1>
+                        <p className="text-xs text-blue-500">{studentCourses.length} course{studentCourses.length !== 1 ? 's' : ''}</p>
+                      </>
+                    )}
+                  </div>
+                  <ChevronDown
+                    size={18}
+                    className={`text-brand-blue transition-transform duration-200 shrink-0 ${studentCourseDropdownOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {studentCourseDropdownOpen && (
+                  <div className="absolute left-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                    <div className="p-4 border-b border-gray-100">
+                      <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                        <BookOpen size={16} />
+                        My Modules
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Year {userData?.academicYear}, Semester {userData?.semester} • {userData?.specialization}
+                      </p>
+                    </div>
+
+                    <div className="max-h-96 overflow-y-auto">
+                      {studentCourses.length > 0 ? (
+                        <div>
+                          {studentCourses.map((course) => (
+                            <div
+                              key={course._id}
+                              onClick={() => handleSelectStudentCourse(course)}
+                              className={`p-4 border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition-all duration-150 ${
+                                selectedStudentCourse?._id === course._id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                              }`}
+                            >
+                              <div className="flex-1">
+                                <p className="text-sm font-semibold text-gray-900">
+                                  {course.courseName}
+                                </p>
+                                <p className="text-xs text-gray-600 mt-1">
+                                  {course.courseCode} • {course.credits} Credits
+                                </p>
+                                
+                                {course.specializations && course.specializations.length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {course.specializations.map((spec) => (
+                                      <span
+                                        key={spec}
+                                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getSpecializationColor(spec)}`}
+                                      >
+                                        {spec}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                
+                                {course.lecturerInCharge && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Instructor: {course.lecturerInCharge.name}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 text-center">
+                          <p className="text-sm text-gray-500">No modules assigned</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {studentCoursesLoading && (
+                      <div className="p-4 text-center">
+                        <p className="text-sm text-gray-500">Loading modules...</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              userRole !== 'lecture' && userRole !== 'student' && (
+                <button className="hidden sm:flex items-center gap-2 bg-blue-100 rounded-md border border-blue-400 px-3 py-1.5 hover:bg-blue-150 hover:border-blue-500 transition-all duration-200 shadow-sm hover:shadow-md">
+                  <div className="flex flex-col text-left">
+                    <h1 className="text-sm font-bold text-brand-blue">{config.courseCode}</h1>
+                    <p className="text-xs text-blue-500">{config.courseName}</p>
+                  </div>
+                </button>
+              )
+            )}
+          </div>
+
+          <div className="hidden md:flex flex-1 max-w-md mx-8">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder={config.searchPlaceholder}
+                className={`w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-${config.primaryColor}-500`}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6">
+            {config.showPendingTasks && config.pendingTasksCount && config.pendingTasksCount > 0 && (
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-amber-50 border border-amber-200 rounded-full">
+                <span className="text-xs font-semibold text-amber-900">{config.pendingTasksCount} pending</span>
+              </div>
+            )}
+
+            <div className="relative">
+              <button
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                className="relative p-2 text-brand-blue hover:bg-gray-100 rounded-lg transition-colors"
+                aria-label="Notifications"
+              >
+                <Bell size={20} />
+                {unreadNotifications > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200">
+                  <div className="p-4 border-b border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-gray-900">Notifications</h3>
+                      {unreadNotifications > 0 && (
+                        <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-medium">
+                          {unreadNotifications} new
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    {config.notifications.map((notif) => {
+                      const IconComponent = notif.icon;
+                      return (
+                        <div
+                          key={notif.id}
+                          className="p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                        >
+                          <div className="flex gap-3">
+                            <div className={`mt-1 shrink-0 p-2 rounded ${getNotificationColor(notif.type)}`}>
+                              <IconComponent size={16} />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm text-gray-900 font-medium">{notif.message}</p>
+                              <p className="text-xs text-gray-500 mt-1">{notif.time}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="p-3 border-t border-gray-100 text-center">
+                    <button className={`text-sm text-${config.primaryColor}-600 hover:text-${config.primaryColor}-700 font-medium`}>
+                      View all notifications
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="w-0.5 h-8 bg-brand-blue"></div>
+
+            <div className="relative">
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <div className={`w-8 h-8 bg-gradient-to-br ${config.avatarColor} rounded-full flex items-center justify-center text-white text-sm font-semibold`}>
+                  {displayName.charAt(0).toUpperCase()}
+                </div>
+                {userRole === 'student' ? (
+                  <div className="hidden sm:flex flex-col items-start text-left">
+                    <span className="text-sm font-medium text-gray-900">
+                      {!isLoading ? displayName : 'Loading...'}
+                    </span>
+                    {displayId && <span className="text-xs text-gray-500">{displayId}</span>}
+                  </div>
+                ) : (
+                  <span className="hidden sm:inline text-sm font-medium text-gray-900">
+                    {!isLoading ? displayName : 'Loading...'}
+                  </span>
+                )}
+                <ChevronDown
+                  size={16}
+                  className={`text-gray-600 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {dropdownOpen && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200">
+                  <div className="p-3 border-b border-gray-100">
+                    <p className="text-sm font-semibold text-gray-900">{displayName}</p>
+                    {displayId && <p className="text-xs text-gray-500">ID: {displayId}</p>}
+                    {displayPosition && <p className="text-xs text-gray-500 capitalize">{displayPosition}</p>}
+                    {userData?.email && <p className="text-xs text-gray-500">{userData.email}</p>}
+                  </div>
+                  <div className="py-2">
+                    {userRole === 'superadmin' ? (
+                      <>
+                        <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                          <Settings size={16} />
+                          System Settings
+                        </button>
+                        <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                          <Users size={16} />
+                          User Management
+                        </button>
+                        <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                          <Database size={16} />
+                          Database Settings
+                        </button>
+                      </>
+                    ) : userRole === 'lecture' ? (
+                      <>
+                        <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                          <Settings size={16} />
+                          Course Settings
+                        </button>
+                        <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                          <Settings size={16} />
+                          Profile Settings
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                          <Settings size={16} />
+                          My Profile
+                        </button>
+                        <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                          <Settings size={16} />
+                          Preferences
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <div className="border-t border-gray-100 p-2">
+                    <button
+                      onClick={handleLogout}
+                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                    >
+                      <LogOut size={16} />
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
