@@ -1,413 +1,512 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React from 'react';
+import {useRouter} from 'next/navigation';
 import {
-    Upload,
-    FileText,
-    Clock,
-    CheckCircle2,
     AlertTriangle,
-    XCircle,
-    Star,
+    Award,
+    Calendar,
+    CheckCircle2,
+    Clock,
+    Edit,
+    Eye,
+    FileText,
     GitBranch,
     Shield,
+    Star,
+    Target,
     TrendingUp,
-    Calendar,
-    Eye,
-    Plus,
 } from 'lucide-react';
 
-export default function StudentSubmissionsDashboard() {
+export default function StudentDashboardPage() {
     const router = useRouter();
 
-    // Hardcoded student data
-    const studentData = {
-        name: 'John Doe',
-        studentId: 'IT22001',
-        totalSubmissions: 12,
-        pendingSubmissions: 3,
-        gradedSubmissions: 8,
-        averageScore: 85,
-        integrityScore: 92,
+    // Hardcoded data
+    const stats = {
+        totalAssignments: 8,
+        pending: 3,
+        inProgress: 2,
+        submitted: 2,
+        graded: 1,
+        overdue: 0,
+        averageGrade: 87,
+        plagiarismScore: 5, // Lower is better
+        submissionRate: 92,
     };
 
-    // Hardcoded assignments
-    const assignments = [
+    const upcomingDeadlines = [
         {
-            id: 1,
-            title: 'Database Design Assignment',
-            course: 'Database Management Systems',
-            dueDate: '2025-01-10',
+            id: '1',
+            title: 'Database Design and Normalization',
+            module: 'CS3001',
+            dueDate: '2025-01-15 23:59',
             status: 'pending',
-            hasSubmission: false,
-            maxScore: 100,
-            description: 'Design a normalized database schema for an e-commerce system',
+            marks: 100,
         },
         {
-            id: 2,
-            title: 'Software Engineering Essay',
-            course: 'Software Engineering',
-            dueDate: '2025-01-08',
+            id: '2',
+            title: 'Software Development Lifecycle Quiz',
+            module: 'SE2001',
+            dueDate: '2025-01-10 18:00',
+            status: 'in-progress',
+            marks: 50,
+            currentVersion: 2,
+        },
+        {
+            id: '4',
+            title: 'Web Technologies Final Exam',
+            module: 'WT3001',
+            dueDate: '2025-01-20 14:00',
+            status: 'pending',
+            marks: 100,
+        },
+    ];
+
+    const recentSubmissions = [
+        {
+            id: '3',
+            title: 'Data Structures Implementation',
+            module: 'CS2002',
+            submittedAt: '2025-01-07 22:45',
+            version: 4,
             status: 'submitted',
-            hasSubmission: true,
-            submittedAt: '2025-01-03 14:30',
-            versionCount: 3,
-            plagiarismScore: 5,
+            plagiarismScore: 8,
             aiScore: 88,
-            feedbackStatus: 'pending',
         },
         {
-            id: 3,
-            title: 'Python Programming Task',
-            course: 'Programming Fundamentals',
-            dueDate: '2025-01-05',
+            id: '5',
+            title: 'Python Programming Basics',
+            module: 'CS1001',
+            submittedAt: '2025-01-04 18:30',
+            version: 5,
             status: 'graded',
-            hasSubmission: true,
-            submittedAt: '2025-01-02 09:15',
-            versionCount: 5,
+            grade: 95,
             plagiarismScore: 3,
             aiScore: 92,
-            grade: 95,
-            feedback: 'Excellent work! Your code is well-structured and efficient.',
-            feedbackStatus: 'available',
-        },
-        {
-            id: 4,
-            title: 'Web Development Project',
-            course: 'Web Technologies',
-            dueDate: '2025-01-15',
-            status: 'pending',
-            hasSubmission: false,
-            maxScore: 100,
-            description: 'Create a responsive landing page using HTML, CSS, and JavaScript',
-        },
-        {
-            id: 5,
-            title: 'Data Structures Implementation',
-            course: 'Data Structures & Algorithms',
-            dueDate: '2025-01-03',
-            status: 'overdue',
-            hasSubmission: false,
-            maxScore: 100,
-            description: 'Implement a balanced BST with insertion and deletion operations',
         },
     ];
 
-    const stats = [
+    const recentFeedback = [
         {
-            label: 'Total Submissions',
-            value: studentData.totalSubmissions,
-            icon: <FileText size={24} />,
-            color: 'blue',
-            change: '+2',
-        },
-        {
-            label: 'Pending Review',
-            value: studentData.pendingSubmissions,
-            icon: <Clock size={24} />,
-            color: 'amber',
-            change: '+1',
-        },
-        {
-            label: 'Average Score',
-            value: `${studentData.averageScore}%`,
-            icon: <Star size={24} />,
+            id: '1',
+            assignment: 'Python Programming Basics',
+            type: 'Grade Published',
+            message: 'Your assignment has been graded. Grade: 95/100',
+            time: '2 hours ago',
+            icon: Award,
             color: 'green',
-            change: '+3%',
         },
         {
-            label: 'Integrity Score',
-            value: `${studentData.integrityScore}%`,
-            icon: <Shield size={24} />,
+            id: '2',
+            assignment: 'Data Structures Implementation',
+            type: 'AI Feedback',
+            message: 'New AI feedback available for Version 4',
+            time: '5 hours ago',
+            icon: Star,
             color: 'purple',
-            change: '+2%',
+        },
+        {
+            id: '3',
+            assignment: 'Database Design and Normalization',
+            type: 'Reminder',
+            message: 'Deadline approaching in 8 days',
+            time: '1 day ago',
+            icon: Clock,
+            color: 'amber',
         },
     ];
 
-    const getStatColor = (color: string) => {
-        const colors: { [key: string]: string } = {
-            blue: 'bg-blue-50 border-blue-200',
-            amber: 'bg-amber-50 border-amber-200',
-            green: 'bg-green-50 border-green-200',
-            purple: 'bg-purple-50 border-purple-200',
-        };
-        return colors[color] || 'bg-gray-50 border-gray-200';
-    };
-
-    const getStatusBadge = (status: string) => {
-        switch (status) {
-            case 'pending':
-                return (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-            <Clock size={14} />
-            Not Submitted
-          </span>
-                );
-            case 'submitted':
-                return (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-            <Clock size={14} />
-            Under Review
-          </span>
-                );
-            case 'graded':
-                return (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-            <CheckCircle2 size={14} />
-            Graded
-          </span>
-                );
-            case 'overdue':
-                return (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
-            <XCircle size={14} />
-            Overdue
-          </span>
-                );
-            default:
-                return null;
-        }
-    };
-
-    const getDaysUntilDue = (dueDate: string) => {
-        const today = new Date();
+    const getDaysRemaining = (dueDate: string) => {
         const due = new Date(dueDate);
-        const diffTime = due.getTime() - today.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const now = new Date();
+        const diff = due.getTime() - now.getTime();
+        const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
 
-        if (diffDays < 0) return `${Math.abs(diffDays)} days overdue`;
-        if (diffDays === 0) return 'Due today';
-        if (diffDays === 1) return 'Due tomorrow';
-        return `${diffDays} days left`;
+        if (days < 0) return {text: `${Math.abs(days)} days overdue`, color: 'text-red-600'};
+        if (days === 0) return {text: 'Due today', color: 'text-red-600'};
+        if (days === 1) return {text: 'Due tomorrow', color: 'text-amber-600'};
+        if (days <= 3) return {text: `${days} days left`, color: 'text-amber-600'};
+        return {text: `${days} days left`, color: 'text-gray-600'};
     };
 
     return (
         <div>
-            {/* Page Header */}
+            {/* Header */}
             <div className="mb-8">
-                <h1 className="text-4xl font-bold text-gray-900 mb-2">
-                    Submission Center
-                </h1>
-                <p className="text-gray-600">
-                    {studentData.studentId} • {studentData.name}
-                </p>
+                <h1 className="text-4xl font-bold text-gray-900 mb-2">Dashboard</h1>
+                <p className="text-gray-600">Welcome back! Here&#39;s your submission overview</p>
             </div>
 
-            {/* Stats Grid */}
+            {/* Main Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                {stats.map((stat, index) => (
-                    <div
-                        key={index}
-                        className={`${getStatColor(stat.color)} p-6 rounded-lg border shadow-sm`}
-                    >
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-gray-600 font-medium">{stat.label}</h3>
-                            <div className="text-gray-400">{stat.icon}</div>
+                <div
+                    className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <p className="text-blue-100 text-sm font-medium">Total Assignments</p>
+                            <p className="text-4xl font-bold mt-1">{stats.totalAssignments}</p>
                         </div>
-                        <div className="flex items-end justify-between">
-                            <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-                            <span className={`text-sm font-medium ${
-                                stat.change.startsWith('+') ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                {stat.change}
-              </span>
+                        <div
+                            className="w-14 h-14 bg-blue-400 bg-opacity-30 rounded-full flex items-center justify-center">
+                            <FileText size={28}/>
                         </div>
                     </div>
-                ))}
-            </div>
+                    <div className="flex items-center text-blue-100 text-sm">
+                        <TrendingUp size={16} className="mr-1"/>
+                        2 new this week
+                    </div>
+                </div>
 
-            {/* Quick Actions */}
-            <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg shadow-lg p-6 mb-8 text-white">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h2 className="text-2xl font-bold mb-2">Ready to submit?</h2>
-                        <p className="text-purple-100">
-                            Upload your work and get instant AI feedback with plagiarism detection
-                        </p>
+                <div
+                    className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-lg shadow-lg p-6 text-white">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <p className="text-amber-100 text-sm font-medium">Pending</p>
+                            <p className="text-4xl font-bold mt-1">{stats.pending}</p>
+                        </div>
+                        <div
+                            className="w-14 h-14 bg-amber-400 bg-opacity-30 rounded-full flex items-center justify-center">
+                            <Clock size={28}/>
+                        </div>
                     </div>
-                    <button
-                        onClick={() => router.push('/submissions/student/submit')}
-                        className="flex items-center gap-2 px-6 py-3 bg-white text-purple-600 rounded-lg hover:bg-purple-50 transition-colors font-medium"
-                    >
-                        <Upload size={20} />
-                        New Submission
-                    </button>
+                    <div className="flex items-center text-amber-100 text-sm">
+                        <AlertTriangle size={16} className="mr-1"/>
+                        Action required
+                    </div>
+                </div>
+
+                <div
+                    className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <p className="text-green-100 text-sm font-medium">Average Grade</p>
+                            <p className="text-4xl font-bold mt-1">{stats.averageGrade}%</p>
+                        </div>
+                        <div
+                            className="w-14 h-14 bg-green-400 bg-opacity-30 rounded-full flex items-center justify-center">
+                            <Award size={28}/>
+                        </div>
+                    </div>
+                    <div className="flex items-center text-green-100 text-sm">
+                        <TrendingUp size={16} className="mr-1"/>
+                        +5% from last month
+                    </div>
+                </div>
+
+                <div
+                    className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <p className="text-purple-100 text-sm font-medium">Submission Rate</p>
+                            <p className="text-4xl font-bold mt-1">{stats.submissionRate}%</p>
+                        </div>
+                        <div
+                            className="w-14 h-14 bg-purple-400 bg-opacity-30 rounded-full flex items-center justify-center">
+                            <Target size={28}/>
+                        </div>
+                    </div>
+                    <div className="flex items-center text-purple-100 text-sm">
+                        <CheckCircle2 size={16} className="mr-1"/>
+                        Excellent!
+                    </div>
                 </div>
             </div>
 
-            {/* Assignments List */}
-            <div className="bg-white rounded-lg shadow">
-                <div className="p-6 border-b border-gray-200">
-                    <h2 className="text-xl font-bold text-gray-900">Active Assignments</h2>
-                </div>
-
-                <div className="divide-y divide-gray-200">
-                    {assignments.map((assignment) => (
-                        <div key={assignment.id} className="p-6 hover:bg-gray-50 transition-colors">
-                            <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                    <div className="flex items-start gap-4">
-                                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                                            assignment.status === 'graded' ? 'bg-green-100' :
-                                                assignment.status === 'submitted' ? 'bg-amber-100' :
-                                                    assignment.status === 'overdue' ? 'bg-red-100' :
-                                                        'bg-blue-100'
-                                        }`}>
-                                            <FileText size={24} className={
-                                                assignment.status === 'graded' ? 'text-green-600' :
-                                                    assignment.status === 'submitted' ? 'text-amber-600' :
-                                                        assignment.status === 'overdue' ? 'text-red-600' :
-                                                            'text-blue-600'
-                                            } />
-                                        </div>
-
-                                        <div className="flex-1">
-                                            <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                                                {assignment.title}
-                                            </h3>
-                                            <p className="text-sm text-gray-600 mb-2">{assignment.course}</p>
-
-                                            {assignment.description && (
-                                                <p className="text-sm text-gray-500 mb-3">{assignment.description}</p>
-                                            )}
-
-                                            <div className="flex flex-wrap items-center gap-4 text-sm">
-                                                <div className="flex items-center gap-1 text-gray-600">
-                                                    <Calendar size={16} />
-                                                    Due: {assignment.dueDate}
-                                                </div>
-                                                <div className={`font-medium ${
-                                                    assignment.status === 'overdue' ? 'text-red-600' :
-                                                        getDaysUntilDue(assignment.dueDate).includes('tomorrow') ||
-                                                        getDaysUntilDue(assignment.dueDate).includes('today') ? 'text-amber-600' :
-                                                            'text-gray-600'
-                                                }`}>
-                                                    {getDaysUntilDue(assignment.dueDate)}
-                                                </div>
-
-                                                {assignment.hasSubmission && (
-                                                    <>
-                                                        <div className="flex items-center gap-1 text-gray-600">
-                                                            <GitBranch size={16} />
-                                                            {assignment.versionCount} versions
-                                                        </div>
-                                                        {assignment.plagiarismScore !== undefined && (
-                                                            <div className={`flex items-center gap-1 ${
-                                                                assignment.plagiarismScore < 20 ? 'text-green-600' : 'text-red-600'
-                                                            }`}>
-                                                                <Shield size={16} />
-                                                                {assignment.plagiarismScore}% plagiarism
-                                                            </div>
-                                                        )}
-                                                        {assignment.aiScore !== undefined && (
-                                                            <div className="flex items-center gap-1 text-purple-600">
-                                                                <Star size={16} />
-                                                                AI Score: {assignment.aiScore}
-                                                            </div>
-                                                        )}
-                                                    </>
-                                                )}
-                                            </div>
-
-                                            {assignment.grade !== undefined && (
-                                                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-sm font-medium text-gray-700">Final Grade:</span>
-                                                        <span className="text-2xl font-bold text-green-600">{assignment.grade}%</span>
-                                                    </div>
-                                                    {assignment.feedback && (
-                                                        <p className="text-sm text-gray-600 mt-2">{assignment.feedback}</p>
+            {/* Two Column Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Left Column - Upcoming Deadlines */}
+                <div className="lg:col-span-2 space-y-8">
+                    {/* Upcoming Deadlines */}
+                    <div className="bg-white rounded-lg shadow-lg border border-gray-200">
+                        <div className="p-6 border-b border-gray-200">
+                            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                                <Calendar className="text-purple-600" size={24}/>
+                                Upcoming Deadlines
+                            </h2>
+                        </div>
+                        <div className="divide-y divide-gray-200">
+                            {upcomingDeadlines.map((assignment) => {
+                                const deadline = getDaysRemaining(assignment.dueDate);
+                                return (
+                                    <div key={assignment.id}
+                                         className="p-6 hover:bg-gray-50 transition-colors">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <h3 className="font-semibold text-gray-900">{assignment.title}</h3>
+                                                    {assignment.status === 'in-progress' && (
+                                                        <span
+                                                            className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs font-medium">
+                              In Progress
+                            </span>
                                                     )}
                                                 </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex flex-col items-end gap-3 ml-4">
-                                    {getStatusBadge(assignment.status)}
-
-                                    <div className="flex gap-2">
-                                        {assignment.hasSubmission ? (
-                                            <>
-                                                <button
-                                                    onClick={() => router.push(`/submissions/student/version-history/${assignment.id}`)}
-                                                    className="flex items-center gap-1 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                                                >
-                                                    <GitBranch size={16} />
-                                                    Versions
-                                                </button>
-                                                {assignment.feedbackStatus === 'available' && (
+                                                <div
+                                                    className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                                                    <span
+                                                        className="font-medium">{assignment.module}</span>
+                                                    <span>•</span>
+                                                    <span>{assignment.marks} marks</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <Calendar size={16} className="text-gray-400"/>
+                                                    <span className="text-gray-600">
+                            {new Date(assignment.dueDate).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                            })}
+                          </span>
+                                                    <span
+                                                        className={`font-medium ${deadline.color}`}>
+                            ({deadline.text})
+                          </span>
+                                                </div>
+                                                {assignment.currentVersion && (
+                                                    <div
+                                                        className="flex items-center gap-2 text-sm text-purple-600 mt-2">
+                                                        <GitBranch size={16}/>
+                                                        <span>Current Version: {assignment.currentVersion}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex gap-2">
+                                                {assignment.status === 'pending' && (
                                                     <button
-                                                        onClick={() => router.push(`/submissions/student/feedback/${assignment.id}`)}
-                                                        className="flex items-center gap-1 px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                                                        onClick={() => router.push(`/submissions/student/submit/${assignment.id}`)}
+                                                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium flex items-center gap-2"
                                                     >
-                                                        <Eye size={16} />
-                                                        View Feedback
+                                                        <Edit size={16}/>
+                                                        Start
                                                     </button>
                                                 )}
-                                                <button
-                                                    onClick={() => router.push('/submissions/student/submit')}
-                                                    className="flex items-center gap-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                                                >
-                                                    <Upload size={16} />
-                                                    Resubmit
-                                                </button>
-                                            </>
-                                        ) : (
-                                            <button
-                                                onClick={() => router.push('/submissions/student/submit')}
-                                                className="flex items-center gap-1 px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
-                                            >
-                                                <Upload size={16} />
-                                                Submit Now
-                                            </button>
-                                        )}
+                                                {assignment.status === 'in-progress' && (
+                                                    <button
+                                                        onClick={() => router.push(`/submissions/student/submit/${assignment.id}`)}
+                                                        className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium flex items-center gap-2"
+                                                    >
+                                                        <Edit size={16}/>
+                                                        Continue
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <div className="p-4 bg-gray-50 border-t border-gray-200">
+                            <button
+                                onClick={() => router.push('/submissions/student/assignments')}
+                                className="text-purple-600 hover:text-purple-700 font-medium text-sm flex items-center gap-2"
+                            >
+                                View All Assignments
+                                <span>→</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Recent Submissions */}
+                    <div className="bg-white rounded-lg shadow-lg border border-gray-200">
+                        <div className="p-6 border-b border-gray-200">
+                            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                                <FileText className="text-purple-600" size={24}/>
+                                Recent Submissions
+                            </h2>
+                        </div>
+                        <div className="divide-y divide-gray-200">
+                            {recentSubmissions.map((submission) => (
+                                <div key={submission.id}
+                                     className="p-6 hover:bg-gray-50 transition-colors">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <h3 className="font-semibold text-gray-900">{submission.title}</h3>
+                                                {submission.status === 'graded' ? (
+                                                    <span
+                                                        className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium flex items-center gap-1">
+                            <Award size={14}/>
+                            Graded
+                          </span>
+                                                ) : (
+                                                    <span
+                                                        className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium flex items-center gap-1">
+                            <CheckCircle2 size={14}/>
+                            Submitted
+                          </span>
+                                                )}
+                                            </div>
+                                            <div className="text-sm text-gray-600 mb-3">
+                                                <span
+                                                    className="font-medium">{submission.module}</span>
+                                                <span className="mx-2">•</span>
+                                                <span>Submitted {new Date(submission.submittedAt).toLocaleDateString()}</span>
+                                                <span className="mx-2">•</span>
+                                                <span
+                                                    className="text-purple-600 font-medium">Version {submission.version}</span>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-3">
+                                                {submission.grade !== undefined && (
+                                                    <div
+                                                        className="p-2 bg-green-50 border border-green-200 rounded">
+                                                        <div
+                                                            className="text-xs text-gray-600">Grade
+                                                        </div>
+                                                        <div
+                                                            className="text-lg font-bold text-green-600">{submission.grade}%
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                <div className={`p-2 border rounded ${
+                                                    submission.plagiarismScore < 10
+                                                        ? 'bg-green-50 border-green-200'
+                                                        : 'bg-amber-50 border-amber-200'
+                                                }`}>
+                                                    <div
+                                                        className="text-xs text-gray-600">Plagiarism
+                                                    </div>
+                                                    <div className={`text-lg font-bold ${
+                                                        submission.plagiarismScore < 10
+                                                            ? 'text-green-600'
+                                                            : 'text-amber-600'
+                                                    }`}>
+                                                        {submission.plagiarismScore}%
+                                                    </div>
+                                                </div>
+                                                <div
+                                                    className="p-2 bg-purple-50 border border-purple-200 rounded">
+                                                    <div className="text-xs text-gray-600">AI
+                                                        Score
+                                                    </div>
+                                                    <div
+                                                        className="text-lg font-bold text-purple-600">{submission.aiScore}/100
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => router.push(`/submissions/student/my-submissions/${submission.id}`)}
+                                            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium flex items-center gap-2"
+                                        >
+                                            <Eye size={16}/>
+                                            View
+                                        </button>
                                     </div>
                                 </div>
+                            ))}
+                        </div>
+                        <div className="p-4 bg-gray-50 border-t border-gray-200">
+                            <button
+                                onClick={() => router.push('/submissions/student/my-submissions')}
+                                className="text-purple-600 hover:text-purple-700 font-medium text-sm flex items-center gap-2"
+                            >
+                                View All Submissions
+                                <span>→</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right Column - Recent Feedback & Quick Stats */}
+                <div className="space-y-6">
+                    {/* Quick Stats */}
+                    <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-6">
+                        <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <Shield className="text-purple-600" size={20}/>
+                            Academic Integrity
+                        </h3>
+                        <div className="space-y-4">
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <span
+                                        className="text-sm text-gray-600">Avg. Plagiarism Score</span>
+                                    <span
+                                        className="text-lg font-bold text-green-600">{stats.plagiarismScore}%</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                    <div
+                                        className="bg-green-500 h-2 rounded-full"
+                                        style={{width: `${Math.min(stats.plagiarismScore * 5, 100)}%`}}
+                                    />
+                                </div>
+                                <p className="text-xs text-green-600 mt-1 font-medium">Excellent!
+                                    Keep it up!</p>
                             </div>
                         </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* Tips Section */}
-            <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border-2 border-blue-200">
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
-                            <GitBranch className="text-white" size={20} />
-                        </div>
-                        <h3 className="font-bold text-gray-900">Version Control</h3>
                     </div>
-                    <p className="text-sm text-gray-700">
-                        Every submission is automatically versioned. You can view and compare previous versions anytime.
-                    </p>
-                </div>
 
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border-2 border-purple-200">
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
-                            <Star className="text-white" size={20} />
+                    {/* Recent Feedback */}
+                    <div className="bg-white rounded-lg shadow-lg border border-gray-200">
+                        <div className="p-6 border-b border-gray-200">
+                            <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                                <Star className="text-purple-600" size={20}/>
+                                Recent Activity
+                            </h3>
                         </div>
-                        <h3 className="font-bold text-gray-900">AI Feedback</h3>
+                        <div className="p-4 space-y-4">
+                            {recentFeedback.map((item) => {
+                                const IconComponent = item.icon;
+                                const colorClasses = {
+                                    green: 'bg-green-100 text-green-600',
+                                    purple: 'bg-purple-100 text-purple-600',
+                                    amber: 'bg-amber-100 text-amber-600',
+                                };
+                                return (
+                                    <div key={item.id} className="flex items-start gap-3">
+                                        <div
+                                            className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${colorClasses[item.color as keyof typeof colorClasses]}`}>
+                                            <IconComponent size={20}/>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-gray-900 mb-1">{item.type}</p>
+                                            <p className="text-sm text-gray-600 mb-1">{item.assignment}</p>
+                                            <p className="text-xs text-gray-500">{item.time}</p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
-                    <p className="text-sm text-gray-700">
-                        Get instant AI-powered feedback on your submissions to improve before final grading.
-                    </p>
-                </div>
 
-                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border-2 border-green-200">
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center">
-                            <Shield className="text-white" size={20} />
+                    {/* Status Overview */}
+                    <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-6">
+                        <h3 className="font-bold text-gray-900 mb-4">Assignment Status</h3>
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 bg-blue-500 rounded-full"/>
+                                    <span className="text-sm text-gray-700">Pending</span>
+                                </div>
+                                <span
+                                    className="text-sm font-bold text-gray-900">{stats.pending}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 bg-amber-500 rounded-full"/>
+                                    <span className="text-sm text-gray-700">In Progress</span>
+                                </div>
+                                <span
+                                    className="text-sm font-bold text-gray-900">{stats.inProgress}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 bg-purple-500 rounded-full"/>
+                                    <span className="text-sm text-gray-700">Submitted</span>
+                                </div>
+                                <span
+                                    className="text-sm font-bold text-gray-900">{stats.submitted}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 bg-green-500 rounded-full"/>
+                                    <span className="text-sm text-gray-700">Graded</span>
+                                </div>
+                                <span
+                                    className="text-sm font-bold text-gray-900">{stats.graded}</span>
+                            </div>
                         </div>
-                        <h3 className="font-bold text-gray-900">Plagiarism Check</h3>
                     </div>
-                    <p className="text-sm text-gray-700">
-                        All submissions are automatically checked for plagiarism against internet sources and peer submissions.
-                    </p>
                 </div>
             </div>
         </div>
