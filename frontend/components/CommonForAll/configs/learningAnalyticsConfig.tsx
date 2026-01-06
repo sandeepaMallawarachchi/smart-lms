@@ -128,13 +128,7 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
           label: 'Learning Progress',
           icon: <TrendingUp size={20} />,
           description: 'Track your growth',
-          badge: 2,
-          href: '/learning-analytics/student/progress',
-          subsections: [
-            { id: 'course-progress', label: 'Course Progress' },
-            { id: 'skill-development', label: 'Skill Development' },
-            { id: 'time-spent', label: 'Time Analytics' },
-          ],
+          href: '/learning-analytics/student/learning-progress',
         },
         {
           id: 'performance',
@@ -149,16 +143,15 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
           ],
         },
         {
-          id: 'achievements',
-          label: 'Achievements',
-          icon: <Award size={20} />,
-          description: 'Your milestones',
-          badge: 3,
-          href: '/learning-analytics/student/achievements',
+          id: 'goals',
+          label: 'Learning Goals',
+          icon: <Target size={20} />,
+          description: 'Set and track goals',
+          href: '/learning-analytics/student/goals',
           subsections: [
-            { id: 'badges', label: 'Badges Earned', badge: 3 },
-            { id: 'certificates', label: 'Certificates' },
-            { id: 'leaderboard', label: 'Leaderboard' },
+            { id: 'active-goals', label: 'Active Goals' },
+            { id: 'completed-goals', label: 'Completed Goals' },
+            { id: 'create-goal', label: 'Create New Goal' },
           ],
         },
         {
@@ -184,18 +177,6 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
             { id: 'recommendations', label: 'Recommendations', badge: 4 },
             { id: 'weak-areas', label: 'Areas to Improve' },
             { id: 'strengths', label: 'Your Strengths' },
-          ],
-        },
-        {
-          id: 'goals',
-          label: 'Learning Goals',
-          icon: <Target size={20} />,
-          description: 'Set and track goals',
-          href: '/learning-analytics/student/goals',
-          subsections: [
-            { id: 'active-goals', label: 'Active Goals' },
-            { id: 'completed-goals', label: 'Completed Goals' },
-            { id: 'create-goal', label: 'Create New Goal' },
           ],
         },
         {

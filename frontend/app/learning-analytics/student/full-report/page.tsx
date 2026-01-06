@@ -138,7 +138,7 @@ export default function FullReportPage() {
                 const ageBand = getAgeBand(age);
                 const gender = convertGender(student.gender);
 
-                // Prepare prediction payload (hardcoded for now)
+                // Prepare prediction payload
                 const predictionPayload = {
                     student_id: student.studentIdNumber,
                     total_clicks: 5000,
