@@ -299,13 +299,6 @@ export default function StudentProjectsAndTasksPage() {
                     });
                 }
 
-                for (const item of [...projectItems, ...taskItems]) {
-                    if (item.item.deadlineDate && item.status !== 'done') {
-                        const id = item.type === 'project' ? item._id : item._id;
-                        scheduleReminders(id);
-                    }
-                }
-
                 const todoProjects = projectItems.filter(p => p.status === 'todo');
                 const inProgressProjects = projectItems.filter(p => p.status === 'inprogress');
                 const doneProjects = projectItems.filter(p => p.status === 'done');
@@ -431,9 +424,15 @@ export default function StudentProjectsAndTasksPage() {
                 break;
             case 'inprogress':
                 setInProgressItems(prev => [...prev, updatedItem]);
-
-                if (draggedItem.type === 'project') {
-                    scheduleReminders(draggedItem._id);
+                // Schedule reminders when moved to In Progress
+                if (updatedItem.type === 'project') {
+                    scheduleReminders(updatedItem._id);
+                } else {
+                    // schedule for tasks if they have deadlines
+                    const task = updatedItem.item as Task;
+                    if (task.deadlineDate) {
+                        scheduleReminders(updatedItem._id);
+                    }
                 }
                 break;
             case 'done':
@@ -448,7 +447,7 @@ export default function StudentProjectsAndTasksPage() {
         try {
             const token = localStorage.getItem('authToken');
 
-            await fetch('/api/projects-and-tasks/notifications/scheduled-reminders', {
+            const response = await fetch('/api/projects-and-tasks/student/notifications/scheduled-reminders', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -456,6 +455,10 @@ export default function StudentProjectsAndTasksPage() {
                 },
                 body: JSON.stringify({ projectId }),
             });
+
+            if (response.ok) {
+                console.log('Reminders scheduled for project:', projectId);
+            }
         } catch (error) {
             console.error('Error scheduling reminders:', error);
         }

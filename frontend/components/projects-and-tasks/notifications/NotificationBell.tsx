@@ -48,7 +48,7 @@ export default function NotificationBell({ pollInterval = 30000 }: NotificationB
   const fetchNotifications = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch('/api/projects-and-tasks/notifications/scheduled-reminders', {
+      const response = await fetch('/api/projects-and-tasks/student/notifications/scheduled-reminders', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -67,7 +67,7 @@ export default function NotificationBell({ pollInterval = 30000 }: NotificationB
   const handleMarkRead = async (notificationId: string) => {
     try {
       const token = localStorage.getItem('authToken');
-      await fetch('/api/projects-and-tasks/notifications/mark-read', {
+      await fetch('/api/projects-and-tasks/student/notifications/mark-read', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

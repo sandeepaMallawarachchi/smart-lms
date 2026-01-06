@@ -1,3 +1,4 @@
+import ChatbotWidget from '@/components/CommonForAll/ChatbotWidget';
 import ModuleLayout from '@/components/CommonForAll/ModuleLayout';
 import type { Metadata } from 'next';
 
@@ -11,5 +12,10 @@ export default function ProjectsTasksLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <ModuleLayout>{children}</ModuleLayout>;
+  return (
+    <ModuleLayout>
+      {children}
+      <ChatbotWidget />
+    </ModuleLayout>
+  )
 }

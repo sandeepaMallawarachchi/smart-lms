@@ -12,6 +12,7 @@ import {
   ListTodo,
   Settings,
   FileText,
+  BellIcon
 } from 'lucide-react';
 
 interface SubSection {
@@ -147,6 +148,14 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           ],
         },
         {
+          id: 'heatmap',
+          label: 'Activity Heatmap',
+          icon: <AlertCircle size={20} />,
+          description: 'Activity HeatMap Overview',
+          badge: 1,
+          href: '/projects-and-tasks/student/heatmap',
+        },
+        {
           id: 'deadlines',
           label: 'Upcoming Deadlines',
           icon: <Clock size={20} />,
@@ -181,16 +190,11 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           ],
         },
         {
-          id: 'analytics',
-          label: 'My Progress',
-          icon: <BarChart3 size={20} />,
-          description: 'Performance insights',
-          href: '/projects-and-tasks/student/progress',
-          subsections: [
-            { id: 'completion-rate', label: 'Completion Rate' },
-            { id: 'productivity-trends', label: 'Productivity Trends' },
-            { id: 'time-management', label: 'Time Management' },
-          ],
+          id: 'notifications',
+          label: 'Project Notifications',
+          icon: <BellIcon size={20} />,
+          description: 'Your project notifications',
+          href: '/projects-and-tasks/student/notifications',
         },
         {
           id: 'help',
