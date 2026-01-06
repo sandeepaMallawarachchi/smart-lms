@@ -147,11 +147,11 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
           label: 'Learning Goals',
           icon: <Target size={20} />,
           description: 'Set and track goals',
-          href: '/learning-analytics/student/goals',
+          href: '/learning-analytics/student/learning-goals',
           subsections: [
-            { id: 'active-goals', label: 'Active Goals' },
-            { id: 'completed-goals', label: 'Completed Goals' },
-            { id: 'create-goal', label: 'Create New Goal' },
+            { id: 'active-goals', label: 'Active Goals', href: '/learning-analytics/student/learning-goals', },
+            { id: 'completed-goals', label: 'Completed Goals', href: '/learning-analytics/student/learning-goals', },
+            { id: 'create-goal', label: 'Create New Goal', href: '/learning-analytics/student/learning-goals', },
           ],
         },
         {
