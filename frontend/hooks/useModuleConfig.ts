@@ -1,6 +1,7 @@
 import { usePathname } from 'next/navigation';
 import { projectsTasksConfig } from '@/components/CommonForAll/configs/projectsTasksConfig';
 import { learningAnalyticsConfig } from '@/components/CommonForAll/configs/learningAnalyticsConfig';
+import {submissionsConfig} from "@/components/CommonForAll/configs/submissionsConfig";
 
 type UserRole = 'student' | 'lecture' | 'superadmin';
 
@@ -21,6 +22,8 @@ export function useModuleConfig(userRole: UserRole) {
     ? 'projects-tasks' 
     : pathname.includes('/learning-analytics')
     ? 'learning-analytics'
+          : pathname.includes('/submissions')
+  ? 'submissions'
     : null;
 
   // Get the appropriate config
@@ -29,6 +32,8 @@ export function useModuleConfig(userRole: UserRole) {
       return projectsTasksConfig[userRole];
     } else if (currentModule === 'learning-analytics') {
       return learningAnalyticsConfig[userRole];
+    }else if (currentModule === 'submissions') {
+      return submissionsConfig[userRole];
     }
     return null;
   };
