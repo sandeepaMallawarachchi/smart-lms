@@ -2,7 +2,7 @@ import React from 'react';
 import {
   LayoutGrid,
   Trello,
-  CheckCircle2,
+  CodeXml,
   Clock,
   AlertCircle,
   Users,
@@ -202,6 +202,18 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           icon: <Lightbulb size={20} />,
           description: 'How to manage tasks effectively',
           href: '/projects-and-tasks/student/help',
+          subsections: [
+            { id: 'getting-started', label: 'Getting Started' },
+            { id: 'kanban-guide', label: 'Kanban Guide' },
+            { id: 'best-practices', label: 'Best Practices' },
+          ],
+        },
+        {
+          id: 'code-projects',
+          label: 'Code Projects',
+          icon: <CodeXml size={20} />,
+          description: 'Practice coding challenges & labs',
+          href: '/projects-and-tasks/student/code-assignments',
           subsections: [
             { id: 'getting-started', label: 'Getting Started' },
             { id: 'kanban-guide', label: 'Kanban Guide' },
