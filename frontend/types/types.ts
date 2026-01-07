@@ -5,7 +5,7 @@ export type TestCase = {
   isHidden?: boolean
 }
 
-type Options = {
+export type Options = {
   autoComplete: boolean
   externalCopyPaste: boolean
   internalCopyPaste: boolean
@@ -13,11 +13,13 @@ type Options = {
 }
 
 export type Assignment = {
+  courseId: string
+  lecturerId: string
   question: string
   type: string
   language: string
-  startDateTime: string
-  endDateTime: string
+  deadlineDate: string
+  deadlineTime: string
   options?: Options
   testCases?: TestCase[]
 }

@@ -3,41 +3,15 @@
 import React, { useState } from 'react'
 import { Plus, Trash2, Loader, AlertCircle, Save, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
+import { TestCase, Assignment, Options } from '@/types/types'
 import RichTextEditor from '../RichTextEditor'
-
-export type TestCase = {
-  id: number
-  input: string
-  expectedOutput: string
-  isHidden?: boolean
-}
-
-type Options = {
-  autoComplete: boolean
-  externalCopyPaste: boolean
-  internalCopyPaste: boolean
-  analytics: boolean
-}
-
-export type Assignment = {
-  question: string
-  type: string
-  language: string
-  startDateTime: string
-  endDateTime: string
-  options?: Options
-  testCases?: TestCase[]
-}
-
 
 interface AssignmentFormState {
   question: { html: string; text: string }
   type: string
   language: string
-  startDate: string
-  startTime: string
-  endDate: string
-  endTime: string
+  deadlineDate: string
+  deadlineTime: string
   options: Options
   testCases: TestCase[]
 }
@@ -65,10 +39,8 @@ export default function AssignmentCreationForm({
     question: { html: '', text: '' },
     type: 'coding',
     language: 'java',
-    startDate: '',
-    startTime: '08:00',
-    endDate: '',
-    endTime: '23:59',
+    deadlineDate: '',
+    deadlineTime: '23:59',
     options: {
       autoComplete: false,
       externalCopyPaste: false,
@@ -78,27 +50,18 @@ export default function AssignmentCreationForm({
     testCases: [],
   })
 
-  const combineDateTime = (date: string, time: string) => {
-    return `${date}T${time}:00`
-  }
-
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {}
 
     if (!formState.question.text.trim()) {
       newErrors.question = 'Question description is required'
     }
-    if (!formState.startDate || !formState.endDate) {
-      newErrors.dates = 'Start and End dates are required'
+    if (!formState.deadlineDate) {
+      newErrors.deadlineDate = 'Deadline date is required'
     }
-    
-    const start = new Date(combineDateTime(formState.startDate, formState.startTime))
-    const end = new Date(combineDateTime(formState.endDate, formState.endTime))
-    
-    if (end <= start) {
-        newErrors.dates = 'End time must be after start time'
+    if (!formState.deadlineTime) {
+      newErrors.deadlineTime = 'Deadline time is required'
     }
-
     if (formState.testCases.length === 0) {
       newErrors.testCases = 'At least one test case is required'
     }
@@ -136,6 +99,7 @@ export default function AssignmentCreationForm({
     })
   }
 
+  // Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -146,14 +110,14 @@ export default function AssignmentCreationForm({
 
     setIsSubmitting(true)
     try {
-      const payload = {
+      const payload: Assignment = {
         courseId,
         lecturerId,
-        question: JSON.stringify(formState.question),
+        question: formState.question.html,
         type: formState.type,
         language: formState.language,
-        startDateTime: combineDateTime(formState.startDate, formState.startTime),
-        endDateTime: combineDateTime(formState.endDate, formState.endTime),
+        deadlineDate: formState.deadlineDate,
+        deadlineTime: formState.deadlineTime,
         options: formState.options,
         testCases: formState.testCases,
       }
@@ -161,7 +125,7 @@ export default function AssignmentCreationForm({
       const token = localStorage.getItem('authToken')
       
       const response = await fetch(
-        '/api/projects-and-tasks/lecturer/create-projects-and-tasks/assignment',
+        '/api/projects-and-tasks/lecturer/create-projects-and-tasks/code-assignment',
         {
           method: 'POST',
           headers: {
@@ -204,6 +168,7 @@ export default function AssignmentCreationForm({
         </div>
       )}
 
+      {/* Basic Info */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="grid grid-cols-2 gap-6 mb-6">
             <div>
@@ -229,8 +194,8 @@ export default function AssignmentCreationForm({
                     onChange={(e) => setFormState({ ...formState, language: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue bg-white"
                 >
-                    <option value="java">Java (Spring Boot)</option>
-                    <option value="python">Python 3</option>
+                    <option value="java">Java</option>
+                    <option value="python">Python</option>
                     <option value="javascript">Node.js</option>
                     <option value="cpp">C++</option>
                 </select>
@@ -247,51 +212,32 @@ export default function AssignmentCreationForm({
         />
       </div>
 
+      {/* Deadline Configuration - Adjusted to match Assignment Type */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <label className="block text-sm font-semibold text-gray-900 mb-4">
-            Duration & Schedule
+            Deadline Settings
         </label>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
-            <span className="text-sm font-medium text-gray-700 block mb-3">Start Time</span>
-            <div className="grid grid-cols-2 gap-2">
+        <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+            <span className="text-sm font-medium text-gray-700 block mb-3">Submission Deadline</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input
                 type="date"
-                value={formState.startDate}
-                onChange={(e) => setFormState({ ...formState, startDate: e.target.value })}
+                value={formState.deadlineDate}
+                onChange={(e) => setFormState({ ...formState, deadlineDate: e.target.value })}
                 min={today}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-blue"
                 />
                 <input
                 type="time"
-                value={formState.startTime}
-                onChange={(e) => setFormState({ ...formState, startTime: e.target.value })}
+                value={formState.deadlineTime}
+                onChange={(e) => setFormState({ ...formState, deadlineTime: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-blue"
                 />
             </div>
-          </div>
-
-          <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
-            <span className="text-sm font-medium text-gray-700 block mb-3">End Time (Deadline)</span>
-            <div className="grid grid-cols-2 gap-2">
-                <input
-                type="date"
-                value={formState.endDate}
-                onChange={(e) => setFormState({ ...formState, endDate: e.target.value })}
-                min={formState.startDate || today}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-blue"
-                />
-                <input
-                type="time"
-                value={formState.endTime}
-                onChange={(e) => setFormState({ ...formState, endTime: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-blue"
-                />
-            </div>
-          </div>
         </div>
       </div>
 
+      {/* Options */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <label className="block text-sm font-semibold text-gray-900 mb-4">
             Environment Options
@@ -319,6 +265,7 @@ export default function AssignmentCreationForm({
         </div>
       </div>
 
+      {/* Test Cases */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <label className="block text-sm font-semibold text-gray-900 mb-4">
           Test Cases <span className="text-red-600">*</span>
