@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import Editor from '@monaco-editor/react'
-import { Play, FileText, Terminal, Settings, CheckCircle2, XCircle, ArrowLeft, ChartArea, Lock } from 'lucide-react'
+import { Play, FileText, Terminal, Settings, CheckCircle2, XCircle, ArrowLeft, ChartArea, Lock, Send, Info } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 export interface TestCase {
@@ -159,8 +159,15 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
             onClick={() => setActiveTab('analytics')}
             className="flex items-center gap-2 px-4 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm"
           >
-            <ChartArea size={14} />
+            <Info size={14} />
             Analyze
+          </button>
+           <button 
+            // onClick={() => setActiveTab('analytics')}
+            className="flex items-center gap-2 px-4 py-1.5 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50"
+          >
+            <Send size={14} />
+            Submit
           </button>
 
           <div className="h-6 w-px bg-gray-300 mx-1" />
