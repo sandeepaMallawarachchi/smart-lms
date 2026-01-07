@@ -78,12 +78,10 @@ export default function AssignmentCreationForm({
     testCases: [],
   })
 
-  // Helper to combine date and time
   const combineDateTime = (date: string, time: string) => {
     return `${date}T${time}:00`
   }
 
-  // Validate form
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {}
 
