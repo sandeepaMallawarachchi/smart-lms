@@ -4,16 +4,25 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Loader } from 'lucide-react';
 
+interface HeatmapItem {
+  type: 'task' | 'project';
+  name: string;
+  status: string;
+  id: string;
+}
+
 interface HeatmapData {
   date: string;
   count: number;
   level: number;
+  items?: HeatmapItem[];
 }
 
 export default function ActivityHeatmap() {
   const [heatmapData, setHeatmapData] = useState<HeatmapData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [totalActivities, setTotalActivities] = useState(0);
+  const [hoverDay, setHoverDay] = useState<HeatmapData | null>(null);
 
   useEffect(() => {
     fetchHeatmapData();
@@ -23,31 +32,20 @@ export default function ActivityHeatmap() {
     try {
       const token = localStorage.getItem('authToken');
 
-      if (!token) {
-        throw new Error('Not authenticated');
-      }
+      if (!token) throw new Error('Not authenticated');
 
       const payload = JSON.parse(atob(token.split('.')[1]));
       const studentId = payload.userId || payload.studentIdNumber || payload.id;
 
-      console.log('Fetching heatmap for student:', studentId);
-
       const response = await fetch('http://localhost:5001/heatmap', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          studentId: studentId,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch heatmap');
-      }
+      if (!response.ok) throw new Error('Failed to fetch heatmap');
 
       const data = await response.json();
-      console.log('Heatmap data:', data);
       setHeatmapData(data.heatmap || []);
       setTotalActivities(data.totalActivities || 0);
     } catch (error) {
@@ -80,6 +78,16 @@ export default function ActivityHeatmap() {
     if (week.length > 0) weeks.push(week);
     return weeks;
   };
+
+  const latestActivities = heatmapData
+    .flatMap(day =>
+      (day.items || []).map(item => ({
+        ...item,
+        date: day.date,
+      }))
+    )
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 5);
 
   if (isLoading) {
     return (
@@ -116,6 +124,8 @@ export default function ActivityHeatmap() {
                     <motion.div
                       key={day.date}
                       whileHover={{ scale: 1.2 }}
+                      onMouseEnter={() => setHoverDay(day)}
+                      onMouseLeave={() => setHoverDay(null)}
                       className="w-3 h-3 rounded-sm cursor-pointer"
                       style={{ backgroundColor: getColor(day.level) }}
                       title={`${day.date}: ${day.count} ${day.count === 1 ? 'activity' : 'activities'}`}
@@ -125,6 +135,25 @@ export default function ActivityHeatmap() {
               ))}
             </div>
           </div>
+
+          {hoverDay && hoverDay.items && hoverDay.items.length > 0 && (
+            <div className="mt-4 p-4 rounded-lg border border-gray-200 bg-gray-50">
+              <p className="text-sm font-semibold text-gray-800 mb-2">{hoverDay.date}</p>
+              <ul className="space-y-1 text-sm">
+                {hoverDay.items.map((item) => (
+                  <li key={item.id} className="flex justify-between">
+                    <span className="text-gray-700">
+                      {item.type === 'project' ? '📁' : '📝'} {item.name}
+                    </span>
+                    <span className="text-xs font-medium text-gray-600 uppercase">
+                      {item.status}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 mt-4 text-xs text-gray-600">
             <span>Less</span>
             {[0, 1, 2, 3, 4].map(level => (
@@ -136,6 +165,24 @@ export default function ActivityHeatmap() {
             ))}
             <span>More</span>
           </div>
+
+          {latestActivities.length > 0 && (
+            <div className="mt-6 border-t border-gray-200 pt-4">
+              <h4 className="text-sm font-semibold text-gray-900 mb-2">Latest 5 Works</h4>
+              <ul className="space-y-1 text-sm">
+                {latestActivities.map((item) => (
+                  <li key={item.id} className="flex justify-between">
+                    <span className="text-gray-700">
+                      {item.type === 'project' ? '📁' : '📝'} {item.name}
+                    </span>
+                    <span className="text-xs font-medium text-gray-600 uppercase">
+                      {item.status} • {item.date}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </>
       )}
     </div>
