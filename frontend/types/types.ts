@@ -25,7 +25,7 @@ export type Assignment = {
   testCases?: TestCase[]
 }
 
-interface ApiResponse {
+export interface ApiResponse {
   message: string
   data: {
     assignments: Assignment[]

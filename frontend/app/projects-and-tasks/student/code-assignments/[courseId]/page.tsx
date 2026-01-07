@@ -29,7 +29,7 @@ const formatDate = (dateString: string) => {
 const getLanguageColor = (lang: string) => {
   const l = lang.toLowerCase()
   if (l.includes('java') && !l.includes('script')) return 'text-orange-600 bg-orange-50 border-orange-200'
-  if (l.includes('script')) return 'text-yellow-600 bg-yellow-50 border-yellow-200' // JS/TS
+  if (l.includes('script')) return 'text-yellow-600 bg-yellow-50 border-yellow-200'
   if (l.includes('python')) return 'text-blue-600 bg-blue-50 border-blue-200'
   if (l.includes('c++') || l.includes('c#')) return 'text-purple-600 bg-purple-50 border-purple-200'
   return 'text-gray-600 bg-gray-50 border-gray-200'
@@ -181,7 +181,7 @@ export default function StudentCodeAssignmentsPage() {
                 `}
               >
                 <div 
-                  onClick={() => toggleExpand(assignment._id)}
+                  onClick={() => toggleExpand(assignment._id || "")}
                   className="p-5 flex items-center gap-4 cursor-pointer group"
                 >
                   <div className={`
