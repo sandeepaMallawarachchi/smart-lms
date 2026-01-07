@@ -1,8 +1,8 @@
-'use client';
+'use client'
 
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useParams, useRouter } from 'next/navigation';
+import React, { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useParams, useRouter } from 'next/navigation'
 import {
   CodeXml,
   ChevronDown,
@@ -15,44 +15,44 @@ import {
   Terminal,
   Cpu,
   CheckSquare
-} from 'lucide-react';
+} from 'lucide-react'
 
 // --- Interfaces ---
 
 interface TestCase {
-  id: number;
-  input: string;
-  expectedOutput: string;
-  isHidden: boolean;
+  id: number
+  input: string
+  expectedOutput: string
+  isHidden: boolean
 }
 
 interface AssignmentOptions {
-  autoComplete: boolean;
-  externalCopyPaste: boolean;
-  internalCopyPaste: boolean;
-  analytics: boolean;
+  autoComplete: boolean
+  externalCopyPaste: boolean
+  internalCopyPaste: boolean
+  analytics: boolean
 }
 
 interface CodeAssignment {
-  _id: string;
-  courseId: string;
-  lecturerId: string;
-  projectType: 'code';
-  language: string;
-  question: string; // HTML content
-  deadlineDate: string;
-  deadlineTime: string;
-  options: AssignmentOptions;
-  testCases: TestCase[];
-  createdAt: string;
-  updatedAt: string;
+  _id: string
+  courseId: string
+  lecturerId: string
+  projectType: 'code'
+  language: string
+  question: string // HTML content
+  deadlineDate: string
+  deadlineTime: string
+  options: AssignmentOptions
+  testCases: TestCase[]
+  createdAt: string
+  updatedAt: string
 }
 
 interface ApiResponse {
-  message: string;
+  message: string
   data: {
-    assignments: CodeAssignment[];
-  };
+    assignments: CodeAssignment[]
+  }
 }
 
 // --- Helpers ---
@@ -62,43 +62,43 @@ const formatDate = (dateString: string) => {
     month: 'short',
     day: 'numeric',
     year: 'numeric'
-  });
-};
+  })
+}
 
 const getLanguageColor = (lang: string) => {
-  const l = lang.toLowerCase();
-  if (l.includes('java') && !l.includes('script')) return 'text-orange-600 bg-orange-50 border-orange-200';
-  if (l.includes('script')) return 'text-yellow-600 bg-yellow-50 border-yellow-200'; // JS/TS
-  if (l.includes('python')) return 'text-blue-600 bg-blue-50 border-blue-200';
-  if (l.includes('c++') || l.includes('c#')) return 'text-purple-600 bg-purple-50 border-purple-200';
-  return 'text-gray-600 bg-gray-50 border-gray-200';
-};
+  const l = lang.toLowerCase()
+  if (l.includes('java') && !l.includes('script')) return 'text-orange-600 bg-orange-50 border-orange-200'
+  if (l.includes('script')) return 'text-yellow-600 bg-yellow-50 border-yellow-200' // JS/TS
+  if (l.includes('python')) return 'text-blue-600 bg-blue-50 border-blue-200'
+  if (l.includes('c++') || l.includes('c#')) return 'text-purple-600 bg-purple-50 border-purple-200'
+  return 'text-gray-600 bg-gray-50 border-gray-200'
+}
 
 // --- Main Component ---
 
 export default function StudentCodeAssignmentsPage() {
-  const params = useParams();
-  const router = useRouter();
-  const courseId = params.courseId as string;
+  const params = useParams()
+  const router = useRouter()
+  const courseId = params.courseId as string
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [assignments, setAssignments] = useState<CodeAssignment[]>([]);
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [assignments, setAssignments] = useState<CodeAssignment[]>([])
   
   // Track which assignment is currently expanded
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!courseId) return;
+      if (!courseId) return
 
       try {
-        setLoading(true);
-        const token = localStorage.getItem('authToken');
+        setLoading(true)
+        const token = localStorage.getItem('authToken')
         
         if (!token) {
-          router.push('/login');
-          return;
+          router.push('/login')
+          return
         }
 
         // Call the specific endpoint
@@ -110,35 +110,35 @@ export default function StudentCodeAssignmentsPage() {
               'Content-Type': 'application/json',
             }
           }
-        );
+        )
 
         if (!response.ok) {
-          throw new Error('Failed to fetch assignments');
+          throw new Error('Failed to fetch assignments')
         }
 
-        const result: ApiResponse = await response.json();
+        const result: ApiResponse = await response.json()
         
         // Set assignments directly from result.data.assignments
         if (result.data && Array.isArray(result.data.assignments)) {
-          setAssignments(result.data.assignments);
+          setAssignments(result.data.assignments)
         } else {
-          setAssignments([]); // Handle empty case safely
+          setAssignments([])
         }
 
       } catch (err: any) {
-        console.error(err);
-        setError(err.message || 'An unexpected error occurred');
+        console.error(err)
+        setError(err.message || 'An unexpected error occurred')
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    };
+    }
 
-    fetchData();
-  }, [courseId, router]);
+    fetchData()
+  }, [courseId, router])
 
   const toggleExpand = (id: string) => {
-    setExpandedId(expandedId === id ? null : id);
-  };
+    setExpandedId(expandedId === id ? null : id)
+  }
 
   if (loading) {
     return (
@@ -152,12 +152,11 @@ export default function StudentCodeAssignmentsPage() {
           </div>
         </motion.div>
       </div>
-    );
+    )
   }
 
   return (
     <div className="min-h-screen bg-linear-to-br from-gray-50 via-white to-gray-50">
-      {/* Background Decor */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <motion.div
           animate={{ y: [0, 30, 0] }}
@@ -173,7 +172,6 @@ export default function StudentCodeAssignmentsPage() {
 
       <div className="relative max-w-4xl mx-auto px-4 py-12">
         
-        {/* Header */}
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -318,8 +316,8 @@ export default function StudentCodeAssignmentsPage() {
                             <div className="pt-4 border-t border-gray-100">
                               <button 
                                 onClick={(e) => {
-                                  e.stopPropagation();
-                                  router.push(`/projects-and-tasks/student/code-assignments/${courseId}/${assignment._id}`);
+                                  e.stopPropagation()
+                                  router.push(`/projects-and-tasks/student/code-assignments/${courseId}/${assignment._id}`)
                                 }}
                                 className="w-full group flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white py-3 rounded-lg text-sm font-medium transition-all shadow-lg shadow-gray-200 hover:shadow-gray-300"
                               >
@@ -339,5 +337,5 @@ export default function StudentCodeAssignmentsPage() {
         </div>
       </div>
     </div>
-  );
+  )
 }
