@@ -1,354 +1,3 @@
-// 'use client'
-
-// import React, { useState } from 'react'
-// import Editor from '@monaco-editor/react'
-// import { Play, FileText, Terminal, Settings, CheckCircle2, XCircle, ArrowLeft, ChartArea, Lock, Send, Info } from 'lucide-react'
-// import { useRouter } from 'next/navigation'
-
-// export interface TestCase {
-//   id: number
-//   input: string
-//   expectedOutput: string
-//   isHidden?: boolean
-// }
-
-// export interface AssignmentData {
-//   _id: string
-//   question: string 
-//   language: string
-//   options?: {
-//     autoComplete?: boolean
-//   }
-//   testCases: TestCase[]
-// }
-
-// interface TestResult {
-//   id: number
-//   input: string
-//   expected: string
-//   actual: string
-//   passed: boolean
-//   isError: boolean
-//   stderr?: string
-//   isHidden?: boolean
-// }
-
-// const LANGUAGE_CONFIG: Record<string, { p_lang: string, version: string }> = {
-//   javascript: { p_lang: 'javascript', version: '18.15.0' },
-//   python:     { p_lang: 'python',     version: '3.10.0' },
-//   java:       { p_lang: 'java',       version: '15.0.2' },
-//   cpp:        { p_lang: 'c++',        version: '10.2.0' },
-// }
-
-// interface CodeSpaceProps {
-//   defaultCode: string
-//   assignment: AssignmentData
-// }
-
-// const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
-//   const router = useRouter()
-//   const [code, setCode] = useState(defaultCode)
-//   const [isRunning, setIsRunning] = useState(false)
-//   const [activeTab, setActiveTab] = useState<'output' | 'problem' | 'analytics'>('problem') 
-//   const [testResults, setTestResults] = useState<TestResult[] | null>(null)
-//   const [statusMessage, setStatusMessage] = useState('')
-
-//   const editorOptions = {
-//     fontSize: 14,
-//     fontFamily: "'Fira Code', 'JetBrains Mono', monospace",
-//     fontLigatures: true,
-//     minimap: { enabled: false },
-//     scrollBeyondLastLine: false,
-//     lineNumbers: 'on' as const,
-//     roundedSelection: false,
-//     padding: { top: 16, bottom: 16 },
-//     cursorBlinking: 'smooth' as const,
-//     smoothScrolling: true,
-//     contextmenu: true,
-//     quickSuggestions: assignment.options?.autoComplete ?? true,
-//   }
-
-//   const handleRun = async () => {
-//     const langConfig = LANGUAGE_CONFIG[assignment.language.toLowerCase()]
-    
-//     if (!langConfig) {
-//       alert(`Language ${assignment.language} is not supported.`)
-//       return
-//     }
-
-//     setIsRunning(true)
-//     setActiveTab('output')
-//     setTestResults(null)
-//     setStatusMessage('Preparing test cases...')
-
-//     try {
-//       const promises = assignment.testCases.map(async (testCase) => {
-        
-//         const response = await fetch('https://emkc.org/api/v2/piston/execute', {
-//           method: 'POST',
-//           headers: { 'Content-Type': 'application/json' },
-//           body: JSON.stringify({
-//             language: langConfig.p_lang,
-//             version: langConfig.version,
-//             files: [{ content: code }],
-//             stdin: testCase.input,
-//           }),
-//         })
-
-//         const data = await response.json()
-//         const rawOutput = data.run ? data.run.stdout : ''
-//         const cleanActual = rawOutput.trim()
-//         const cleanExpected = testCase.expectedOutput.trim()
-        
-//         return {
-//           id: testCase.id,
-//           input: testCase.input,
-//           expected: testCase.expectedOutput,
-//           actual: rawOutput, 
-//           passed: cleanActual === cleanExpected && data.run.code === 0,
-//           isError: data.run.code !== 0,
-//           stderr: data.run.stderr,
-//           isHidden: testCase.isHidden
-//         }
-//       })
-
-//       setStatusMessage('Executing code against test cases...')
-      
-//       const results = await Promise.all(promises)
-//       setTestResults(results)
-
-//     } catch (err) {
-//       console.error(err)
-//       setStatusMessage('Network Error: Could not reach execution engine.')
-//     } finally {
-//       setIsRunning(false)
-//       setStatusMessage('')
-//     }
-//   }
-
-//   const problemTabTestCases = assignment.testCases.filter(tc => tc.isHidden === false);
-
-//   return (
-//     <div className="flex flex-col h-[calc(100vh-2rem)] bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xl m-4">
-//       <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200 h-14">
-//         <div className="flex items-center gap-3">
-//           <button 
-//             onClick={() => router.back()}
-//             className="p-1.5 hover:bg-gray-200 rounded-md text-gray-500 transition-colors"
-//           >
-//             <ArrowLeft size={18} />
-//           </button>
-//           <div className="bg-blue-600 text-white p-1.5 rounded-md">
-//             <FileText size={18} />
-//           </div>
-//           <h2 className="text-sm font-semibold text-gray-800 line-clamp-1 max-w-md">
-//               Coding Challenge: <span className="capitalize">{assignment.language}</span>
-//           </h2>
-//         </div>
-
-//         <div className="flex items-center gap-2">
-//           <button 
-//             onClick={handleRun}
-//             disabled={isRunning}
-//             className="flex items-center gap-2 px-4 py-1.5 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50"
-//           >
-//             <Play size={14} className={isRunning ? "animate-spin" : ""} />
-//             {isRunning ? 'Testing...' : 'Run & Check'}
-//           </button>
-//           <button 
-//             onClick={() => setActiveTab('analytics')}
-//             className="flex items-center gap-2 px-4 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm"
-//           >
-//             <Info size={14} />
-//             Analyze
-//           </button>
-//            <button 
-//             // onClick={() => setActiveTab('analytics')}
-//             className="flex items-center gap-2 px-4 py-1.5 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50"
-//           >
-//             <Send size={14} />
-//             Submit
-//           </button>
-
-//           <div className="h-6 w-px bg-gray-300 mx-1" />
-//           <Settings size={16} className="text-gray-400 cursor-pointer hover:text-gray-600" />
-//         </div>
-//       </div>
-
-//       <div className="flex-1 grid grid-cols-12 overflow-hidden">
-
-//         <div className="col-span-12 lg:col-span-7 border-r border-gray-200 relative bg-[#fffffe]">
-//           <Editor
-//             height="100%"
-//             defaultLanguage={assignment.language.toLowerCase()}
-//             value={code}
-//             onChange={(val) => setCode(val || '')}
-//             options={editorOptions}
-//             loading={<div className="p-4 text-sm text-gray-500">Initializing IDE...</div>}
-//           />
-//         </div>
-
-//         <div className="col-span-12 lg:col-span-5 bg-gray-50 flex flex-col h-full overflow-hidden"> 
-//           <div className="flex border-b border-gray-200 bg-white">
-//             <button 
-//               onClick={() => setActiveTab('problem')}
-//               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-//                 activeTab === 'problem' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-//               }`}
-//             >
-//               <FileText size={16} /> Problem
-//             </button>
-//             <button 
-//               onClick={() => setActiveTab('output')}
-//               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-//                 activeTab === 'output' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-//               }`}
-//             >
-//               <Terminal size={16} /> Output & Tests
-//             </button>
-//             <button 
-//               onClick={() => setActiveTab('analytics')}
-//               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-//                 activeTab === 'analytics' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-//               }`}
-//             >
-//               <ChartArea size={16} /> Analytics
-//             </button>
-//           </div>
-
-//           <div className="flex-1 overflow-auto p-0 bg-gray-50">
-//             {activeTab === 'output' && (
-//               <div className="p-4">
-//                 {isRunning && (
-//                   <div className="flex flex-col items-center justify-center h-40 space-y-3 text-gray-500">
-//                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-//                     <p className="text-xs">{statusMessage}</p>
-//                   </div>
-//                 )}
-
-//                 {!isRunning && !testResults && (
-//                   <div className="flex flex-col items-center justify-center h-40 text-gray-400 space-y-2">
-//                     <Play size={32} className="opacity-20" />
-//                     <p className="text-sm">Click "Run & Check" to execute your code.</p>
-//                   </div>
-//                 )}
-
-//                 {!isRunning && testResults && (
-//                   <div className="space-y-4">
-//                     <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
-//                       <span className="text-sm font-medium text-gray-600">Total Score</span>
-//                       <span className={`text-sm font-bold ${
-//                         testResults.every(r => r.passed) ? 'text-green-600' : 'text-red-500'
-//                       }`}>
-//                         {testResults.filter(r => r.passed).length} / {testResults.length} Passed
-//                       </span>
-//                     </div>
-
-//                     {testResults.map((result, index) => (
-//                       <div key={index} className={`rounded-lg border overflow-hidden bg-white shadow-sm ${
-//                         result.passed ? 'border-green-200' : 'border-red-200'
-//                       }`}>
-//                         <div className={`px-4 py-2 flex items-center justify-between text-sm font-medium ${
-//                           result.passed ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
-//                         }`}>
-//                           <div className="flex items-center gap-2">
-//                             {result.passed ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
-//                             Test Case {index + 1}
-//                             {result.isHidden && (
-//                               <span className="flex items-center gap-1 text-[10px] bg-gray-800 text-white px-2 py-0.5 rounded-full ml-2">
-//                                 <Lock size={10} /> Public
-//                               </span>
-//                             )}
-//                           </div>
-//                           <span className="text-xs uppercase tracking-wider opacity-75">
-//                             {result.passed ? 'Success' : 'Failed'}
-//                           </span>
-//                         </div>
-
-//                         <div className="p-3 text-xs font-mono space-y-3">
-//                           <div>
-//                             <div className="text-gray-400 mb-1">Input</div>
-//                             <div className="bg-gray-100 p-2 rounded text-gray-700 whitespace-pre-wrap">
-//                               {result.input || "(Empty Input)"}
-//                             </div>
-//                           </div>
-
-//                           <div className="grid grid-cols-2 gap-2">
-//                             <div>
-//                               <div className="text-gray-400 mb-1">Expected Output</div>
-//                               <div className="bg-emerald-50 border border-emerald-100 p-2 rounded text-emerald-800 whitespace-pre-wrap">
-//                                 {result.expected}
-//                               </div>
-//                             </div>
-//                             <div>
-//                               <div className="text-gray-400 mb-1">Your Output</div>
-//                               <div className={`p-2 rounded border whitespace-pre-wrap ${
-//                                 result.passed 
-//                                   ? 'bg-gray-100 border-gray-200 text-gray-700' 
-//                                   : 'bg-red-50 border-red-100 text-red-800'
-//                               }`}>
-//                                 {result.isError ? (
-//                                   <span className="text-red-600 italic">
-//                                     Runtime Error: {result.stderr || "Unknown Error"}
-//                                   </span>
-//                                 ) : (
-//                                   result.actual || <span className="text-gray-400 italic">(No Output)</span>
-//                                 )}
-//                               </div>
-//                             </div>
-//                           </div>
-//                         </div>
-//                       </div>
-//                     ))}
-//                   </div>
-//                 )}
-//               </div>
-//             )}
-            
-//             {activeTab === 'problem' && (
-//               <div className="p-6">
-//                 <h3 className="font-bold text-gray-800 text-lg mb-4">Problem Description</h3>
-                
-//                 <div 
-//                     className="prose prose-sm max-w-none text-gray-600 mb-8"
-//                     dangerouslySetInnerHTML={{ __html: assignment.question }}
-//                 />
-//                 {problemTabTestCases.length > 0 && (
-//                   <div className="space-y-4">
-//                     <h4 className="font-bold text-gray-700 text-sm uppercase tracking-wide">Test Cases</h4>
-                    
-//                     {problemTabTestCases.map((testCase, index) => (
-//                       <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-//                         <div className="text-xs font-semibold text-gray-500 mb-3">Sample Case {index + 1}</div>
-//                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-sm">
-//                           <div>
-//                             <div className="text-gray-400 text-xs mb-1.5 uppercase">Input</div>
-//                             <div className="bg-white border border-gray-200 p-3 rounded text-gray-700 whitespace-pre-wrap">
-//                               {testCase.input}
-//                             </div>
-//                           </div>
-//                           <div>
-//                             <div className="text-gray-400 text-xs mb-1.5 uppercase">Expected Output</div>
-//                             <div className="bg-white border border-gray-200 p-3 rounded text-gray-700 whitespace-pre-wrap">
-//                               {testCase.expectedOutput}
-//                             </div>
-//                           </div>
-//                         </div>
-//                       </div>
-//                     ))}
-//                   </div>
-//                 )}
-//               </div>
-//             )}
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   )
-// }
-
-// export default CodeSpace
-
 'use client'
 
 import React, { useState } from 'react'
@@ -361,7 +10,6 @@ import {
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion' 
 
-// --- Types ---
 export interface TestCase {
   id: number
   input: string
@@ -411,19 +59,17 @@ const LANGUAGE_CONFIG: Record<string, { p_lang: string, version: string }> = {
   cpp:        { p_lang: 'c++',        version: '10.2.0' },
 }
 
-// --- Helper Components ---
-
 const ScoreRing = ({ score }: { score: number }) => {
-  const radius = 30;
-  const stroke = 4;
-  const normalizedRadius = radius - stroke * 2;
-  const circumference = normalizedRadius * 2 * Math.PI;
-  const strokeDashoffset = circumference - (score / 100) * circumference;
+  const radius = 30
+  const stroke = 4
+  const normalizedRadius = radius - stroke * 2
+  const circumference = normalizedRadius * 2 * Math.PI
+  const strokeDashoffset = circumference - (score / 100) * circumference
   
   const getColor = (s: number) => {
-    if (s >= 80) return "text-emerald-500";
-    if (s >= 50) return "text-amber-500";
-    return "text-rose-500";
+    if (s >= 80) return "text-emerald-500"
+    if (s >= 50) return "text-amber-500"
+    return "text-rose-500"
   }
 
   return (
@@ -434,97 +80,81 @@ const ScoreRing = ({ score }: { score: number }) => {
       </svg>
       <span className={`absolute text-xl font-bold ${getColor(score)}`}>{score}</span>
     </div>
-  );
-};
+  )
+}
 
-// --- SMART MOCK ANALYSIS ENGINE ---
-// This function actually analyzes the string content to give relevant advice
 const analyzeCodeWithAI = async (code: string, language: string): Promise<AnalysisResult> => {
   return new Promise((resolve) => {
     setTimeout(() => {
-      let score = 100;
-      const feedback: AnalysisResult['feedback'] = [];
-      const suggestions: string[] = [];
-      const codeLower = code.toLowerCase();
-      const lines = code.split('\n');
+      let score = 100
+      const feedback: AnalysisResult['feedback'] = []
+      const suggestions: string[] = []
+      const codeLower = code.toLowerCase()
+      const lines = code.split('\n')
 
-      // 1. UNIVERSAL CHECKS
-      
-      // Check for empty or very short code
       if (code.length < 50) {
-        score = 20;
-        feedback.push({ type: 'warning', message: 'Incomplete Solution', description: 'The solution seems too short to be functional. Make sure you cover all edge cases.' });
+        score = 20
+        feedback.push({ type: 'warning', message: 'Incomplete Solution', description: 'The solution seems too short to be functional. Make sure you cover all edge cases.' })
       }
 
-      // Check for comments
-      const hasComments = code.includes('//') || code.includes('#') || code.includes('/*');
+      const hasComments = code.includes('//') || code.includes('#') || code.includes('/*')
       if (!hasComments && code.length > 100) {
-        score -= 10;
-        feedback.push({ type: 'info', message: 'Missing Documentation', description: 'Your code works, but it lacks comments. Explaining "why" you did something is as important as "how".' });
+        score -= 10
+        feedback.push({ type: 'info', message: 'Missing Documentation', description: 'Your code works, but it lacks comments. Explaining "why" you did something is as important as "how".' })
       }
 
-      // Check for nested loops (Naive O(n^2) check)
-      const loops = (code.match(/for\s*\(/g) || []).length + (code.match(/while\s*\(/g) || []).length;
+      const loops = (code.match(/for\s*\(/g) || []).length + (code.match(/while\s*\(/g) || []).length
       if (loops >= 2 && code.includes('for') && code.split('for').length > 2) {
-        // Simple heuristic: if multiple 'for' keywords appear, warn about complexity
-        feedback.push({ type: 'warning', message: 'High Time Complexity', description: 'Nested loops detected. This likely results in O(n²) time complexity. Can you optimize this using a Hash Map or Two Pointers?' });
-        score -= 15;
+        feedback.push({ type: 'warning', message: 'High Time Complexity', description: 'Nested loops detected. This likely results in O(n²) time complexity. Can you optimize this using a Hash Map or Two Pointers?' })
+        score -= 15
       }
 
-      // Check for debugging prints
       if (code.includes('console.log') || code.includes('System.out.println') || (language === 'python' && code.includes('print('))) {
-        suggestions.push('Remove debug print statements before final submission to keep the output clean.');
+        suggestions.push('Remove debug print statements before final submission to keep the output clean.')
       }
 
-      // 2. LANGUAGE SPECIFIC CHECKS
-
-      // --- JavaScript ---
       if (language === 'javascript') {
         if (code.includes('var ')) {
           score -= 10;
-          feedback.push({ type: 'warning', message: 'Deprecated Syntax', description: 'Avoid using `var`. It has function scope and can lead to hoisting bugs. Use `let` or `const` instead.' });
+          feedback.push({ type: 'warning', message: 'Deprecated Syntax', description: 'Avoid using `var`. It has function scope and can lead to hoisting bugs. Use `let` or `const` instead.' })
         }
         if (code.includes('==') && !code.includes('===')) {
-          suggestions.push('Use `===` instead of `==` to prevent unexpected type coercion errors.');
+          suggestions.push('Use `===` instead of `==` to prevent unexpected type coercion errors.')
         }
         if (code.includes('function') && !code.includes('=>')) {
-          suggestions.push('Consider using Arrow Functions `() => {}` for cleaner syntax in callbacks.');
+          suggestions.push('Consider using Arrow Functions `() => {}` for cleaner syntax in callbacks.')
         }
       }
 
-      // --- Python ---
       if (language === 'python') {
         if (/[A-Z]/.test(code.split('=')[0] || '') && !code.includes('class ')) {
-          // Detect CamelCase variables (rough check)
-          suggestions.push('Python conventions (PEP 8) recommend `snake_case` for variable names, not `CamelCase`.');
+          suggestions.push('Python conventions (PEP 8) recommend `snake_case` for variable names, not `CamelCase`.')
         }
         if (code.includes('for i in range(len(')) {
-          feedback.push({ type: 'info', message: 'Non-Pythonic Loop', description: 'Using `range(len(arr))` is often unnecessary. You can iterate directly: `for item in arr:` or use `enumerate`.' });
+          feedback.push({ type: 'info', message: 'Non-Pythonic Loop', description: 'Using `range(len(arr))` is often unnecessary. You can iterate directly: `for item in arr:` or use `enumerate`.' })
         }
         if (code.includes(';')) {
           score -= 5;
-          feedback.push({ type: 'warning', message: 'Syntax Error', description: 'Python does not use semicolons `;` at the end of lines.' });
+          feedback.push({ type: 'warning', message: 'Syntax Error', description: 'Python does not use semicolons `;` at the end of lines.' })
         }
       }
 
-      // --- Java ---
       if (language === 'java') {
         if (codeLower.includes('system.out.print') && loops > 0) {
-          feedback.push({ type: 'warning', message: 'Performance Risk', description: 'Printing inside loops is an expensive I/O operation. It might cause Time Limit Exceeded (TLE) on large test cases.' });
+          feedback.push({ type: 'warning', message: 'Performance Risk', description: 'Printing inside loops is an expensive I/O operation. It might cause Time Limit Exceeded (TLE) on large test cases.' })
         }
         if (code.includes('==') && code.includes('"')) {
-          suggestions.push('Remember to use `.equals()` for String comparison in Java, not `==`.');
+          suggestions.push('Remember to use `.equals()` for String comparison in Java, not `==`.')
         }
       }
 
-      // 3. BEST PRACTICES (General)
       if (score === 100) {
-        feedback.push({ type: 'success', message: 'Excellent Code', description: 'Your code follows industry standards, is well-documented, and efficient. Great job!' });
+        feedback.push({ type: 'success', message: 'Excellent Code', description: 'Your code follows industry standards, is well-documented, and efficient. Great job!' })
       }
       
       if (suggestions.length === 0) {
-        suggestions.push('Review edge cases: What happens if the input is null or empty?');
-        suggestions.push('Variable Naming: Ensure variable names describe their purpose (e.g., `userIndex` vs `i`).');
+        suggestions.push('Review edge cases: What happens if the input is null or empty?')
+        suggestions.push('Variable Naming: Ensure variable names describe their purpose (e.g., `userIndex` vs `i`).')
       }
 
       resolve({
@@ -535,8 +165,8 @@ const analyzeCodeWithAI = async (code: string, language: string): Promise<Analys
         },
         feedback,
         suggestions
-      });
-    }, 1500); 
+      })
+    }, 1500)
   });
 };
 
