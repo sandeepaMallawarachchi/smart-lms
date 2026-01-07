@@ -155,6 +155,14 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
             <Play size={14} className={isRunning ? "animate-spin" : ""} />
             {isRunning ? 'Testing...' : 'Run & Check'}
           </button>
+          <button 
+            onClick={() => setActiveTab('analytics')}
+            className="flex items-center gap-2 px-4 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm"
+          >
+            <ChartArea size={14} />
+            Analyze
+          </button>
+
           <div className="h-6 w-px bg-gray-300 mx-1" />
           <Settings size={16} className="text-gray-400 cursor-pointer hover:text-gray-600" />
         </div>
