@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import Editor from '@monaco-editor/react'
-import { Play, FileText, Terminal, Settings, CheckCircle2, XCircle, ArrowLeft } from 'lucide-react'
+import { Play, FileText, Terminal, Settings, CheckCircle2, XCircle, ArrowLeft, ChartArea } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 export interface TestCase {
@@ -192,7 +192,7 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
                 activeTab === 'analytics' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              <Terminal size={16} /> Analytics
+              <ChartArea size={16} /> Analytics
             </button>
           </div>
 
