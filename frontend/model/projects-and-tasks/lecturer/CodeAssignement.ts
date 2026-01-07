@@ -60,13 +60,6 @@ const CodeAssignmentSchema = new Schema<ICodeAssignment>(
       type: OptionsSchema, 
       required: true 
     },
-    testCases: {
-      type: [TestCaseSchema],
-      validate: [
-        (val: TestCase[]) => val.length > 0, 
-        'At least one test case is required'
-      ]
-    }
   },
   {
     timestamps: true,
