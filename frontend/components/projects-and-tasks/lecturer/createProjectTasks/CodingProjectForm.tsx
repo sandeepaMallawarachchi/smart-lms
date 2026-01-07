@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Plus, Trash2, Loader, AlertCircle, Save, X, Eye, EyeOff, CheckCircle2 } from 'lucide-react'
+import { Plus, Trash2, Loader, AlertCircle, Save, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
 import RichTextEditor from '../RichTextEditor'
 
