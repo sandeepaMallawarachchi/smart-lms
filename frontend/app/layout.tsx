@@ -34,17 +34,17 @@ export default function RootLayout({
         ].join(" ")}
       >
         <Toaster
-                richColors
-                position="top-right"
-                closeButton
-                duration={3000}
-                toastOptions={{
-                  classNames: {
-                    toast:
-                      "rounded-lg shadow-lg border border-gray-200 mt-18 font-medium text-sm",
-                  },
-                }}
-              />
+          richColors
+          position="top-right"
+          closeButton
+          duration={3000}
+          toastOptions={{
+            classNames: {
+              toast:
+                "rounded-lg shadow-lg border border-gray-200 mt-18 font-medium text-sm",
+            },
+          }}
+        />
         {children}
       </body>
     </html>

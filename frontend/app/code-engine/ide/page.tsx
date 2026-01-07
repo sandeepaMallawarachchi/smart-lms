@@ -1,12 +1,14 @@
 import CodeSpace from "@/components/code-engine/code-space"
 import { Assignment } from "@/types/types"
 
-const data: Assignment = {
+const data = {
+  courseId: "6959ebb9aecdd635139e33ee",
+  lecturerId: "695692c5370550efdf14b004",
   question: "Write a program that prints Hello World",
-  type: "code", 
+  projectType: "code", 
   language: "javascript",
-  startDateTime: "2024-01-01T09:00:00Z",
-  endDateTime: "2024-01-01T12:00:00Z",
+  deadlineDate: "2024-01-01",
+  deadlineTime: "12:00:00Z",
   options: {
     autoComplete: true,
     externalCopyPaste: false,
