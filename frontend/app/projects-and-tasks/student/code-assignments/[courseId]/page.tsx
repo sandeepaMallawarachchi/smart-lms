@@ -16,46 +16,7 @@ import {
   Cpu,
   CheckSquare
 } from 'lucide-react'
-
-// --- Interfaces ---
-
-interface TestCase {
-  id: number
-  input: string
-  expectedOutput: string
-  isHidden: boolean
-}
-
-interface AssignmentOptions {
-  autoComplete: boolean
-  externalCopyPaste: boolean
-  internalCopyPaste: boolean
-  analytics: boolean
-}
-
-interface CodeAssignment {
-  _id: string
-  courseId: string
-  lecturerId: string
-  projectType: 'code'
-  language: string
-  question: string // HTML content
-  deadlineDate: string
-  deadlineTime: string
-  options: AssignmentOptions
-  testCases: TestCase[]
-  createdAt: string
-  updatedAt: string
-}
-
-interface ApiResponse {
-  message: string
-  data: {
-    assignments: CodeAssignment[]
-  }
-}
-
-// --- Helpers ---
+import { TestCase, Options as AssignmentOptions, Assignment as CodeAssignment, ApiResponse } from '@/types/types'
 
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {
@@ -74,18 +35,13 @@ const getLanguageColor = (lang: string) => {
   return 'text-gray-600 bg-gray-50 border-gray-200'
 }
 
-// --- Main Component ---
-
 export default function StudentCodeAssignmentsPage() {
   const params = useParams()
   const router = useRouter()
   const courseId = params.courseId as string
-
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [assignments, setAssignments] = useState<CodeAssignment[]>([])
-  
-  // Track which assignment is currently expanded
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -101,7 +57,6 @@ export default function StudentCodeAssignmentsPage() {
           return
         }
 
-        // Call the specific endpoint
         const response = await fetch(
           `/api/projects-and-tasks/lecturer/create-projects-and-tasks/code-assignment?courseId=${courseId}`, 
           {
@@ -118,7 +73,6 @@ export default function StudentCodeAssignmentsPage() {
 
         const result: ApiResponse = await response.json()
         
-        // Set assignments directly from result.data.assignments
         if (result.data && Array.isArray(result.data.assignments)) {
           setAssignments(result.data.assignments)
         } else {
@@ -299,15 +253,15 @@ export default function StudentCodeAssignmentsPage() {
                               <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Allowed Features</h4>
                               <div className="space-y-2">
                                 <div className="flex items-center gap-2 text-sm text-gray-600">
-                                  <CheckSquare size={16} className={assignment.options.autoComplete ? "text-green-500" : "text-gray-300"} />
+                                  <CheckSquare size={16} className={assignment.options?.autoComplete ? "text-green-500" : "text-gray-300"} />
                                   <span>Auto Complete</span>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-gray-600">
-                                  <CheckSquare size={16} className={assignment.options.externalCopyPaste ? "text-green-500" : "text-gray-300"} />
+                                  <CheckSquare size={16} className={assignment.options?.externalCopyPaste ? "text-green-500" : "text-gray-300"} />
                                   <span>Ext. Copy/Paste</span>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-gray-600">
-                                  <CheckSquare size={16} className={assignment.options.analytics ? "text-green-500" : "text-gray-300"} />
+                                  <CheckSquare size={16} className={assignment.options?.analytics ? "text-green-500" : "text-gray-300"} />
                                   <span>Analytics</span>
                                 </div>
                               </div>

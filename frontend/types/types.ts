@@ -13,6 +13,7 @@ export type Options = {
 }
 
 export type Assignment = {
+  _id?: string
   courseId: string
   lecturerId: string
   question: string
@@ -22,6 +23,13 @@ export type Assignment = {
   deadlineTime: string
   options?: Options
   testCases?: TestCase[]
+}
+
+interface ApiResponse {
+  message: string
+  data: {
+    assignments: Assignment[]
+  }
 }
 
 // sudaraka731_db_user
