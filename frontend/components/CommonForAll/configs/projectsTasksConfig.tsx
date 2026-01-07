@@ -707,17 +707,27 @@ export const updateConfigWithCourses = (
   baseConfig: typeof projectsTasksConfig,
   courses: Course[]
 ): typeof projectsTasksConfig => {
-  const newConfig = JSON.parse(JSON.stringify(baseConfig))
-  const navItems = newConfig.student.sidebar.navItems
-  const codeProjectsItem = navItems.find((item: NavItem) => item.id === 'code-projects')
-
-  if (codeProjectsItem) {
-    codeProjectsItem.subsections = courses.map((course) => ({
-      id: course._id,    
-      label: course.courseName,
-      href: `/projects-and-tasks/student/code-assignments/${course._id}`,
-    }))
-  }
-
-  return newConfig
+  
+  return {
+    ...baseConfig,
+    student: {
+      ...baseConfig.student,
+      sidebar: {
+        ...baseConfig.student.sidebar,
+        navItems: baseConfig.student.sidebar.navItems.map((item) => {
+          if (item.id === 'code-projects') {
+            return {
+              ...item, 
+              subsections: courses.map((course) => ({
+                id: course._id,
+                label: course.courseName,
+                href: `/projects-and-tasks/student/code-assignments/${course._id}`,
+              })),
+            };
+          }
+          return item
+        }),
+      },
+    },
+  };
 };

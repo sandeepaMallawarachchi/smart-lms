@@ -95,7 +95,22 @@ export function useModuleConfig(userRole: UserRole) {
 
       const fetchCourses = async () => {
         try {
-          const response = await fetch('/api/student/get-courses')
+          const token = localStorage.getItem('authToken')
+
+          if (!token) {
+              window.location.href = '/login'
+              return
+          }
+
+          const response = await fetch('/api/student/get-courses', {
+             headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+          })
+
+          console.log("response courses", response)
+
           if (!response.ok) return
 
           const result: CoursesApiResponse = await response.json()
