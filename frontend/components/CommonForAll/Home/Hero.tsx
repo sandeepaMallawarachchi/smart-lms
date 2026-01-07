@@ -66,7 +66,7 @@ const HeroSection: React.FC = () => {
                 <Image src="/commonforall/hero/1.svg" alt="Code Engine" width={48} height={48} />
             ),
             label: 'Code Engine',
-            route: '/code-engine',
+            route: '/code-engine/ide',
         },
         {
             icon: (

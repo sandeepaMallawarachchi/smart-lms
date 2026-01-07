@@ -1,6 +1,7 @@
+import FloatingNavMenu from '@/components/CommonForAll/FloatingNavMenu';
 import ModuleLayout from '@/components/CommonForAll/ModuleLayout';
 import type { Metadata } from 'next';
-import React, {ReactNode} from "react";
+import React, { ReactNode } from "react";
 
 export const metadata: Metadata = {
     title: 'Smart LMS - Submission System',
@@ -8,9 +9,14 @@ export const metadata: Metadata = {
 };
 
 export default function SubmissionsLayout({
-                                              children,
-                                          }: {
+    children,
+}: {
     children: ReactNode;
 }) {
-    return <ModuleLayout>{children}</ModuleLayout>;
+    return (
+        <ModuleLayout>
+            {children}
+            <FloatingNavMenu />
+        </ModuleLayout>
+    );
 }
