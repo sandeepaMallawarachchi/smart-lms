@@ -425,14 +425,14 @@ export default function AllProjectsAndTasksPage() {
             <span className="text-gray-900 font-semibold">{activeTab === 'project' ? 'All Projects' : 'All Tasks'}</span>
           </motion.nav>
 
-          <motion.div className="flex items-center gap-4 mb-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
+          {/* <motion.div className="flex items-center gap-4 mb-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
             <motion.div animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}>
               {activeTab === 'project' ? <FileText size={36} className="text-brand-blue" /> : <CheckCircle2 size={36} className="text-brand-blue" />}
             </motion.div>
             <h1 className="text-5xl font-bold bg-gradient-to-r from-brand-blue to-brand-blue/70 bg-clip-text text-transparent">
               {activeTab === 'project' ? 'All Projects' : 'All Tasks'}
             </h1>
-          </motion.div>
+          </motion.div> */}
 
           <motion.p className="text-gray-600 text-lg ml-16" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
             {selectedCourse ? `Viewing ${activeTab === 'project' ? 'projects' : 'tasks'} for ${selectedCourse.courseName}` : 'Select a course to view content'}

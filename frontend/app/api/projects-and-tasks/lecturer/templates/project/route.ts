@@ -3,7 +3,7 @@
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/projects-and-tasks/db';
 import ProjectTemplate from '@/model/projects-and-tasks/lecturer/ProjectTemplate';
-import Lecturer from '@/model/projects-and-tasks/Lecturer';
+import Lecturer from '@/model/Lecturer';
 import { verifyToken } from '@/lib/projects-and-tasks/jwt';
 import {
   successResponse,
