@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { CheckCircle2, Clock, AlertCircle, Users, BarChart3, Plus } from 'lucide-react';
 
 export default function StudentDashboard() {
@@ -40,6 +40,10 @@ export default function StudentDashboard() {
     };
     return colors[color] || 'bg-gray-50';
   };
+
+  useEffect(() => {
+    fetch('/api/projects-and-tasks/student/notifications/init').catch(console.error);
+  }, []);
 
   return (
     <div>
@@ -103,11 +107,10 @@ export default function StudentDashboard() {
               ].map((task, index) => (
                 <div
                   key={index}
-                  className={`p-4 border rounded-lg ${
-                    task.priority === 'high'
+                  className={`p-4 border rounded-lg ${task.priority === 'high'
                       ? 'bg-red-50 border-red-200'
                       : 'bg-amber-50 border-amber-200'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div>
@@ -119,11 +122,10 @@ export default function StudentDashboard() {
                       </p>
                     </div>
                     <span
-                      className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        task.priority === 'high'
+                      className={`px-3 py-1 rounded-full text-sm font-medium ${task.priority === 'high'
                           ? 'bg-red-100 text-red-700'
                           : 'bg-amber-100 text-amber-700'
-                      }`}
+                        }`}
                     >
                       Due {task.dueDate}
                     </span>

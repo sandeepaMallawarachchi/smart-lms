@@ -14,6 +14,7 @@ import {
   Edit,
   ArchiveRestore,
   X,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface Lecturer {
@@ -29,6 +30,7 @@ interface Course {
   credits: number;
   year: number;
   semester: number;
+  specializations: string[];
   lecturerInCharge: Lecturer;
   lecturers: Lecturer[];
   isArchived: boolean;
@@ -56,6 +58,7 @@ export default function CoursesPage() {
     credits: 3,
     year: 1,
     semester: 1,
+    specializations: [] as string[],
     lecturerInCharge: '',
     lecturers: [] as string[],
   });
@@ -65,6 +68,29 @@ export default function CoursesPage() {
     active: 0,
     archived: 0,
   });
+
+  const specializationOptions = [
+    { value: 'IT', label: 'Information Technology' },
+    { value: 'SE', label: 'Software Engineering' },
+    { value: 'DS', label: 'Data Science' },
+    { value: 'CSNE', label: 'Computer Systems & Networking' },
+    { value: 'CS', label: 'Cyber Security' },
+    { value: 'IM', label: 'Interactive Media' },
+  ];
+
+  const getSpecializationLabel = (code: string) => {
+    const spec = specializationOptions.find(s => s.value === code);
+    return spec ? spec.label : code;
+  };
+
+  const handleSpecializationToggle = (specCode: string) => {
+    setFormData(prev => ({
+      ...prev,
+      specializations: prev.specializations.includes(specCode)
+        ? prev.specializations.filter(s => s !== specCode)
+        : [...prev.specializations, specCode],
+    }));
+  };
 
   useEffect(() => {
     if (filterParam === 'archived') {
@@ -226,6 +252,7 @@ export default function CoursesPage() {
       credits: 3,
       year: 1,
       semester: 1,
+      specializations: [], 
       lecturerInCharge: '',
       lecturers: [],
     });
@@ -310,31 +337,28 @@ export default function CoursesPage() {
             <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => setFilterType('all')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  filterType === 'all'
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filterType === 'all'
                     ? 'bg-white text-purple-600 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
-                }`}
+                  }`}
               >
                 All
               </button>
               <button
                 onClick={() => setFilterType('active')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  filterType === 'active'
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filterType === 'active'
                     ? 'bg-white text-purple-600 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
-                }`}
+                  }`}
               >
                 Active
               </button>
               <button
                 onClick={() => setFilterType('archived')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  filterType === 'archived'
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filterType === 'archived'
                     ? 'bg-white text-purple-600 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
-                }`}
+                  }`}
               >
                 Archived
               </button>
@@ -354,6 +378,9 @@ export default function CoursesPage() {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Credits
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Specializations
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Lecturer in Charge
@@ -389,6 +416,18 @@ export default function CoursesPage() {
                       {course.credits} Credits
                     </span>
                   </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-wrap gap-1">
+                      {course.specializations?.map((spec) => (
+                        <span
+                          key={spec}
+                          className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700"
+                        >
+                          {spec}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {course.lecturerInCharge.name}
                   </td>
@@ -413,9 +452,8 @@ export default function CoursesPage() {
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={() => handleArchiveToggle(course._id, course.isArchived)}
-                        className={`p-2 hover:bg-gray-100 rounded-lg transition-colors ${
-                          course.isArchived ? 'text-green-600' : 'text-gray-600'
-                        }`}
+                        className={`p-2 hover:bg-gray-100 rounded-lg transition-colors ${course.isArchived ? 'text-green-600' : 'text-gray-600'
+                          }`}
                         title={course.isArchived ? 'Unarchive' : 'Archive'}
                       >
                         {course.isArchived ? <ArchiveRestore size={18} /> : <Archive size={18} />}
@@ -489,7 +527,7 @@ export default function CoursesPage() {
                     onChange={(e) => setFormData({ ...formData, credits: parseInt(e.target.value) })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                   >
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                    {[1, 2, 3, 4, 8, 16].map(num => (
                       <option key={num} value={num}>{num}</option>
                     ))}
                   </select>
@@ -522,6 +560,54 @@ export default function CoursesPage() {
                     <option value={1}>Semester 1</option>
                     <option value={2}>Semester 2</option>
                   </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Specializations * (Select one or more)
+                </label>
+                <div className="border border-gray-300 rounded-lg p-4 max-h-48 overflow-y-auto space-y-2">
+                  {specializationOptions.map((spec) => (
+                    <label
+                      key={spec.value}
+                      className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.specializations.includes(spec.value)}
+                        onChange={() => handleSpecializationToggle(spec.value)}
+                        className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-900">{spec.label}</div>
+                        <div className="text-xs text-gray-500">{spec.value}</div>
+                      </div>
+                      {formData.specializations.includes(spec.value) && (
+                        <CheckCircle2 size={18} className="text-purple-600" />
+                      )}
+                    </label>
+                  ))}
+                </div>
+                {formData.specializations.length === 0 && (
+                  <p className="text-xs text-red-600 mt-1">Please select at least one specialization</p>
+                )}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {formData.specializations?.map((spec) => (
+                    <span
+                      key={spec}
+                      className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700"
+                    >
+                      {spec}
+                      <button
+                        type="button"
+                        onClick={() => handleSpecializationToggle(spec)}
+                        className="hover:text-purple-900"
+                      >
+                        <X size={14} />
+                      </button>
+                    </span>
+                  ))}
                 </div>
               </div>
 
@@ -584,7 +670,7 @@ export default function CoursesPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={createLoading}
+                  disabled={createLoading || formData.specializations.length === 0}
                   className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
                 >
                   {createLoading ? (

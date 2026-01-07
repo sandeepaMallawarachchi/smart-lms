@@ -12,6 +12,7 @@ import {
   ListTodo,
   Settings,
   FileText,
+  BellIcon
 } from 'lucide-react';
 
 interface SubSection {
@@ -112,14 +113,22 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
       },
       navItems: [
         {
-          id: 'my-tasks',
-          label: 'My Tasks',
+          id: 'dashboard',
+          label: 'Dashboard',
           icon: <LayoutGrid size={20} />,
           description: 'Your personal task board',
+          href: '/projects-and-tasks/student/',
+          subsections: [],
+        },
+        {
+          id: 'my-tasks',
+          label: 'My Project & Tasks',
+          icon: <FileText size={20} />,
+          description: 'Your personal project & task board',
           badge: 5,
           href: '/projects-and-tasks/student/tasks',
           subsections: [
-            { id: 'all-tasks', label: 'All Tasks', badge: 12 },
+            { id: 'all-tasks-projects', label: 'All Projects & Tasks', badge: 12, href: '/projects-and-tasks/student/kanban-board' },
             { id: 'in-progress', label: 'In Progress', badge: 4 },
             { id: 'pending', label: 'Pending', badge: 5 },
             { id: 'completed', label: 'Completed', badge: 3 },
@@ -137,6 +146,14 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
             { id: 'upcoming', label: 'Upcoming' },
             { id: 'archived', label: 'Archived' },
           ],
+        },
+        {
+          id: 'heatmap',
+          label: 'Activity Heatmap',
+          icon: <AlertCircle size={20} />,
+          description: 'Activity HeatMap Overview',
+          badge: 1,
+          href: '/projects-and-tasks/student/heatmap',
         },
         {
           id: 'deadlines',
@@ -173,16 +190,11 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           ],
         },
         {
-          id: 'analytics',
-          label: 'My Progress',
-          icon: <BarChart3 size={20} />,
-          description: 'Performance insights',
-          href: '/projects-and-tasks/student/progress',
-          subsections: [
-            { id: 'completion-rate', label: 'Completion Rate' },
-            { id: 'productivity-trends', label: 'Productivity Trends' },
-            { id: 'time-management', label: 'Time Management' },
-          ],
+          id: 'notifications',
+          label: 'Project Notifications',
+          icon: <BellIcon size={20} />,
+          description: 'Your project notifications',
+          href: '/projects-and-tasks/student/notifications',
         },
         {
           id: 'help',
@@ -250,9 +262,9 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           icon: <ListTodo size={22} />,
           href: '/projects-and-tasks/lecturer/projects',
           subsections: [
-            { id: 'all-projects', label: 'All Projects', href: '/projects-and-tasks/lecturer/projects' },
-            { id: 'create-project', label: 'Create Project', href: '/projects-and-tasks/lecturer/projects' },
-            { id: 'templates', label: 'Templates', href: '/projects-and-tasks/lecturer/projects' },
+            { id: 'all-projects-and-tasks', label: 'All Projects and Tasks', href: '/projects-and-tasks/lecturer/all-projects-and-tasks' },
+            { id: 'create-project-and-task', label: 'Create Project and task ', href: '/projects-and-tasks/lecturer/create-projects-and-tasks' },
+            { id: 'templates', label: 'Templates', href: '/projects-and-tasks/lecturer/templates' },
           ],
         },
         {

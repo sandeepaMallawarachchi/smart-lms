@@ -109,11 +109,7 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
       ],
     },
     sidebar: {
-      showStats: true,
-      stats: {
-        total: 85,
-        dueSoon: 15,
-      },
+      roleLabel: 'Student',
       navItems: [
         {
           id: 'dashboard',
@@ -122,9 +118,9 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
           description: 'Your learning overview',
           href: '/learning-analytics/student',
           subsections: [
-            { id: 'overview', label: 'Overview' },
-            { id: 'weekly-summary', label: 'Weekly Summary' },
-            { id: 'monthly-report', label: 'Monthly Report' },
+            { id: 'overview', label: 'Overview', href: '/learning-analytics/student/' },
+            { id: 'weekly-summary', label: 'Weekly Summary', href: '/learning-analytics/student/weekly-summary' },
+            { id: 'monthly-report', label: 'Monthly Report', href: '/learning-analytics/student/monthly-report' },
           ],
         },
         {
@@ -132,13 +128,7 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
           label: 'Learning Progress',
           icon: <TrendingUp size={20} />,
           description: 'Track your growth',
-          badge: 2,
-          href: '/learning-analytics/student/progress',
-          subsections: [
-            { id: 'course-progress', label: 'Course Progress' },
-            { id: 'skill-development', label: 'Skill Development' },
-            { id: 'time-spent', label: 'Time Analytics' },
-          ],
+          href: '/learning-analytics/student/learning-progress',
         },
         {
           id: 'performance',
@@ -153,16 +143,15 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
           ],
         },
         {
-          id: 'achievements',
-          label: 'Achievements',
-          icon: <Award size={20} />,
-          description: 'Your milestones',
-          badge: 3,
-          href: '/learning-analytics/student/achievements',
+          id: 'goals',
+          label: 'Learning Goals',
+          icon: <Target size={20} />,
+          description: 'Set and track goals',
+          href: '/learning-analytics/student/learning-goals',
           subsections: [
-            { id: 'badges', label: 'Badges Earned', badge: 3 },
-            { id: 'certificates', label: 'Certificates' },
-            { id: 'leaderboard', label: 'Leaderboard' },
+            { id: 'active-goals', label: 'Active Goals', href: '/learning-analytics/student/learning-goals', },
+            { id: 'completed-goals', label: 'Completed Goals', href: '/learning-analytics/student/learning-goals', },
+            { id: 'create-goal', label: 'Create New Goal', href: '/learning-analytics/student/learning-goals', },
           ],
         },
         {
@@ -188,18 +177,6 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
             { id: 'recommendations', label: 'Recommendations', badge: 4 },
             { id: 'weak-areas', label: 'Areas to Improve' },
             { id: 'strengths', label: 'Your Strengths' },
-          ],
-        },
-        {
-          id: 'goals',
-          label: 'Learning Goals',
-          icon: <Target size={20} />,
-          description: 'Set and track goals',
-          href: '/learning-analytics/student/goals',
-          subsections: [
-            { id: 'active-goals', label: 'Active Goals' },
-            { id: 'completed-goals', label: 'Completed Goals' },
-            { id: 'create-goal', label: 'Create New Goal' },
           ],
         },
         {

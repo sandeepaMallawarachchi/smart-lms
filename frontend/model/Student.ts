@@ -11,6 +11,9 @@ export interface IStudent extends Document {
   address: string;
   nicNumber: string;
   userRole: 'student';
+  academicYear: string;
+  semester: string;
+  specialization?: string;
   isVerified: boolean;
   verificationToken?: string;
   createdAt: Date;
@@ -74,6 +77,21 @@ const StudentSchema: Schema<IStudent> = new Schema(
       type: String,
       enum: ['student'],
       default: 'student',
+    },
+    academicYear: {
+      type: String,
+      enum: ['1', '2', '3', '4'],
+      required: [true, 'Please provide your academic year'],
+    },
+    semester: {
+      type: String,
+      enum: ['1', '2'],
+      required: [true, 'Please provide your semester'],
+    },
+    specialization: {
+      type: String,
+      enum: ['IT', 'SE', 'DS', 'CSNE', 'CS', 'IM'],
+      required: [true, 'Please provide your specialization'],
     },
     isVerified: {
       type: Boolean,

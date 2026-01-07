@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter_Tight, Poppins } from "next/font/google";
 import "./globals.css";
+import { Toaster } from "sonner";
 
 const interTight = Inter_Tight({
   subsets: ["latin"],
@@ -32,6 +33,18 @@ export default function RootLayout({
           "antialiased",
         ].join(" ")}
       >
+        <Toaster
+                richColors
+                position="top-right"
+                closeButton
+                duration={3000}
+                toastOptions={{
+                  classNames: {
+                    toast:
+                      "rounded-lg shadow-lg border border-gray-200 mt-18 font-medium text-sm",
+                  },
+                }}
+              />
         {children}
       </body>
     </html>
