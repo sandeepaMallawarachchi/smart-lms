@@ -48,7 +48,7 @@ interface Notification {
     message: string;
     time: string;
     type: 'alert' | 'warning' | 'info' | 'success';
-    icon: React.ComponentType<any>;
+    icon: React.ComponentType<never>;
 }
 
 interface SidebarConfig {
