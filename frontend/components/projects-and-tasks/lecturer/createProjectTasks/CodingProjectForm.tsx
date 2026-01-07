@@ -8,7 +8,6 @@ import RichTextEditor from '../RichTextEditor'
 
 interface AssignmentFormState {
   question: { html: string; text: string }
-  type: string
   language: string
   deadlineDate: string
   deadlineTime: string
@@ -37,7 +36,6 @@ export default function AssignmentCreationForm({
 
   const [formState, setFormState] = useState<AssignmentFormState>({
     question: { html: '', text: '' },
-    type: 'coding',
     language: 'java',
     deadlineDate: '',
     deadlineTime: '23:59',
@@ -99,7 +97,6 @@ export default function AssignmentCreationForm({
     })
   }
 
-  // Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -114,7 +111,6 @@ export default function AssignmentCreationForm({
         courseId,
         lecturerId,
         question: formState.question.html,
-        type: formState.type,
         language: formState.language,
         deadlineDate: formState.deadlineDate,
         deadlineTime: formState.deadlineTime,
@@ -171,7 +167,7 @@ export default function AssignmentCreationForm({
       {/* Basic Info */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="grid grid-cols-2 gap-6 mb-6">
-            <div>
+            {/* <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Assignment Type
                 </label>
@@ -184,7 +180,7 @@ export default function AssignmentCreationForm({
                     <option value="algorithm">Algorithm Analysis</option>
                     <option value="debugging">Debugging Task</option>
                 </select>
-            </div>
+            </div> */}
             <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Programming Language

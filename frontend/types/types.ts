@@ -16,7 +16,7 @@ export type Assignment = {
   courseId: string
   lecturerId: string
   question: string
-  type: string
+  projectType?: string
   language: string
   deadlineDate: string
   deadlineTime: string
