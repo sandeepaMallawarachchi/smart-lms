@@ -1,8 +1,3 @@
-"""
-LLM-based Recommendation Service using Groq API
-Cloud-based, fast, reliable - no local model needed
-"""
-
 import os
 import logging
 import requests

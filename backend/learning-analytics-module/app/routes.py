@@ -108,7 +108,6 @@ def predict_single():
             student_id=student_id
         )
         
-        # Replace hardcoded recommendations with LLM output
         prediction_result['recommendations'] = llm_recommendations
         
         response = {
