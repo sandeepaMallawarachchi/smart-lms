@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import TabSelector from '@/components/projects-and-tasks/lecturer/createProjectTasks/TabSelector';
 import ProjectCreationForm from '@/components/projects-and-tasks/lecturer/createProjectTasks/ProjectCreationForm';
 import TaskCreationForm from '@/components/projects-and-tasks/lecturer/createProjectTasks/TaskCreationForm';
+import CodeProjectForm from '@/components/projects-and-tasks/lecturer/createProjectTasks/CodingProjectForm';
 
 interface SelectedCourse {
   _id: string;
@@ -30,7 +31,7 @@ export default function CreateProjectsAndTasksPage() {
   const [courseId, setCourseId] = useState<string>('');
   const [courseName, setCourseName] = useState<string>('');
   const [selectedCourse, setSelectedCourse] = useState<SelectedCourse | null>(null);
-  const [activeTab, setActiveTab] = useState<'project' | 'task'>('project');
+  const [activeTab, setActiveTab] = useState<'project' | 'task' | 'code'>('project');
   const [lecturerId, setLecturerId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -291,6 +292,11 @@ export default function CreateProjectsAndTasksPage() {
                         router.push(`/projects-and-tasks/lecturer/all-projects-and-tasks`);
                       }}
                     />
+                  )}
+
+                  {/* Task Form */}
+                  {activeTab === 'code' && lecturerId && (
+                    <CodeProjectForm />
                   )}
 
                   {/* Loading State */}
