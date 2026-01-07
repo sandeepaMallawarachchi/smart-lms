@@ -296,7 +296,10 @@ export default function CreateProjectsAndTasksPage() {
 
                   {/* Task Form */}
                   {activeTab === 'code' && lecturerId && (
-                    <CodeProjectForm />
+                    <CodeProjectForm 
+                      courseId={courseId}
+                      lecturerId={lecturerId}
+                    />
                   )}
 
                   {/* Loading State */}
