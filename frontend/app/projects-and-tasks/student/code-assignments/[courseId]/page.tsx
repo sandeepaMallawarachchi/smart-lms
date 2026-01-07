@@ -1,8 +1,8 @@
-'use client'
+'use client';
 
-import React, { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { useParams, useRouter } from 'next/navigation'
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useParams, useRouter } from 'next/navigation';
 import {
     CodeXml,
     ChevronDown,
@@ -13,86 +13,95 @@ import {
     AlertCircle,
     ExternalLink,
     Terminal,
-    Download
-} from 'lucide-react'
+    Cpu,
+    CheckSquare
+} from 'lucide-react';
 
-interface Course {
-    _id: string
-    courseName: string
-    courseCode: string
-    credits: number
+// --- Interfaces ---
+
+interface TestCase {
+    id: number;
+    input: string;
+    expectedOutput: string;
+    isHidden: boolean;
 }
 
-interface Document {
-    url: string
-    name: string
-    fileSize: number
+interface AssignmentOptions {
+    autoComplete: boolean;
+    externalCopyPaste: boolean;
+    internalCopyPaste: boolean;
+    analytics: boolean;
 }
 
 interface CodeAssignment {
-    _id: string
-    title: string
-    description: { html: string; text: string }
-    language: string
-    deadlineDate: string
-    deadlineTime: string
-    status: 'todo' | 'inprogress' | 'submitted' | 'graded'
-    maxScore?: number
-    templateFiles?: Document[]
-    instructions?: Document[]
-    createdAt: string
+    _id: string;
+    courseId: string;
+    lecturerId: string;
+    projectType: 'code';
+    language: string;
+    question: string; // HTML content
+    deadlineDate: string;
+    deadlineTime: string;
+    options: AssignmentOptions;
+    testCases: TestCase[];
+    createdAt: string;
+    updatedAt: string;
 }
 
 interface ApiResponse {
-    success: boolean
+    message: string;
     data: {
-        course: Course
-        assignments: CodeAssignment[]
-    }
+        assignments: CodeAssignment[];
+    };
 }
 
-const getStatusColor = (status: string) => {
-    switch (status) {
-        case 'submitted': return 'bg-green-100 text-green-700 border-green-200'
-        case 'graded': return 'bg-purple-100 text-purple-700 border-purple-200'
-        case 'inprogress': return 'bg-blue-100 text-brand-blue border-blue-200'
-        default: return 'bg-gray-100 text-gray-700 border-gray-200'
-    }
-}
+// --- Helpers ---
 
 const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric'
-    })
-}
+    });
+};
 
+const getLanguageColor = (lang: string) => {
+    const l = lang.toLowerCase();
+    if (l.includes('java') && !l.includes('script')) return 'text-orange-600 bg-orange-50 border-orange-200';
+    if (l.includes('script')) return 'text-yellow-600 bg-yellow-50 border-yellow-200'; // JS/TS
+    if (l.includes('python')) return 'text-blue-600 bg-blue-50 border-blue-200';
+    if (l.includes('c++') || l.includes('c#')) return 'text-purple-600 bg-purple-50 border-purple-200';
+    return 'text-gray-600 bg-gray-50 border-gray-200';
+};
+
+// --- Main Component ---
 
 export default function StudentCodeAssignmentsPage() {
-    const params = useParams()
-    const router = useRouter()
-    const courseId = params.courseId as string
+    const params = useParams();
+    const router = useRouter();
+    const courseId = params.courseId as string;
 
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
-    const [course, setCourse] = useState<Course | null>(null)
-    const [assignments, setAssignments] = useState<CodeAssignment[]>([])
-    const [expandedId, setExpandedId] = useState<string | null>(null)
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [assignments, setAssignments] = useState<CodeAssignment[]>([]);
+    
+    // Track which assignment is currently expanded
+    const [expandedId, setExpandedId] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchData = async () => {
-            if (!courseId) return
+            if (!courseId) return;
 
             try {
-                setLoading(true)
-                const token = localStorage.getItem('authToken')
+                setLoading(true);
+                const token = localStorage.getItem('authToken');
                 
                 if (!token) {
-                    router.push('/login')
-                    return
+                    router.push('/login');
+                    return;
                 }
 
+                // Call the specific endpoint
                 const response = await fetch(
                     `/api/projects-and-tasks/lecturer/create-projects-and-tasks/code-assignment?courseId=${courseId}`, 
                     {
@@ -101,35 +110,35 @@ export default function StudentCodeAssignmentsPage() {
                             'Content-Type': 'application/json',
                         }
                     }
-                )
+                );
 
                 if (!response.ok) {
-                    throw new Error('Failed to fetch assignments')
+                    throw new Error('Failed to fetch assignments');
                 }
 
-                const result: ApiResponse = await response.json()
+                const result: ApiResponse = await response.json();
                 
-                if (result.success) {
-                    setCourse(result.data.course)
-                    setAssignments(result.data.assignments)
+                // Set assignments directly from result.data.assignments
+                if (result.data && Array.isArray(result.data.assignments)) {
+                    setAssignments(result.data.assignments);
                 } else {
-                    setError('Failed to load data structure')
+                    setAssignments([]); // Handle empty case safely
                 }
 
             } catch (err: any) {
-                console.error(err)
-                setError(err.message || 'An unexpected error occurred')
+                console.error(err);
+                setError(err.message || 'An unexpected error occurred');
             } finally {
-                setLoading(false)
+                setLoading(false);
             }
-        }
+        };
 
-        fetchData()
-    }, [courseId, router])
+        fetchData();
+    }, [courseId, router]);
 
     const toggleExpand = (id: string) => {
-        setExpandedId(expandedId === id ? null : id)
-    }
+        setExpandedId(expandedId === id ? null : id);
+    };
 
     if (loading) {
         return (
@@ -143,7 +152,7 @@ export default function StudentCodeAssignmentsPage() {
                     </div>
                 </motion.div>
             </div>
-        )
+        );
     }
 
     return (
@@ -176,12 +185,12 @@ export default function StudentCodeAssignmentsPage() {
                         </div>
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
-                                {course?.courseName || 'Code Assignments'}
+                                Course Assignments
                             </h1>
                             <div className="flex items-center gap-3 mt-1.5 text-gray-500 text-sm font-medium">
-                                <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-700">{course?.courseCode}</span>
+                                <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-700">Code Challenges</span>
                                 <span>•</span>
-                                <span>{assignments.length} Assignments</span>
+                                <span>{assignments.length} Available</span>
                             </div>
                         </div>
                     </div>
@@ -203,8 +212,8 @@ export default function StudentCodeAssignmentsPage() {
                     {assignments.length === 0 ? (
                         <div className="text-center py-20 bg-white/50 rounded-2xl border-2 border-dashed border-gray-200">
                             <CodeXml className="mx-auto text-gray-300 mb-4" size={48} />
-                            <h3 className="text-lg font-semibold text-gray-900">No Assignments Yet</h3>
-                            <p className="text-gray-500">Check back later for new coding tasks.</p>
+                            <h3 className="text-lg font-semibold text-gray-900">No Assignments Found</h3>
+                            <p className="text-gray-500">There are no code assignments listed for this course ID.</p>
                         </div>
                     ) : (
                         assignments.map((assignment, index) => (
@@ -225,10 +234,10 @@ export default function StudentCodeAssignmentsPage() {
                                     onClick={() => toggleExpand(assignment._id)}
                                     className="p-5 flex items-center gap-4 cursor-pointer group"
                                 >
-                                    {/* Status Icon Indicator */}
+                                    {/* Language Icon Indicator */}
                                     <div className={`
-                                        w-10 h-10 rounded-lg flex items-center justify-center shrink-0 transition-colors
-                                        ${expandedId === assignment._id ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-600'}
+                                        w-10 h-10 rounded-lg flex items-center justify-center shrink-0 transition-colors border
+                                        ${getLanguageColor(assignment.language)}
                                     `}>
                                         <Terminal size={20} />
                                     </div>
@@ -236,11 +245,12 @@ export default function StudentCodeAssignmentsPage() {
                                     {/* Title & Metadata */}
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-3 mb-1">
+                                            {/* Since API has no title, generate one based on language & index */}
                                             <h3 className="text-lg font-semibold text-gray-900 truncate">
-                                                {assignment.title}
+                                                {assignment.language.charAt(0).toUpperCase() + assignment.language.slice(1)} Assignment {index + 1}
                                             </h3>
-                                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${getStatusColor(assignment.status)}`}>
-                                                {assignment.status}
+                                            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border bg-blue-50 text-blue-600 border-blue-100">
+                                                {assignment.projectType}
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-4 text-xs text-gray-500">
@@ -248,12 +258,10 @@ export default function StudentCodeAssignmentsPage() {
                                                 <Calendar size={12} />
                                                 <span>Due {formatDate(assignment.deadlineDate)}</span>
                                             </div>
-                                            {assignment.language && (
-                                                <div className="flex items-center gap-1.5">
-                                                    <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-                                                    <span>{assignment.language}</span>
-                                                </div>
-                                            )}
+                                            <div className="flex items-center gap-1.5">
+                                                <Cpu size={12} />
+                                                <span>{assignment.testCases?.length || 0} Test Cases</span>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -274,25 +282,26 @@ export default function StudentCodeAssignmentsPage() {
                                             transition={{ duration: 0.3, ease: 'easeInOut' }}
                                         >
                                             <div className="px-5 pb-6 pt-0 border-t border-gray-100">
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-6">
+                                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-6">
                                                     
-                                                    {/* Left Col: Description */}
-                                                    <div className="md:col-span-2 space-y-4">
+                                                    {/* Left Col: Question & Deadline */}
+                                                    <div className="lg:col-span-2 space-y-5">
                                                         <div>
                                                             <h4 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                                                                <FileText size={16} className="text-blue-500"/> Description
+                                                                <FileText size={16} className="text-blue-500"/> Problem Statement
                                                             </h4>
                                                             <div 
-                                                                className="text-sm text-gray-600 leading-relaxed prose prose-sm max-w-none bg-gray-50 p-4 rounded-lg border border-gray-100"
-                                                                dangerouslySetInnerHTML={{ __html: assignment.description.html }} 
+                                                                className="text-sm text-gray-700 leading-relaxed prose prose-sm max-w-none bg-gray-50/50 p-4 rounded-lg border border-gray-100"
+                                                                // The API returns HTML in 'question'
+                                                                dangerouslySetInnerHTML={{ __html: assignment.question }} 
                                                             />
                                                         </div>
 
-                                                        {/* Deadline Alert if near */}
+                                                        {/* Deadline Alert */}
                                                         <div className="flex items-start gap-3 p-3 bg-orange-50 border border-orange-100 rounded-lg text-orange-800 text-sm">
                                                             <Clock size={16} className="mt-0.5 shrink-0" />
                                                             <div>
-                                                                <span className="font-semibold">Deadline: </span> 
+                                                                <span className="font-semibold">Submission Deadline: </span> 
                                                                 {formatDate(assignment.deadlineDate)} at {assignment.deadlineTime}
                                                             </div>
                                                         </div>
@@ -300,37 +309,37 @@ export default function StudentCodeAssignmentsPage() {
 
                                                     {/* Right Col: Actions & Meta */}
                                                     <div className="space-y-6">
+                                                        {/* Options / Features */}
                                                         <div>
-                                                            <h4 className="text-sm font-semibold text-gray-900 mb-3">Resources</h4>
-                                                            {assignment.templateFiles && assignment.templateFiles.length > 0 ? (
-                                                                <ul className="space-y-2">
-                                                                    {assignment.templateFiles.map((file, i) => (
-                                                                        <li key={i}>
-                                                                            <a 
-                                                                                href={file.url} 
-                                                                                className="flex items-center gap-2 text-xs p-2 rounded border border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-colors bg-white group"
-                                                                            >
-                                                                                <Download size={14} className="text-gray-400 group-hover:text-blue-500"/>
-                                                                                <span className="truncate">{file.name}</span>
-                                                                            </a>
-                                                                        </li>
-                                                                    ))}
-                                                                </ul>
-                                                            ) : (
-                                                                <p className="text-xs text-gray-400 italic">No resource files attached.</p>
-                                                            )}
+                                                            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Allowed Features</h4>
+                                                            <div className="space-y-2">
+                                                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                                                    <CheckSquare size={16} className={assignment.options.autoComplete ? "text-green-500" : "text-gray-300"} />
+                                                                    <span>Auto Complete</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                                                    <CheckSquare size={16} className={assignment.options.externalCopyPaste ? "text-green-500" : "text-gray-300"} />
+                                                                    <span>Ext. Copy/Paste</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                                                    <CheckSquare size={16} className={assignment.options.analytics ? "text-green-500" : "text-gray-300"} />
+                                                                    <span>Analytics</span>
+                                                                </div>
+                                                            </div>
                                                         </div>
 
+                                                        {/* Open IDE Action */}
                                                         <div className="pt-4 border-t border-gray-100">
                                                             <button 
                                                                 onClick={(e) => {
-                                                                    e.stopPropagation()
-                                                                    router.push(`/projects-and-tasks/student/code-assignments/${courseId}/${assignment._id}`)
+                                                                    e.stopPropagation();
+                                                                    // Navigate to the coding environment
+                                                                    router.push(`/projects-and-tasks/student/code-assignments/${courseId}/${assignment._id}`);
                                                                 }}
-                                                                className="w-full flex items-center justify-center gap-2 bg-black hover:bg-gray-800 text-white py-2.5 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-gray-200"
+                                                                className="w-full group flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white py-3 rounded-lg text-sm font-medium transition-all shadow-lg shadow-gray-200 hover:shadow-gray-300"
                                                             >
-                                                                Open IDE
-                                                                <ExternalLink size={16} />
+                                                                Open Code Editor
+                                                                <ExternalLink size={16} className="group-hover:translate-x-0.5 transition-transform"/>
                                                             </button>
                                                         </div>
                                                     </div>
@@ -345,5 +354,5 @@ export default function StudentCodeAssignmentsPage() {
                 </div>
             </div>
         </div>
-    )
+    );
 }
