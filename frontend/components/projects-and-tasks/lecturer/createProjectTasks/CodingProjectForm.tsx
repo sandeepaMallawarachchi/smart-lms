@@ -94,7 +94,6 @@ export default function AssignmentCreationForm({
       newErrors.dates = 'Start and End dates are required'
     }
     
-    // Check if end date is after start date
     const start = new Date(combineDateTime(formState.startDate, formState.startTime))
     const end = new Date(combineDateTime(formState.endDate, formState.endTime))
     
@@ -110,7 +109,6 @@ export default function AssignmentCreationForm({
     return Object.keys(newErrors).length === 0
   }
 
-  // Handle Add Test Case
   const addTestCase = () => {
     if (!newTestCase.input.trim() || !newTestCase.output.trim()) {
       toast.error('Both Input and Expected Output are required')
@@ -118,7 +116,7 @@ export default function AssignmentCreationForm({
     }
 
     const testCase: TestCase = {
-      id: Date.now(), // simple ID generation
+      id: Date.now(),
       input: newTestCase.input,
       expectedOutput: newTestCase.output,
       isHidden: newTestCase.isHidden,
@@ -133,7 +131,6 @@ export default function AssignmentCreationForm({
     toast.success('Test case added')
   }
 
-  // Remove Test Case
   const removeTestCase = (id: number) => {
     setFormState({
       ...formState,
@@ -141,7 +138,6 @@ export default function AssignmentCreationForm({
     })
   }
 
-  // Handle Submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -166,7 +162,6 @@ export default function AssignmentCreationForm({
 
       const token = localStorage.getItem('authToken')
       
-      // Simulate API call
       const response = await fetch(
         '/api/projects-and-tasks/lecturer/create-projects-and-tasks/assignment',
         {
@@ -197,7 +192,6 @@ export default function AssignmentCreationForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
-      {/* Error Summary */}
       {Object.keys(errors).length > 0 && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-red-800 font-semibold flex items-center gap-2 mb-2">
@@ -212,7 +206,6 @@ export default function AssignmentCreationForm({
         </div>
       )}
 
-      {/* Basic Info & Question */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="grid grid-cols-2 gap-6 mb-6">
             <div>
@@ -256,13 +249,11 @@ export default function AssignmentCreationForm({
         />
       </div>
 
-      {/* Timing Configuration */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <label className="block text-sm font-semibold text-gray-900 mb-4">
             Duration & Schedule
         </label>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Start Date/Time */}
           <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
             <span className="text-sm font-medium text-gray-700 block mb-3">Start Time</span>
             <div className="grid grid-cols-2 gap-2">
@@ -282,7 +273,6 @@ export default function AssignmentCreationForm({
             </div>
           </div>
 
-          {/* End Date/Time */}
           <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
             <span className="text-sm font-medium text-gray-700 block mb-3">End Time (Deadline)</span>
             <div className="grid grid-cols-2 gap-2">
@@ -304,7 +294,6 @@ export default function AssignmentCreationForm({
         </div>
       </div>
 
-      {/* Editor & Execution Options */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <label className="block text-sm font-semibold text-gray-900 mb-4">
             Environment Options
@@ -332,13 +321,11 @@ export default function AssignmentCreationForm({
         </div>
       </div>
 
-      {/* Test Cases */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <label className="block text-sm font-semibold text-gray-900 mb-4">
           Test Cases <span className="text-red-600">*</span>
         </label>
 
-        {/* Existing Test Cases List */}
         {formState.testCases.length > 0 && (
           <div className="space-y-3 mb-6">
             <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-gray-500 px-4 uppercase">
@@ -381,7 +368,6 @@ export default function AssignmentCreationForm({
           </div>
         )}
 
-        {/* Add New Test Case Area */}
         <div className="p-4 bg-blue-50/50 rounded-lg border border-blue-100">
             <h4 className="text-sm font-medium text-gray-800 mb-3 flex items-center gap-2">
                 <Plus size={16} className="text-brand-blue" /> Add New Test Case
@@ -431,7 +417,6 @@ export default function AssignmentCreationForm({
         </div>
       </div>
 
-      {/* Sticky Footer */}
       <div className="flex gap-4 sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 rounded-lg shadow-lg z-10">
         <button
           type="button"
