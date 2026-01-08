@@ -261,6 +261,10 @@ export default function StudentCodeAssignmentsPage() {
                                   <span>Ext. Copy/Paste</span>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-gray-600">
+                                  <CheckSquare size={16} className={assignment.options?.internalCopyPaste ? "text-green-500" : "text-gray-300"} />
+                                  <span>Int. Copy/Paste</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-gray-600">
                                   <CheckSquare size={16} className={assignment.options?.analytics ? "text-green-500" : "text-gray-300"} />
                                   <span>Analytics</span>
                                 </div>
