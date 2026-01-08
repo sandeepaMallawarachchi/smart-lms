@@ -229,7 +229,6 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
     setStatusMessage('Analyzing code structure...');
 
     try {
-      // In production, fetch from /api/code-analysis
       const result = await analyzeCodeWithAI(code, assignment.language.toLowerCase());
       setAnalysisResult(result);
     } catch (error) {
@@ -241,10 +240,10 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
   }
 
   const problemTabTestCases = assignment.testCases.filter(tc => tc.isHidden === false);
+  const compileError = testResults?.find(r => r.isError && r.stderr);
 
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)] bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xl m-4">
-      {/* --- Toolbar --- */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200 h-14">
         <div className="flex items-center gap-3">
           <button onClick={() => router.back()} className="p-1.5 hover:bg-gray-200 rounded-md text-gray-500 transition-colors">
@@ -274,12 +273,10 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
       </div>
 
       <div className="flex-1 grid grid-cols-12 overflow-hidden">
-        {/* --- Editor --- */}
         <div className="col-span-12 lg:col-span-7 border-r border-gray-200 relative bg-[#fffffe]">
           <Editor height="100%" defaultLanguage={assignment.language.toLowerCase()} value={code} onChange={(val) => setCode(val || '')} options={editorOptions} loading={<div className="p-4 text-sm text-gray-500">Initializing IDE...</div>} />
         </div>
 
-        {/* --- Tabs --- */}
         <div className="col-span-12 lg:col-span-5 bg-gray-50 flex flex-col h-full overflow-hidden"> 
           <div className="flex border-b border-gray-200 bg-white">
             <button onClick={() => setActiveTab('problem')} className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'problem' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
@@ -294,7 +291,6 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
           </div>
 
           <div className="flex-1 overflow-auto p-0 bg-gray-50">
-            {/* --- Analytics Tab UI --- */}
             {activeTab === 'analytics' && (
               <div className="p-6 min-h-full">
                  {isAnalyzing && (
@@ -318,7 +314,7 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
                      </div>
                      <div className="text-center">
                         <p className="text-base font-semibold text-gray-700">No Analytics Yet</p>
-                        <p className="text-xs text-gray-500 mt-1 max-w-[250px] mx-auto">Click the "Analyze" button in the toolbar to get AI-powered feedback on your code.</p>
+                        <p className="text-xs text-gray-500 mt-1 max-w-62.5 mx-auto">Click the "Analyze" button in the toolbar to get AI-powered feedback on your code.</p>
                      </div>
                      <button onClick={handleAnalyze} className="mt-2 text-xs font-medium text-blue-600 bg-blue-50 px-4 py-2 rounded-lg hover:bg-blue-100 transition-colors">
                         Start Analysis
@@ -333,11 +329,9 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
                     transition={{ duration: 0.4 }}
                     className="space-y-6"
                   >
-                    {/* 1. Score & Complexity Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                       {/* Score Card */}
                        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between relative overflow-hidden group">
-                          <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-gray-50 to-gray-100 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+                          <div className="absolute top-0 right-0 w-24 h-24 bg-linear-to-br from-gray-50 to-gray-100 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
                           <div className="z-10">
                             <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Quality Score</h4>
                             <div className="text-3xl font-bold text-gray-800">
@@ -350,7 +344,6 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
                           </div>
                        </div>
 
-                       {/* Complexity Cards */}
                        <div className="space-y-4">
                           <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
                              <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
@@ -373,7 +366,6 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
                        </div>
                     </div>
 
-                    {/* 2. Review Feedback */}
                     <div>
                       <h4 className="flex items-center gap-2 text-sm font-bold text-gray-800 mb-4 px-1">
                         <Gauge size={16} className="text-gray-500" /> 
@@ -416,7 +408,6 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
                       </div>
                     </div>
 
-                    {/* 3. Pro Tips / Best Practices */}
                     <div className="relative overflow-hidden bg-gray-900 rounded-xl shadow-lg p-6">
                       <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500 rounded-full blur-3xl opacity-10 -mr-10 -mt-10"></div>
                       <h4 className="relative flex items-center gap-2 text-sm font-bold text-yellow-400 mb-4">
@@ -443,38 +434,67 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
               </div>
             )}
 
-            {/* --- Other Tabs --- */}
             {activeTab === 'output' && (
               <div className="p-4">
                 {isRunning && <div className="flex flex-col items-center justify-center h-40 space-y-3 text-gray-500"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div><p className="text-xs">{statusMessage}</p></div>}
+                
                 {!isRunning && !testResults && <div className="flex flex-col items-center justify-center h-40 text-gray-400 space-y-2"><Play size={32} className="opacity-20" /><p className="text-sm">Click "Run & Check" to execute your code.</p></div>}
+                
                 {!isRunning && testResults && (
-                  <div className="space-y-4">
-                     <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
-                      <span className="text-sm font-medium text-gray-600">Total Score</span>
-                      <span className={`text-sm font-bold ${testResults.every(r => r.passed) ? 'text-green-600' : 'text-red-500'}`}>{testResults.filter(r => r.passed).length} / {testResults.length} Passed</span>
-                    </div>
-                    {testResults.map((result, index) => (
-                      <div key={index} className={`rounded-lg border overflow-hidden bg-white shadow-sm ${result.passed ? 'border-green-200' : 'border-red-200'}`}>
-                        <div className={`px-4 py-2 flex items-center justify-between text-sm font-medium ${result.passed ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
-                          <div className="flex items-center gap-2">
-                            {result.passed ? <CheckCircle2 size={16} /> : <XCircle size={16} />} Test Case {index + 1}
-                            {result.isHidden && <span className="flex items-center gap-1 text-[10px] bg-gray-800 text-white px-2 py-0.5 rounded-full ml-2"><Lock size={10} /> Public</span>}
-                          </div>
-                          <span className="text-xs uppercase tracking-wider opacity-75">{result.passed ? 'Success' : 'Failed'}</span>
-                        </div>
-                        {/* Detail View for Test Results */}
-                        {!result.isHidden && (
-                          <div className="p-3 text-xs font-mono space-y-3">
-                            <div><div className="text-gray-400 mb-1">Input</div><div className="bg-gray-100 p-2 rounded text-gray-700 whitespace-pre-wrap">{result.input || "(Empty Input)"}</div></div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div><div className="text-gray-400 mb-1">Expected Output</div><div className="bg-emerald-50 border border-emerald-100 p-2 rounded text-emerald-800 whitespace-pre-wrap">{result.expected}</div></div>
-                              <div><div className="text-gray-400 mb-1">Your Output</div><div className={`p-2 rounded border whitespace-pre-wrap ${result.passed ? 'bg-gray-100 border-gray-200 text-gray-700' : 'bg-red-50 border-red-100 text-red-800'}`}>{result.isError ? <span className="text-red-600 italic">Runtime Error: {result.stderr || "Unknown Error"}</span> : result.actual || <span className="text-gray-400 italic">(No Output)</span>}</div></div>
-                            </div>
-                          </div>
+                  <div className="space-y-6">
+                     <div className="space-y-2">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                           <Terminal size={14} /> Compilation Status
+                        </h4>
+                        
+                        {compileError ? (
+                           <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 font-mono text-xs whitespace-pre-wrap leading-relaxed shadow-sm">
+                              <div className="flex items-center gap-2 font-bold mb-2 text-red-700">
+                                 <XCircle size={16} /> Compilation Error
+                              </div>
+                              {compileError.stderr}
+                           </div>
+                        ) : (
+                           <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-lg text-emerald-800 text-sm flex items-center gap-2 shadow-sm">
+                              <CheckCircle2 size={18} className="text-emerald-600" />
+                              <span className="font-medium">Compilation Successful</span>
+                           </div>
                         )}
-                      </div>
-                    ))}
+                     </div>
+                     
+                     <div className="border-t border-gray-100"></div>
+
+                     <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                              <CheckCircle2 size={14} /> Test Case Results
+                            </h4>
+                            <span className={`text-xs font-bold px-2 py-1 rounded-full ${testResults.every(r => r.passed) ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                               {testResults.filter(r => r.passed).length} / {testResults.length} Passing
+                            </span>
+                        </div>
+                        
+                        {testResults.map((result, index) => (
+                          <div key={index} className={`rounded-lg border overflow-hidden bg-white shadow-sm ${result.passed ? 'border-green-200' : 'border-red-200'}`}>
+                            <div className={`px-4 py-2 flex items-center justify-between text-sm font-medium ${result.passed ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+                              <div className="flex items-center gap-2">
+                                {result.passed ? <CheckCircle2 size={16} /> : <XCircle size={16} />} Test Case {index + 1}
+                                {result.isHidden && <span className="flex items-center gap-1 text-[10px] bg-gray-800 text-white px-2 py-0.5 rounded-full ml-2"><Lock size={10} /> Public</span>}
+                              </div>
+                              <span className="text-xs uppercase tracking-wider opacity-75">{result.passed ? 'Success' : 'Failed'}</span>
+                            </div>
+                            {!result.isHidden && (
+                              <div className="p-3 text-xs font-mono space-y-3">
+                                <div><div className="text-gray-400 mb-1">Input</div><div className="bg-gray-100 p-2 rounded text-gray-700 whitespace-pre-wrap">{result.input || "(Empty Input)"}</div></div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div><div className="text-gray-400 mb-1">Expected Output</div><div className="bg-emerald-50 border border-emerald-100 p-2 rounded text-emerald-800 whitespace-pre-wrap">{result.expected}</div></div>
+                                  <div><div className="text-gray-400 mb-1">Your Output</div><div className={`p-2 rounded border whitespace-pre-wrap ${result.passed ? 'bg-gray-100 border-gray-200 text-gray-700' : 'bg-red-50 border-red-100 text-red-800'}`}>{result.isError ? <span className="text-red-600 italic">Check Compilation Error Above</span> : result.actual || <span className="text-gray-400 italic">(No Output)</span>}</div></div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                     </div>
                   </div>
                 )}
               </div>
