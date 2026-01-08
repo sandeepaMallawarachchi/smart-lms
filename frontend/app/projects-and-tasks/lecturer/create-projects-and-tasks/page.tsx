@@ -80,7 +80,7 @@ export default function CreateProjectsAndTasksPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-br from-gray-50 via-blue-50/30 to-gray-50 flex items-center justify-center">
         <motion.div
           animate={{ opacity: [0.5, 1, 0.5] }}
           transition={{ duration: 2, repeat: Infinity }}
@@ -90,7 +90,7 @@ export default function CreateProjectsAndTasksPage() {
             transition={{ duration: 2, repeat: Infinity }}
             className="inline-block"
           >
-            <div className="w-16 h-16 rounded-full bg-gradient-to-r from-brand-blue to-brand-yellow flex items-center justify-center shadow-lg shadow-brand-blue/30">
+            <div className="w-16 h-16 rounded-full bg-linear-to-r from-brand-blue to-brand-yellow flex items-center justify-center shadow-lg shadow-brand-blue/30">
               <Sparkles size={32} className="text-white" />
             </div>
           </motion.div>
@@ -125,28 +125,28 @@ export default function CreateProjectsAndTasksPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <div className="min-h-screen bg-linear-to-br from-gray-50 via-white to-gray-50">
       {/* Background Decorative Elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <motion.div
           animate={{ y: [0, 20, 0] }}
           transition={{ duration: 6, repeat: Infinity }}
-          className="absolute top-20 right-10 w-72 h-72 bg-gradient-to-r from-brand-blue/5 to-brand-yellow/5 rounded-full blur-3xl"
+          className="absolute top-20 right-10 w-72 h-72 bg-linear-to-r from-brand-blue/5 to-brand-yellow/5 rounded-full blur-3xl"
         />
         <motion.div
           animate={{ y: [0, -20, 0] }}
           transition={{ duration: 6, repeat: Infinity, delay: 1 }}
-          className="absolute -bottom-20 -left-20 w-96 h-96 bg-gradient-to-r from-brand-yellow/5 to-brand-blue/5 rounded-full blur-3xl"
+          className="absolute -bottom-20 -left-20 w-96 h-96 bg-linear-to-r from-brand-yellow/5 to-brand-blue/5 rounded-full blur-3xl"
         />
       </div>
 
-      <div className="relative max-w-4xl mx-auto px-4 py-8">
+      <div className="relative max-w-7xl mx-auto px-4 py-8 -mt-8">
         {/* Header Section */}
         <motion.div
           initial="hidden"
           animate="visible"
           variants={containerVariants}
-          className="mb-8"
+          className="mb-4"
         >
           {/* Back Button with Animation */}
           <motion.button
@@ -192,7 +192,7 @@ export default function CreateProjectsAndTasksPage() {
             <span className="text-gray-900 font-semibold">Create New</span>
           </motion.nav>
 
-          {/* Page Title with Gradient */}
+          {/* Page Title with linear */}
           <motion.div
             variants={itemVariants}
             className="space-y-3"
@@ -204,7 +204,7 @@ export default function CreateProjectsAndTasksPage() {
               >
                 <Zap size={32} className="text-brand-yellow" />
               </motion.div>
-              <h1 className="text-5xl font-bold bg-gradient-to-r from-brand-blue via-brand-blue to-brand-blue/70 bg-clip-text text-transparent">
+              <h1 className="text-3xl font-bold bg-brand-blue bg-clip-text text-transparent mt-4">
                 Create Project or Task
               </h1>
             </div>
@@ -222,7 +222,7 @@ export default function CreateProjectsAndTasksPage() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3 }}
-              className="mb-8 p-5 bg-gradient-to-r from-yellow-50 via-orange-50 to-yellow-50 border border-yellow-200 rounded-xl flex items-start gap-4 shadow-sm hover:shadow-md transition-shadow"
+              className="mb-8 p-5 bg-linear-to-r from-yellow-50 via-orange-50 to-yellow-50 border border-yellow-200 rounded-xl flex items-start gap-4 shadow-sm hover:shadow-md transition-shadow"
             >
               <motion.div
                 animate={{ scale: [1, 1.1, 1] }}

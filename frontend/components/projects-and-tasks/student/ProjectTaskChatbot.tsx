@@ -135,7 +135,7 @@ export default function ProjectTaskChatbot() {
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center">
-                  <CheckSquare className="text-blue-500" size={24} />
+                  <MessageCircleMore className="text-blue-500" size={24} />
                 </div>
                 <div>
                   <h3 className="text-white font-bold">Task Manager</h3>

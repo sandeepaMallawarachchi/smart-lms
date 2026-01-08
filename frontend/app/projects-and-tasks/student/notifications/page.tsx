@@ -95,27 +95,27 @@ export default function NotificationsPage() {
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <div className="min-h-screen bg-linear-to-br from-gray-50 via-white to-gray-50">
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <motion.div
           animate={{ y: [0, 30, 0] }}
           transition={{ duration: 8, repeat: Infinity }}
-          className="absolute top-10 right-20 w-96 h-96 bg-gradient-to-r from-brand-blue/5 to-brand-yellow/5 rounded-full blur-3xl"
+          className="absolute top-10 right-20 w-96 h-96 bg-linear-to-r from-brand-blue/5 to-brand-yellow/5 rounded-full blur-3xl"
         />
       </div>
 
-      <div className="relative max-w-4xl mx-auto px-4 py-8">
+      <div className="relative max-w-7xl mx-auto px-4 py-8">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
           <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-brand-blue to-brand-blue/80 flex items-center justify-center text-white font-bold shadow-lg">
+            <div className="w-12 h-12 rounded-full bg-brand-yellow flex items-center p-2 justify-center text-brand-blue font-bold shadow-lg">
               <Bell size={28} />
             </div>
             <div>
-              <h1 className="text-4xl font-bold text-gray-900">Notifications</h1>
+              <h1 className="text-4xl font-bold text-brand-blue">Notifications</h1>
               <p className="text-gray-600 mt-1">
                 {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}` : 'All notifications read'}
               </p>
@@ -176,7 +176,7 @@ export default function NotificationsPage() {
             className="flex items-center justify-center py-12"
           >
             <div className="flex flex-col items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-r from-brand-blue to-brand-yellow flex items-center justify-center shadow-lg">
+              <div className="w-16 h-16 rounded-full bg-linear-to-r from-brand-blue to-brand-yellow flex items-center justify-center shadow-lg">
                 <Loader className="animate-spin text-white" size={32} />
               </div>
               <p className="text-gray-600 font-semibold">Loading notifications...</p>

@@ -63,7 +63,7 @@ export default function ActivityHeatmap() {
 
   const groupByWeeks = () => {
     if (!heatmapData.length) return [];
-    
+
     const weeks: HeatmapData[][] = [];
     let week: HeatmapData[] = [];
 
@@ -103,13 +103,36 @@ export default function ActivityHeatmap() {
 
   return (
     <div className="bg-white rounded-xl border-2 border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-bold text-gray-900">📊 Your Activity</h3>
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-8"
+      >
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-12 h-12 rounded-full bg-brand-yellow flex items-center justify-center text-brand-blue text-xl font-bold shadow-lg">
+            {/* {student?.name.charAt(0).toUpperCase()} */}
+            S
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-brand-blue">My Heat Map</h1>
+            <p className="text-gray-600 mt-1">
+              {/* {student?.name} • Year {student?.academicYear}, Semester {student?.semester} */}
+              Sandeepa Mallawarachchi • Year 4, Semester 1
+            </p>
+          </div>
+        </div>
+      </motion.div>
+
+        <h3 className='text-2xl font-bold text-brand-blue mt-16'>📊 Activity Heat Map </h3>
+
+
+      <div className="flex items-center justify-between mb-6 ">
+        <h3 className="text-lg font-medium text-gray-600">• Study Your Activity Heat Map to Get Understand How Your colloburation for the acadamic work.</h3>
         <p className="text-sm text-gray-600">
           {totalActivities} {totalActivities === 1 ? 'activity' : 'activities'} in the last year
         </p>
       </div>
-      
+
       {weeks.length === 0 ? (
         <div className="text-center py-8 text-gray-500">
           <p>No activity data yet. Start working on projects to see your progress!</p>

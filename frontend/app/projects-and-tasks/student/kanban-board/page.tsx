@@ -529,11 +529,11 @@ export default function StudentProjectsAndTasksPage() {
                     className="mb-8"
                 >
                     <div className="flex items-center gap-4 mb-6">
-                        <div className="w-12 h-12 rounded-full bg-linear-to-br from-brand-blue to-brand-blue/80 flex items-center justify-center text-white font-bold shadow-lg">
+                        <div className="w-12 h-12 rounded-full bg-brand-yellow flex items-center justify-center text-brand-blue text-xl font-bold shadow-lg">
                             {student?.name.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                            <h1 className="text-4xl font-bold text-gray-900">My Projects & Tasks</h1>
+                            <h1 className="text-3xl font-bold text-brand-blue">My Projects & Tasks</h1>
                             <p className="text-gray-600 mt-1">
                                 {student?.name} • Year {student?.academicYear}, Semester {student?.semester}
                             </p>
