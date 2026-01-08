@@ -49,7 +49,7 @@ export default function StudentDashboard() {
     <div>
       {/* Page Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-900 mb-2">
+        <h1 className="text-4xl font-bold text-brand-blue mb-2">
           Student Dashboard
         </h1>
         <p className="text-gray-600">

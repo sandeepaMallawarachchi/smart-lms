@@ -125,7 +125,7 @@ export default function NotificationBell({ pollInterval = 30000 }: NotificationB
               exit={{ opacity: 0, y: -10, scale: 0.95 }}
               className="absolute top-full right-0 mt-2 w-96 max-h-[600px] bg-white rounded-lg shadow-2xl border border-gray-200 z-50 overflow-hidden flex flex-col"
             >
-              <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-linear-to-r from-brand-blue to-brand-blue/80 text-white">
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-brand-blue text-brand-yellow">
                 <h3 className="font-bold text-lg">Notifications</h3>
                 <motion.button
                   whileHover={{ rotate: 90 }}
