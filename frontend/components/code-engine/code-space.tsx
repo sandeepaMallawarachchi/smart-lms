@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState } from 'react'
-import Editor from '@monaco-editor/react'
+import React, { useState, useRef } from 'react'
+import Editor, { OnMount } from '@monaco-editor/react'
 import { 
   Play, FileText, Terminal, Settings, CheckCircle2, XCircle, 
   ArrowLeft, ChartArea, Lock, Send, Info, Lightbulb, 
@@ -23,6 +23,9 @@ export interface AssignmentData {
   language: string
   options?: {
     autoComplete?: boolean
+    externalCopyPaste?: boolean
+    internalCopyPaste?: boolean
+    analytics?: boolean
   }
   testCases: TestCase[]
 }
@@ -184,6 +187,7 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
   const [testResults, setTestResults] = useState<TestResult[] | null>(null)
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
   const [statusMessage, setStatusMessage] = useState('')
+  const editorRef = useRef<any>(null)
 
   const editorOptions = {
     fontSize: 14,
@@ -196,8 +200,60 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
     padding: { top: 16, bottom: 16 },
     cursorBlinking: 'smooth' as const,
     smoothScrolling: true,
-    contextmenu: true,
+    contextmenu: true, 
     quickSuggestions: assignment.options?.autoComplete ?? true,
+  }
+
+  const handleEditorDidMount: OnMount = (editor, monaco) => {
+    editorRef.current = editor;
+    const container = editor.getContainerDomNode();
+    const options = assignment.options;
+
+    if (!options) return;
+
+    if (options.externalCopyPaste === false) {
+        editor.updateOptions({ contextmenu: false });
+        container.addEventListener('paste', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            alert("Pasting is disabled for this assignment.");
+        }, true);
+
+        editor.onKeyDown((e) => {
+            if ((e.ctrlKey || e.metaKey) && e.keyCode === monaco.KeyCode.KeyV) {
+                e.preventDefault();
+                e.stopPropagation();
+                alert("Pasting is disabled.");
+            }
+        });
+    }
+
+    if (options.internalCopyPaste === false) {
+        editor.updateOptions({ contextmenu: false });
+
+        container.addEventListener('copy', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            alert("Copying is disabled.");
+        }, true);
+        
+        container.addEventListener('cut', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            alert("Cutting is disabled.");
+        }, true);
+
+        editor.onKeyDown((e) => {
+            const isCopy = (e.ctrlKey || e.metaKey) && e.keyCode === monaco.KeyCode.KeyC;
+            const isCut = (e.ctrlKey || e.metaKey) && e.keyCode === monaco.KeyCode.KeyX;
+            
+            if (isCopy || isCut) {
+                e.preventDefault();
+                e.stopPropagation();
+                alert(isCopy ? "Copying is disabled." : "Cutting is disabled.");
+            }
+        });
+    }
   }
 
   const handleRun = async () => {
@@ -244,6 +300,7 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)] bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xl m-4">
+      {/* --- Toolbar --- */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200 h-14">
         <div className="flex items-center gap-3">
           <button onClick={() => router.back()} className="p-1.5 hover:bg-gray-200 rounded-md text-gray-500 transition-colors">
@@ -274,7 +331,15 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
 
       <div className="flex-1 grid grid-cols-12 overflow-hidden">
         <div className="col-span-12 lg:col-span-7 border-r border-gray-200 relative bg-[#fffffe]">
-          <Editor height="100%" defaultLanguage={assignment.language.toLowerCase()} value={code} onChange={(val) => setCode(val || '')} options={editorOptions} loading={<div className="p-4 text-sm text-gray-500">Initializing IDE...</div>} />
+          <Editor 
+            height="100%" 
+            defaultLanguage={assignment.language.toLowerCase()} 
+            value={code} 
+            onChange={(val) => setCode(val || '')} 
+            options={editorOptions} 
+            onMount={handleEditorDidMount} 
+            loading={<div className="p-4 text-sm text-gray-500">Initializing IDE...</div>} 
+          />
         </div>
 
         <div className="col-span-12 lg:col-span-5 bg-gray-50 flex flex-col h-full overflow-hidden"> 
@@ -442,7 +507,7 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
                 
                 {!isRunning && testResults && (
                   <div className="space-y-6">
-                     <div className="space-y-2">
+                      <div className="space-y-2">
                         <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                            <Terminal size={14} /> Compilation Status
                         </h4>
@@ -460,11 +525,11 @@ const CodeSpace = ({ defaultCode, assignment }: CodeSpaceProps) => {
                               <span className="font-medium">Compilation Successful</span>
                            </div>
                         )}
-                     </div>
-                     
-                     <div className="border-t border-gray-100"></div>
+                      </div>
+                      
+                      <div className="border-t border-gray-100"></div>
 
-                     <div className="space-y-4">
+                      <div className="space-y-4">
                         <div className="flex items-center justify-between">
                             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                               <CheckCircle2 size={14} /> Test Case Results
