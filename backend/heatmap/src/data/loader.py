@@ -9,6 +9,7 @@ class DataLoader:
         self.db = self.client['test']
     
     def get_activity_history(self, student_id, days=365):
+        """Get activity with items details"""
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
         
@@ -22,19 +23,64 @@ class DataLoader:
             "updatedAt": {"$gte": start_date, "$lte": end_date}
         }))
         
+        # Get project and task details
+        projects = self._get_student_projects(student_id)
+        tasks = self._get_student_tasks(student_id)
+        
+        project_map = {str(p["_id"]): p["projectName"] for p in projects}
+        task_map = {str(t["_id"]): t["taskName"] for t in tasks}
+        
+        # Build activity map with items
         activity_map = {}
         current = start_date
         while current <= end_date:
-            activity_map[current.strftime('%Y-%m-%d')] = 0
+            activity_map[current.strftime('%Y-%m-%d')] = {
+                "count": 0,
+                "items": []
+            }
             current += timedelta(days=1)
         
-        for progress in project_progress + task_progress:
+        # Process project progress
+        for progress in project_progress:
             if 'updatedAt' in progress:
                 date_str = progress['updatedAt'].strftime('%Y-%m-%d')
                 if date_str in activity_map:
-                    activity_map[date_str] += 1
+                    project_id = str(progress.get('projectId'))
+                    activity_map[date_str]["count"] += 1
+                    activity_map[date_str]["items"].append({
+                        "type": "project",
+                        "name": project_map.get(project_id, "Unknown Project"),
+                        "status": progress.get("status", "todo"),
+                        "id": project_id
+                    })
+        
+        # Process task progress
+        for progress in task_progress:
+            if 'updatedAt' in progress:
+                date_str = progress['updatedAt'].strftime('%Y-%m-%d')
+                if date_str in activity_map:
+                    task_id = str(progress.get('taskId'))
+                    activity_map[date_str]["count"] += 1
+                    activity_map[date_str]["items"].append({
+                        "type": "task",
+                        "name": task_map.get(task_id, "Unknown Task"),
+                        "status": progress.get("status", "todo"),
+                        "id": task_id
+                    })
         
         return activity_map
+    
+    def _get_student_projects(self, student_id):
+        """Get all projects for student"""
+        courses = self.get_student_courses(student_id)
+        course_ids = [str(c['_id']) for c in courses]
+        return list(self.db.projects.find({"courseId": {"$in": course_ids}}))
+    
+    def _get_student_tasks(self, student_id):
+        """Get all tasks for student"""
+        courses = self.get_student_courses(student_id)
+        course_ids = [str(c['_id']) for c in courses]
+        return list(self.db.tasks.find({"courseId": {"$in": course_ids}}))
     
     def get_student_courses(self, student_id):
         student = self.db.students.find_one({"_id": ObjectId(student_id)})

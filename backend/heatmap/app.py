@@ -8,10 +8,17 @@ from src.data.loader import DataLoader
 from src.features.engineer import FeatureEngineer
 from src.models.predictor import ActivityPredictor
 from src.models.anomaly import AnomalyDetector
-from src.utils.formatter import map_to_level, adaptive_thresholds, format_response
+from src.utils.formatter import map_to_level, adaptive_thresholds
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:3000", "http://localhost:3001"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
+    }
+})
 
 data_loader = DataLoader()
 feature_engineer = FeatureEngineer()
@@ -27,16 +34,17 @@ def generate_heatmap():
     try:
         data = request.json
         student_id = data.get('studentId')
-        lookback = data.get('lookbackDays', Config.DEFAULT_LOOKBACK_DAYS)
-        forecast = data.get('forecastDays', Config.DEFAULT_FORECAST_DAYS)
         
         if not student_id:
             return jsonify({'error': 'studentId required'}), 400
         
-        # Load data
-        history = data_loader.get_activity_history(student_id, lookback)
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=lookback)
+        # FULL YEAR: Jan 1 to Dec 31 of current year
+        now = datetime.now()
+        start_date = datetime(now.year, 1, 1)
+        end_date = datetime(now.year, 12, 31)
+        
+        # Get activity history with items
+        activity_history = data_loader.get_activity_history(student_id, days=365)
         
         context = {
             'deadlines': data_loader.get_deadlines(student_id),
@@ -44,63 +52,98 @@ def generate_heatmap():
             'semester_start': data_loader.get_semester_start(student_id)
         }
         
-        # Training dates (past only)
-        training_dates = [start_date + timedelta(days=i) 
-                         for i in range((min(end_date, datetime.now()) - start_date).days + 1)]
+        # All dates in the year
+        all_dates = []
+        current = start_date
+        while current <= end_date:
+            all_dates.append(current)
+            current += timedelta(days=1)
         
-        # Create training data
-        X_train, feature_names = feature_engineer.create_matrix(training_dates, history, context)
-        y_train = np.array([history.get(d.strftime('%Y-%m-%d'), 0) for d in training_dates])
+        # Split into past and future
+        today = datetime.now().date()
+        past_dates = [d for d in all_dates if d.date() <= today]
+        future_dates = [d for d in all_dates if d.date() > today]
         
-        # Train models
-        if X_train.shape[0] > 0:
+        # Extract actual counts for past dates
+        y_train = np.array([activity_history.get(d.strftime('%Y-%m-%d'), {}).get('count', 0) for d in past_dates])
+        
+        # Create features and train models
+        X_all, feature_names = feature_engineer.create_matrix(all_dates, activity_history, context)
+        
+        if len(past_dates) >= Config.MIN_TRAINING_SAMPLES:
+            X_train = X_all[:len(past_dates)]
             activity_predictor.fit(X_train, y_train, feature_names)
             anomaly_detector.fit(y_train)
         
-        # All dates (history + forecast)
-        all_dates = [start_date + timedelta(days=i) 
-                    for i in range((end_date + timedelta(days=forecast) - start_date).days + 1)]
-        
-        # Create features for all dates
-        X_all, _ = feature_engineer.create_matrix(all_dates, history, context)
-        
-        # Predict
+        # Predict all dates
         predicted_counts = activity_predictor.predict(X_all) if X_all.shape[0] > 0 else np.zeros(len(all_dates))
         
+        # For past dates, use ACTUAL counts; for future, use PREDICTIONS
+        final_counts = []
+        for i, date in enumerate(all_dates):
+            if date.date() <= today:
+                # Use actual count from database
+                final_counts.append(activity_history.get(date.strftime('%Y-%m-%d'), {}).get('count', 0))
+            else:
+                # Use ML prediction
+                final_counts.append(predicted_counts[i])
+        
+        final_counts = np.array(final_counts)
+        
         # Detect anomalies
-        anomaly_flags = anomaly_detector.detect(predicted_counts)
+        anomaly_flags = anomaly_detector.detect(final_counts)
         
         # Prediction flags
-        today = datetime.now().date()
         prediction_flags = [d.date() > today for d in all_dates]
         
-        # Adaptive thresholds
-        thresholds = adaptive_thresholds([history.get(d.strftime('%Y-%m-%d'), 0) for d in training_dates])
+        # Adaptive thresholds based on actual past data
+        past_counts = [activity_history.get(d.strftime('%Y-%m-%d'), {}).get('count', 0) for d in past_dates]
+        thresholds = adaptive_thresholds(past_counts)
         
         # Map to levels
-        levels = [map_to_level(c, thresholds) for c in predicted_counts]
+        levels = [map_to_level(c, thresholds) for c in final_counts]
         
-        # Format response
-        date_strings = [d.strftime('%Y-%m-%d') for d in all_dates]
-        response = format_response(
-            dates=date_strings,
-            counts=predicted_counts.tolist(),
-            levels=levels,
-            anomalies=anomaly_flags.tolist(),
-            predictions=prediction_flags
-        )
+        # Build heatmap with items
+        heatmap = []
+        for i, date in enumerate(all_dates):
+            date_str = date.strftime('%Y-%m-%d')
+            items = activity_history.get(date_str, {}).get('items', [])
+            
+            heatmap.append({
+                'date': date_str,
+                'count': float(final_counts[i]),
+                'level': int(levels[i]),
+                'isPrediction': bool(prediction_flags[i]),
+                'isAnomaly': bool(anomaly_flags[i]),
+                'items': items if not prediction_flags[i] else []
+            })
         
-        # Add metadata
-        response['model_info'] = {
-            'prediction_enabled': activity_predictor.is_fitted,
-            'anomaly_detection_enabled': anomaly_detector.is_fitted,
-            'forecast_days': forecast,
-            'training_samples': len(training_dates),
-            'feature_count': len(feature_names) if feature_names else 0
+        # Calculate summary
+        actual_activities = sum(activity_history.get(d.strftime('%Y-%m-%d'), {}).get('count', 0) for d in past_dates)
+        
+        response = {
+            'heatmap': heatmap,
+            'summary': {
+                'totalDays': int(len(all_dates)),
+                'totalActivities': float(actual_activities),
+                'averageDaily': float(np.mean([h['count'] for h in heatmap if not h['isPrediction']])),
+                'maxDaily': float(max([h['count'] for h in heatmap if not h['isPrediction']])) if any(not h['isPrediction'] for h in heatmap) else 0.0,
+                'activeDays': int(sum(1 for h in heatmap if h['count'] > 0 and not h['isPrediction'])),
+                'anomalyCount': int(sum(anomaly_flags)),
+                'predictedDays': int(sum(prediction_flags))
+            },
+            'model_info': {
+                'prediction_enabled': bool(activity_predictor.is_fitted),
+                'anomaly_detection_enabled': bool(anomaly_detector.is_fitted),
+                'forecast_days': int(sum(prediction_flags)),
+                'training_samples': int(len(past_dates)),
+                'feature_count': int(len(feature_names)) if feature_names else 0
+            }
         }
         
         if activity_predictor.is_fitted:
-            response['feature_importance'] = activity_predictor.get_importance()
+            importance = activity_predictor.get_importance()
+            response['feature_importance'] = {k: float(v) for k, v in importance.items()}
         
         return jsonify(response)
     
@@ -130,7 +173,7 @@ def diagnostics():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    print(f"Heatmap service")
+    print(f"Heatmap ML Microservice")
     print(f"Port: {Config.PORT}")
     print(f"Debug: {Config.DEBUG}")
     app.run(host='0.0.0.0', port=Config.PORT, debug=Config.DEBUG)

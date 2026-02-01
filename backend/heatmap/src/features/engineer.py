@@ -30,8 +30,8 @@ class FeatureEngineer:
         trend_7d = self._trend(date, history, 7)
         
         # Lags
-        lag_1d = history.get((date - timedelta(days=1)).strftime('%Y-%m-%d'), 0)
-        lag_7d = history.get((date - timedelta(days=7)).strftime('%Y-%m-%d'), 0)
+        lag_1d = self._get_count(history, (date - timedelta(days=1)).strftime('%Y-%m-%d'))
+        lag_7d = self._get_count(history, (date - timedelta(days=7)).strftime('%Y-%m-%d'))
         
         # Semester phase
         weeks_since_start = ((date - semester_start).days // 7) + 1
@@ -76,16 +76,24 @@ class FeatureEngineer:
             'estimated_workload': active_projects * 2
         }
     
+    def _get_count(self, history, date_str):
+        """Extract count from history dict"""
+        data = history.get(date_str, {})
+        if isinstance(data, dict):
+            return data.get('count', 0)
+        return data  # Fallback if it's just a number
+    
     def _rolling_avg(self, target_date, history, window):
         start = target_date - timedelta(days=window)
-        total = sum(history.get((start + timedelta(days=i)).strftime('%Y-%m-%d'), 0) 
+        total = sum(self._get_count(history, (start + timedelta(days=i)).strftime('%Y-%m-%d'))
                    for i in range(window))
         return total / window
     
     def _trend(self, target_date, history, window):
         start = target_date - timedelta(days=window)
         x = list(range(window))
-        y = [history.get((start + timedelta(days=i)).strftime('%Y-%m-%d'), 0) for i in range(window)]
+        y = [self._get_count(history, (start + timedelta(days=i)).strftime('%Y-%m-%d')) 
+             for i in range(window)]
         
         if len([v for v in y if v > 0]) < 3:
             return 0.0
