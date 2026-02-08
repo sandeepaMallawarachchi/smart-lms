@@ -86,14 +86,8 @@ def predict_single():
         required_features = numeric_features + categorical_features
         
         missing_features = [f for f in required_features if f not in data]
-        
         if missing_features:
-            return jsonify({
-                'success': False,
-                'error': 'Missing required features',
-                'missing_features': missing_features,
-                'timestamp': datetime.utcnow().isoformat()
-            }), 400
+            logger.warning(f"Missing features in prediction request: {missing_features}")
         
         student_id = data.get('student_id', None)
         
