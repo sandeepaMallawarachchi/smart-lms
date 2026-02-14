@@ -16,6 +16,7 @@ class AnalyticsChatbot:
         self.ML_API_URL = os.getenv('ML_API_URL', 'http://localhost:5000')
         self.GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
         self.GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+        self.HEATMAP_URL = os.getenv('HEATMAP_SERVICE_URL', 'http://localhost:5002/heatmap')
         
         self.INTENTS = {
             "risk_prediction": ["risk", "failing", "fail", "at risk", "danger", "academic risk", "prediction"],
@@ -106,36 +107,12 @@ class AnalyticsChatbot:
                 payload = latest_prediction['inputData']
                 payload['student_id'] = student.get('studentIdNumber', student_id)
             else:
-                payload = {
-                    "student_id": student.get('studentIdNumber', student_id),
-                    "total_clicks": 5000,
-                    "avg_clicks_per_day": 50,
-                    "clicks_std": 25,
-                    "max_clicks_single_day": 150,
-                    "days_active": 100,
-                    "study_span_days": 120,
-                    "engagement_regularity": 0.5,
-                    "pre_course_clicks": 200,
-                    "avg_score": 75,
-                    "score_std": 10,
-                    "min_score": 60,
-                    "max_score": 90,
-                    "completion_rate": 0.9,
-                    "first_score": 70,
-                    "score_improvement": 20,
-                    "avg_days_early": 2,
-                    "timing_consistency": 3,
-                    "worst_delay": -1,
-                    "late_submission_count": 1,
-                    "num_of_prev_attempts": 0,
-                    "studied_credits": 60,
-                    "early_registration": 1,
-                    "withdrew": 0,
-                    "gender": gender,
-                    "age_band": age_band,
-                    "highest_education": "A Level or Equivalent",
-                    "disability": "N"
-                }
+                payload = self._build_payload_from_activity(
+                    student=student,
+                    student_id=student_id,
+                    gender=gender,
+                    age_band=age_band
+                )
             
             print(f"Calling ML API with payload: {payload}")
             
@@ -298,6 +275,131 @@ Format your response as a numbered list with clear, concise points."""
             response += "⚠️ Low engagement detected. Try to complete more activities to improve your performance.\n"
         
         return response
+
+    def _build_payload_from_activity(self, student, student_id, gender, age_band):
+        # Course credits
+        year = int(student.get('academicYear') or student.get('year', 1))
+        semester = int(student.get('semester', 1))
+        specialization = student.get('specialization', '')
+        courses = list(self.db.courses.find({
+            "year": year,
+            "semester": semester,
+            "specializations": specialization
+        }))
+        studied_credits = sum([c.get('credits', 0) for c in courses])
+        course_ids = [str(c["_id"]) for c in courses]
+
+        projects = list(self.db.projects.find({"courseId": {"$in": course_ids}}))
+        tasks = list(self.db.tasks.find({"courseId": {"$in": course_ids}}))
+        project_progress = list(self.db.studentprojectprogresses.find({"studentId": student_id}))
+        task_progress = list(self.db.studenttaskprogresses.find({"studentId": student_id}))
+
+        project_map = {str(p["_id"]): p for p in projects}
+        task_map = {str(t["_id"]): t for t in tasks}
+
+        progress_dates = []
+        completed_projects = 0
+        completed_tasks = 0
+        late_count = 0
+
+        for p in project_progress:
+            if p.get("updatedAt"):
+                progress_dates.append(p["updatedAt"])
+            if p.get("status") == "done":
+                completed_projects += 1
+                project = project_map.get(p.get("projectId"))
+                if project and project.get("deadlineDate") and p.get("updatedAt"):
+                    delay_days = self._days_early(p["updatedAt"], project["deadlineDate"])
+                    if delay_days is not None and delay_days < 0:
+                        late_count += 1
+
+        for t in task_progress:
+            if t.get("updatedAt"):
+                progress_dates.append(t["updatedAt"])
+            if t.get("status") == "done":
+                completed_tasks += 1
+                task = task_map.get(t.get("taskId"))
+                if task and task.get("deadlineDate") and t.get("updatedAt"):
+                    delay_days = self._days_early(t["updatedAt"], task["deadlineDate"])
+                    if delay_days is not None and delay_days < 0:
+                        late_count += 1
+
+        total_items = len(projects) + len(tasks)
+        completion_rate = (completed_projects + completed_tasks) / total_items if total_items > 0 else 0
+
+        days_active = 0
+        study_span_days = 0
+        if progress_dates:
+            sorted_dates = sorted(progress_dates)
+            unique_days = set([d.strftime("%Y-%m-%d") for d in sorted_dates])
+            days_active = len(unique_days)
+            study_span_days = max(1, (sorted_dates[-1] - sorted_dates[0]).days + 1)
+
+        # Heatmap service for activity counts
+        total_clicks = 0
+        avg_clicks_per_day = 0
+        max_clicks_single_day = 0
+        clicks_std = 0
+        try:
+            resp = requests.post(self.HEATMAP_URL, json={"studentId": student_id}, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                summary = data.get("summary", {})
+                heatmap = [d for d in data.get("heatmap", []) if not d.get("isPrediction")]
+                counts = [d.get("count", 0) for d in heatmap]
+                if counts:
+                    mean = sum(counts) / len(counts)
+                    variance = sum([(c - mean) ** 2 for c in counts]) / len(counts)
+                    clicks_std = variance ** 0.5
+                total_clicks = summary.get("totalActivities", sum(counts))
+                avg_clicks_per_day = summary.get("averageDaily", sum(counts) / len(counts) if counts else 0)
+                max_clicks_single_day = summary.get("maxDaily", max(counts) if counts else 0)
+                if not days_active:
+                    days_active = summary.get("activeDays", 0)
+        except Exception:
+            pass
+
+        engagement_regularity = clicks_std / avg_clicks_per_day if avg_clicks_per_day else 0
+
+        # Scores and timing from submissions are disabled for now
+        return {
+            "student_id": student.get("studentIdNumber", student_id),
+            "total_clicks": total_clicks,
+            "avg_clicks_per_day": avg_clicks_per_day,
+            "clicks_std": clicks_std,
+            "max_clicks_single_day": max_clicks_single_day,
+            "days_active": days_active,
+            "study_span_days": study_span_days,
+            "engagement_regularity": engagement_regularity,
+            "pre_course_clicks": 0,
+            "avg_score": 0,
+            "score_std": 0,
+            "min_score": 0,
+            "max_score": 0,
+            "completion_rate": completion_rate,
+            "first_score": 0,
+            "score_improvement": 0,
+            "avg_days_early": 0,
+            "timing_consistency": 0,
+            "worst_delay": 0,
+            "late_submission_count": late_count,
+            "num_of_prev_attempts": 0,
+            "studied_credits": studied_credits,
+            "early_registration": 0,
+            "withdrew": 0,
+            "gender": gender,
+            "age_band": age_band,
+            "highest_education": "A Level or Equivalent",
+            "disability": "N"
+        }
+
+    def _days_early(self, submitted_at, due_date_str):
+        try:
+            due = datetime.strptime(due_date_str, "%Y-%m-%d")
+            submitted = submitted_at if isinstance(submitted_at, datetime) else datetime.fromisoformat(str(submitted_at))
+            return (due - submitted).days
+        except Exception:
+            return None
     
     def handle_query(self, user_query, student_id):
         intent = self.classify_intent(user_query)

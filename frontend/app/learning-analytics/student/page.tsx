@@ -22,10 +22,46 @@ interface StudentData {
   academicYear: string;
 }
 
+interface PredictionData {
+  prediction?: {
+    risk_level?: 'low' | 'medium' | 'high';
+  };
+}
+
+interface LearningGoal {
+  _id: string;
+  title: string;
+  targetDate: string;
+  status: 'todo' | 'inprogress' | 'done' | 'active' | 'completed';
+}
+
+interface Course {
+  _id: string;
+  courseName: string;
+  credits: number;
+  year: number;
+  semester: number;
+  specializations: string[];
+}
+
 export default function StudentDashboard() {
   const [studentData, setStudentData] = useState<StudentData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [learningGoals, setLearningGoals] = useState<LearningGoal[]>([]);
+  const [coursePerformance, setCoursePerformance] = useState<Array<{
+    subject: string;
+    progress: number;
+    grade: string;
+    status: 'excellent' | 'good' | 'needs-improvement';
+  }>>([]);
+  const [insights, setInsights] = useState<Array<{ title: string; message: string }>>([]);
+  const [overviewStats, setOverviewStats] = useState({
+    overallProgress: 0,
+    completionRate: 0,
+    riskLevel: 'unknown',
+    achievements: 0,
+  });
 
   // Fetch student data
   useEffect(() => {
@@ -72,6 +108,97 @@ export default function StudentDashboard() {
 
         const studentResult = await studentResponse.json();
         setStudentData(studentResult.data.student);
+
+        const headers = { Authorization: `Bearer ${token}` };
+
+        const [featuresRes, predictionRes, goalsRes, projectsRes, tasksRes, coursesRes] = await Promise.all([
+          fetch('/api/learning-analytics/features', { headers }),
+          fetch('/api/predictions/latest', { headers }),
+          fetch('/api/student/learning-goals?status=all', { headers }),
+          fetch('/api/student/project-progress/projects', { headers }),
+          fetch('/api/student/task-progress/tasks', { headers }),
+          fetch('/api/student/get-courses', { headers }),
+        ]);
+
+        const featuresData = featuresRes.ok ? await featuresRes.json() : null;
+        const predictionData = predictionRes.ok ? await predictionRes.json() : null;
+        const goalsData = goalsRes.ok ? await goalsRes.json() : null;
+        const projectsData = projectsRes.ok ? await projectsRes.json() : null;
+        const tasksData = tasksRes.ok ? await tasksRes.json() : null;
+        const coursesData = coursesRes.ok ? await coursesRes.json() : null;
+
+        const payload = featuresData?.data?.payload;
+        const completionRate = payload?.completion_rate ? payload.completion_rate * 100 : 0;
+        const overallProgress = Math.round(completionRate);
+
+        const riskLevel = (predictionData?.data?.prediction as PredictionData | undefined)?.prediction?.risk_level || 'unknown';
+
+        const projects = projectsData?.data?.projects || [];
+        const tasks = tasksData?.data?.tasks || [];
+        const completedProjects = projects.filter((p: any) => p.status === 'done').length;
+        const completedTasks = tasks.filter((t: any) => t.status === 'done').length;
+        const achievements = completedProjects + completedTasks;
+
+        const courses: Course[] = coursesData?.data?.courses || [];
+        const performance = courses.map((course) => {
+          const courseProjects = projects.filter((p: any) => p.courseId === course._id);
+          const courseTasks = tasks.filter((t: any) => t.courseId === course._id);
+          const totalItems = courseProjects.length + courseTasks.length;
+          const completedItems =
+            courseProjects.filter((p: any) => p.status === 'done').length +
+            courseTasks.filter((t: any) => t.status === 'done').length;
+          const progress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+          const status = progress >= 80 ? 'excellent' : progress >= 60 ? 'good' : 'needs-improvement';
+          const grade = progress >= 80 ? 'A' : progress >= 70 ? 'B+' : progress >= 60 ? 'B' : 'C';
+          return {
+            subject: course.courseName,
+            progress,
+            grade,
+            status,
+          };
+        });
+        setCoursePerformance(performance.slice(0, 3));
+
+        setOverviewStats({
+          overallProgress,
+          completionRate,
+          riskLevel,
+          achievements,
+        });
+
+        setLearningGoals(goalsData?.data?.goals || []);
+        if (payload) {
+          const engagement = payload.total_clicks || 0;
+          const engagementText =
+            engagement > 0
+              ? `You’ve logged ${engagement.toLocaleString()} interactions so far. Keep the momentum going.`
+              : 'We don’t have enough activity data yet. Start engaging with tasks to build insights.';
+          const completionText =
+            completionRate >= 70
+              ? 'Strong completion rate. You’re keeping up with your coursework.'
+              : completionRate > 0
+              ? 'Your completion rate is below target. Focus on finishing pending tasks.'
+              : 'No completion data yet. Complete a task to begin tracking progress.';
+          const riskText =
+            riskLevel === 'high'
+              ? 'You are currently at high risk. Prioritize overdue items this week.'
+              : riskLevel === 'medium'
+              ? 'You are at medium risk. Small improvements can lift your standing.'
+              : riskLevel === 'low'
+              ? 'Low risk detected. Keep your current pace steady.'
+              : 'Risk level is not available yet.';
+          setInsights([
+            { title: 'Engagement Snapshot', message: engagementText },
+            { title: 'Completion Status', message: completionText },
+            { title: 'Risk Guidance', message: riskText },
+          ]);
+        } else {
+          setInsights([
+            { title: 'Engagement Snapshot', message: 'Engagement data is not available yet.' },
+            { title: 'Completion Status', message: 'Completion data is not available yet.' },
+            { title: 'Risk Guidance', message: 'Risk data is not available yet.' },
+          ]);
+        }
         setIsLoading(false);
       } catch (err) {
         console.error('Error fetching student data:', err);
@@ -86,72 +213,34 @@ export default function StudentDashboard() {
   const analyticsStats = [
     {
       label: 'Overall Progress',
-      value: '85%',
+      value: `${overviewStats.overallProgress}%`,
       icon: <TrendingUp size={24} />,
       color: 'blue',
-      change: '+12%',
     },
     {
       label: 'Completion Rate',
-      value: '92%',
+      value: `${overviewStats.completionRate.toFixed(1)}%`,
       icon: <CheckCircle2 size={24} />,
       color: 'green',
-      change: '+8%',
     },
     {
-      label: 'At Risk',
-      value: '2',
+      label: 'Risk Level',
+      value: overviewStats.riskLevel.toUpperCase(),
       icon: <AlertCircle size={24} />,
-      color: 'red',
-      change: '-1',
+      color: overviewStats.riskLevel === 'high' ? 'red' : overviewStats.riskLevel === 'medium' ? 'amber' : 'green',
     },
     {
       label: 'Achievements',
-      value: '15',
+      value: `${overviewStats.achievements}`,
       icon: <Award size={24} />,
       color: 'amber',
-      change: '+3',
     },
   ];
 
-  const performanceMetrics = [
-    {
-      subject: 'Software Engineering Fundamentals',
-      progress: 88,
-      grade: 'A',
-      status: 'excellent',
-    },
-    {
-      subject: 'Data Structures & Algorithms',
-      progress: 75,
-      grade: 'B+',
-      status: 'good',
-    },
-    {
-      subject: 'Database Management Systems',
-      progress: 65,
-      grade: 'B',
-      status: 'needs-improvement',
-    },
-  ];
+  const performanceMetrics = coursePerformance;
 
-  const learningGoals = [
-    {
-      goal: 'Complete ML module',
-      deadline: '2 weeks',
-      progress: 60,
-    },
-    {
-      goal: 'Improve coding speed',
-      deadline: '1 month',
-      progress: 40,
-    },
-    {
-      goal: 'Master React Hooks',
-      deadline: '3 weeks',
-      progress: 75,
-    },
-  ];
+  const formatTargetDate = (date: string) =>
+    new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   const getStatColor = (color: string) => {
     const colors: { [key: string]: string } = {
@@ -241,10 +330,6 @@ export default function StudentDashboard() {
             </div>
             <div className="flex items-end justify-between">
               <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-              <span className={`text-sm font-medium ${stat.change.startsWith('+') ? 'text-green-600' : 'text-red-600'
-                }`}>
-                {stat.change}
-              </span>
             </div>
           </div>
         ))}
@@ -262,6 +347,11 @@ export default function StudentDashboard() {
               <BarChart3 className="text-gray-400" size={20} />
             </div>
             <div className="space-y-4">
+              {performanceMetrics.length === 0 && (
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-600">
+                  No course performance data yet.
+                </div>
+              )}
               {performanceMetrics.map((metric, index) => (
                 <div
                   key={index}
@@ -307,21 +397,22 @@ export default function StudentDashboard() {
               <Target className="text-gray-400" size={20} />
             </div>
             <div className="space-y-4">
-              {learningGoals.map((goal, index) => (
-                <div key={index} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+              {learningGoals.length === 0 && (
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-600">
+                  No goals yet.
+                </div>
+              )}
+              {learningGoals.map((goal) => (
+                <div key={goal._id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold text-gray-900">{goal.goal}</h3>
+                    <h3 className="font-semibold text-gray-900">{goal.title}</h3>
                     <span className="text-sm text-gray-600 bg-white px-2 py-1 rounded">
-                      {goal.deadline}
+                      {formatTargetDate(goal.targetDate)}
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-500 h-2 rounded-full"
-                      style={{ width: `${goal.progress}%` }}
-                    ></div>
-                  </div>
-                  <p className="text-xs text-gray-600 mt-1">{goal.progress}% complete</p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Status: {goal.status === 'inprogress' ? 'In Progress' : goal.status === 'todo' || goal.status === 'active' ? 'To Do' : 'Done'}
+                  </p>
                 </div>
               ))}
             </div>
@@ -337,30 +428,16 @@ export default function StudentDashboard() {
               AI Insights
             </h2>
             <div className="space-y-4">
-              <div className="bg-white rounded-lg p-3">
-                <p className="text-sm font-semibold text-gray-900 mb-1">
-                  📈 Strong Performance
-                </p>
-                <p className="text-xs text-gray-600">
-                  Your completion rate is 12% higher than class average. Keep up the excellent work!
-                </p>
-              </div>
-              <div className="bg-white rounded-lg p-3">
-                <p className="text-sm font-semibold text-gray-900 mb-1">
-                  ⚠️ Needs Attention
-                </p>
-                <p className="text-xs text-gray-600">
-                  Database Management needs more focus. Consider reviewing past modules.
-                </p>
-              </div>
-              <div className="bg-white rounded-lg p-3">
-                <p className="text-sm font-semibold text-gray-900 mb-1">
-                  💡 Recommendation
-                </p>
-                <p className="text-xs text-gray-600">
-                  You excel at morning study sessions. Schedule complex topics for 9-11 AM.
-                </p>
-              </div>
+              {insights.map((insight, index) => (
+                <div key={index} className="bg-white rounded-lg p-3">
+                  <p className="text-sm font-semibold text-gray-900 mb-1">
+                    {insight.title}
+                  </p>
+                  <p className="text-xs text-gray-600">
+                    {insight.message}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -374,27 +451,12 @@ export default function StudentDashboard() {
                 <BookOpen size={18} />
                 View Full Report
               </Link>
-              <Link href={'#'} className="w-full border border-gray-300 hover:border-gray-400 text-gray-700 py-2 rounded-lg font-medium transition-colors">
+              <Link href={'/learning-analytics/student/learning-goals'} className="w-full border border-gray-300 hover:border-gray-400 text-gray-700 py-2 rounded-lg font-medium transition-colors">
                 Set New Goal
-              </Link>
-              <Link href={'#'} className="w-full border border-gray-300 hover:border-gray-400 text-gray-700 py-2 rounded-lg font-medium transition-colors">
-                Compare with Peers
               </Link>
             </div>
           </div>
 
-          {/* Study Tip */}
-          <div className="bg-linear-to-br from-green-50 to-green-100 rounded-lg shadow p-6 border border-green-200">
-            <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
-              💡 Study Tip
-            </h3>
-            <p className="text-sm text-gray-700 mb-3">
-              The Pomodoro Technique: Study for 25 minutes, then take a 5-minute break. This improves focus and retention.
-            </p>
-            <button className="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 rounded transition-colors">
-              Learn More
-            </button>
-          </div>
         </div>
       </div>
     </div>
