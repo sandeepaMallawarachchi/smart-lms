@@ -32,8 +32,7 @@ interface LearningGoal {
   _id: string;
   title: string;
   targetDate: string;
-  progress: number;
-  status: 'active' | 'completed' | 'overdue' | 'cancelled';
+  status: 'todo' | 'inprogress' | 'done' | 'active' | 'completed';
 }
 
 interface Course {
@@ -115,7 +114,7 @@ export default function StudentDashboard() {
         const [featuresRes, predictionRes, goalsRes, projectsRes, tasksRes, coursesRes] = await Promise.all([
           fetch('/api/learning-analytics/features', { headers }),
           fetch('/api/predictions/latest', { headers }),
-          fetch('/api/student/learning-goals?status=active', { headers }),
+          fetch('/api/student/learning-goals?status=all', { headers }),
           fetch('/api/student/project-progress/projects', { headers }),
           fetch('/api/student/task-progress/tasks', { headers }),
           fetch('/api/student/get-courses', { headers }),
@@ -400,7 +399,7 @@ export default function StudentDashboard() {
             <div className="space-y-4">
               {learningGoals.length === 0 && (
                 <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-600">
-                  No active goals yet.
+                  No goals yet.
                 </div>
               )}
               {learningGoals.map((goal) => (
@@ -411,13 +410,9 @@ export default function StudentDashboard() {
                       {formatTargetDate(goal.targetDate)}
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-500 h-2 rounded-full"
-                      style={{ width: `${goal.progress}%` }}
-                    ></div>
-                  </div>
-                  <p className="text-xs text-gray-600 mt-1">{goal.progress}% complete</p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Status: {goal.status === 'inprogress' ? 'In Progress' : goal.status === 'todo' || goal.status === 'active' ? 'To Do' : 'Done'}
+                  </p>
                 </div>
               ))}
             </div>

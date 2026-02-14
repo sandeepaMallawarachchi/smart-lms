@@ -4,18 +4,14 @@ import React, { useEffect, useState } from 'react';
 import {
   Target,
   Plus,
-  Filter,
   Calendar,
-  Flag,
-  Tag,
   CheckCircle2,
   Clock,
   AlertCircle,
   X,
-  Edit,
   Trash2,
-  ChevronRight,
 } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 
 interface Goal {
   _id: string;
@@ -24,8 +20,7 @@ interface Goal {
   category: 'academic' | 'skill' | 'project' | 'career' | 'personal';
   targetDate: string;
   priority: 'low' | 'medium' | 'high';
-  status: 'active' | 'completed' | 'overdue' | 'cancelled';
-  progress: number;
+  status: 'todo' | 'inprogress' | 'done';
   milestones: Array<{
     id: string;
     title: string;
@@ -33,22 +28,22 @@ interface Goal {
   }>;
   tags: string[];
   courseId?: { _id: string; courseName: string };
-  completedAt?: string;
   createdAt: string;
 }
 
 export default function LearningGoalsPage() {
+  const searchParams = useSearchParams();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [filterStatus, setFilterStatus] = useState('active');
+  const [filterStatus, setFilterStatus] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [stats, setStats] = useState({
     total: 0,
-    active: 0,
-    completed: 0,
-    overdue: 0,
-    avgProgress: 0,
+    todo: 0,
+    inprogress: 0,
+    done: 0,
   });
 
   // Form state
@@ -65,6 +60,19 @@ export default function LearningGoalsPage() {
   useEffect(() => {
     fetchGoals();
   }, [filterStatus, filterCategory]);
+
+  useEffect(() => {
+    const statusParam = searchParams.get('status');
+    if (statusParam && ['all', 'todo', 'inprogress', 'done'].includes(statusParam)) {
+      setFilterStatus(statusParam);
+    }
+    if (!statusParam) {
+      setFilterStatus('all');
+    }
+
+    const actionParam = searchParams.get('action');
+    setShowCreateModal(actionParam === 'create');
+  }, [searchParams]);
 
   const fetchGoals = async () => {
     try {
@@ -125,10 +133,14 @@ export default function LearningGoalsPage() {
     }
   };
 
-  const handleUpdateProgress = async (goalId: string, newProgress: number) => {
+  const handleUpdateStatus = async (goalId: string, newStatus: Goal['status']) => {
     try {
+      setActionError(null);
       const token = localStorage.getItem('authToken');
-      if (!token) return;
+      if (!token) {
+        setActionError('Not authenticated');
+        return;
+      }
 
       const response = await fetch(`/api/student/learning-goals/${goalId}`, {
         method: 'PATCH',
@@ -136,14 +148,19 @@ export default function LearningGoalsPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ progress: newProgress }),
+        body: JSON.stringify({ status: newStatus }),
       });
 
       if (response.ok) {
         fetchGoals();
+      } else {
+        const errorText = await response.text();
+        setActionError(`Failed to update status: ${errorText}`);
+        console.error('Failed to update goal status', errorText);
       }
     } catch (error) {
-      console.error('Error updating progress:', error);
+      console.error('Error updating status:', error);
+      setActionError('Error updating status');
     }
   };
 
@@ -208,12 +225,14 @@ export default function LearningGoalsPage() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
+      case 'done':
       case 'completed':
         return <CheckCircle2 className="text-green-600" size={20} />;
-      case 'overdue':
-        return <AlertCircle className="text-red-600" size={20} />;
-      case 'active':
+      case 'inprogress':
         return <Clock className="text-blue-600" size={20} />;
+      case 'todo':
+      case 'active':
+        return <AlertCircle className="text-amber-600" size={20} />;
       default:
         return <Target className="text-gray-600" size={20} />;
     }
@@ -234,6 +253,14 @@ export default function LearningGoalsPage() {
       default:
         return 'bg-gray-100 text-gray-700';
     }
+  };
+
+  const normalizeGoalStatus = (status: string): Goal['status'] => {
+    if (status === 'active') return 'todo';
+    if (status === 'completed') return 'done';
+    if (status === 'inprogress') return 'inprogress';
+    if (status === 'done') return 'done';
+    return 'todo';
   };
 
   if (isLoading) {
@@ -260,42 +287,40 @@ export default function LearningGoalsPage() {
         <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-blue-600">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 mb-1">Active Goals</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.active}</p>
+              <p className="text-sm text-gray-600 mb-1">To Do</p>
+              <p className="text-3xl font-bold text-gray-900">{stats.todo}</p>
             </div>
-            <Clock className="text-blue-600" size={40} />
+            <AlertCircle className="text-amber-600" size={40} />
           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-green-600">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 mb-1">Completed</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.completed}</p>
+              <p className="text-sm text-gray-600 mb-1">Done</p>
+              <p className="text-3xl font-bold text-gray-900">{stats.done}</p>
             </div>
             <CheckCircle2 className="text-green-600" size={40} />
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-red-600">
+        <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-blue-600">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 mb-1">Overdue</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.overdue}</p>
+              <p className="text-sm text-gray-600 mb-1">In Progress</p>
+              <p className="text-3xl font-bold text-gray-900">{stats.inprogress}</p>
             </div>
-            <AlertCircle className="text-red-600" size={40} />
+            <Clock className="text-blue-600" size={40} />
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-amber-600">
+        <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-gray-600">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 mb-1">Avg Progress</p>
-              <p className="text-3xl font-bold text-gray-900">
-                {stats.avgProgress.toFixed(0)}%
-              </p>
+              <p className="text-sm text-gray-600 mb-1">Total Goals</p>
+              <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
             </div>
-            <Target className="text-amber-600" size={40} />
+            <Target className="text-gray-600" size={40} />
           </div>
         </div>
       </div>
@@ -309,9 +334,9 @@ export default function LearningGoalsPage() {
             className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="completed">Completed</option>
-            <option value="overdue">Overdue</option>
+            <option value="todo">To Do</option>
+            <option value="inprogress">In Progress</option>
+            <option value="done">Done</option>
           </select>
 
           <select
@@ -336,6 +361,12 @@ export default function LearningGoalsPage() {
           Create New Goal
         </button>
       </div>
+
+      {actionError && (
+        <div className="mb-6 p-3 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm">
+          {actionError}
+        </div>
+      )}
 
       {/* Goals Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -372,42 +403,20 @@ export default function LearningGoalsPage() {
                 </div>
               </div>
 
-              {/* Progress Bar */}
+              {/* Status */}
               <div className="mb-4">
                 <div className="flex justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700">Progress</span>
-                  <span className="text-sm font-bold text-gray-900">
-                    {goal.progress}%
-                  </span>
+                  <span className="text-sm font-medium text-gray-700">Status</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div
-                    className={`h-3 rounded-full transition-all duration-300 ${
-                      goal.progress === 100
-                        ? 'bg-green-600'
-                        : goal.status === 'overdue'
-                        ? 'bg-red-600'
-                        : 'bg-blue-600'
-                    }`}
-                    style={{ width: `${goal.progress}%` }}
-                  ></div>
-                </div>
-
-                {/* Progress Control */}
-                {goal.status !== 'completed' && (
-                  <div className="mt-2 flex gap-2">
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={goal.progress}
-                      onChange={(e) =>
-                        handleUpdateProgress(goal._id, parseInt(e.target.value))
-                      }
-                      className="flex-1"
-                    />
-                  </div>
-                )}
+                <select
+                  value={normalizeGoalStatus(goal.status)}
+                  onChange={(e) => handleUpdateStatus(goal._id, e.target.value as Goal['status'])}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="todo">To Do</option>
+                  <option value="inprogress">In Progress</option>
+                  <option value="done">Done</option>
+                </select>
               </div>
 
               {/* Milestones */}
