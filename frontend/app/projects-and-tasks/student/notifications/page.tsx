@@ -69,7 +69,7 @@ export default function NotificationsPage() {
   const handleMarkRead = async (notificationId: string) => {
     try {
       const token = localStorage.getItem('authToken');
-      await fetch('/api/notifications/mark-read', {
+      await fetch('/api/projects-and-tasks/student/notifications/mark-read', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

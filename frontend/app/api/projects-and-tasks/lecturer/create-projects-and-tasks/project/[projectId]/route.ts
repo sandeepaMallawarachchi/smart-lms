@@ -1,8 +1,9 @@
 // /app/api/projects-and-tasks/lecturer/create-projects-and-tasks/project/[projectId]/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { Project } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
+import { Project, StudentProjectProgress } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
 import { connectDB } from '@/lib/db';
+import { scheduleReminderJobsForStudentItem } from '@/lib/projects-and-tasks/reminders/scheduler';
 
 export async function GET(
   request: NextRequest,
@@ -67,6 +68,14 @@ export async function PUT(
       );
     }
 
+    const existingProject = await Project.findById(projectId).lean();
+    if (!existingProject) {
+      return NextResponse.json(
+        { message: 'Project not found' },
+        { status: 404 }
+      );
+    }
+
     const body = await request.json();
     console.log('Request body:', body);
 
@@ -113,6 +122,33 @@ export async function PUT(
       return NextResponse.json(
         { message: 'Project not found' },
         { status: 404 }
+      );
+    }
+
+    const shouldRescheduleReminders =
+      existingProject.deadlineDate !== updatedProject.deadlineDate ||
+      (existingProject.deadlineTime || '23:59') !== (updatedProject.deadlineTime || '23:59') ||
+      existingProject.projectName !== updatedProject.projectName;
+
+    if (shouldRescheduleReminders) {
+      const activeProgress = await StudentProjectProgress.find({
+        projectId,
+        status: 'inprogress',
+      })
+        .select('studentId')
+        .lean();
+
+      await Promise.all(
+        activeProgress.map((row: { studentId: string }) =>
+          scheduleReminderJobsForStudentItem({
+            studentId: row.studentId,
+            itemType: 'project',
+            itemId: projectId,
+            itemName: updatedProject.projectName,
+            deadlineDate: updatedProject.deadlineDate,
+            deadlineTime: updatedProject.deadlineTime || '23:59',
+          })
+        )
       );
     }
 

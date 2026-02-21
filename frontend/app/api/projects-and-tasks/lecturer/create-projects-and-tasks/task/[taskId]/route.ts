@@ -1,8 +1,9 @@
 // /app/api/projects-and-tasks/lecturer/create-projects-and-tasks/task/[taskId]/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { Task } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
+import { Task, StudentTaskProgress } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
 import { connectDB } from '@/lib/db';
+import { scheduleReminderJobsForStudentItem, cancelReminderJobsForStudentItem } from '@/lib/projects-and-tasks/reminders/scheduler';
 
 export async function GET(
   request: NextRequest,
@@ -67,6 +68,14 @@ export async function PUT(
       );
     }
 
+    const existingTask = await Task.findById(taskId).lean();
+    if (!existingTask) {
+      return NextResponse.json(
+        { message: 'Task not found' },
+        { status: 404 }
+      );
+    }
+
     const body = await request.json();
     console.log('Request body:', body);
 
@@ -99,6 +108,45 @@ export async function PUT(
         { message: 'Task not found' },
         { status: 404 }
       );
+    }
+
+    const deadlineChanged =
+      (existingTask.deadlineDate || '') !== (updatedTask.deadlineDate || '') ||
+      (existingTask.deadlineTime || '23:59') !== (updatedTask.deadlineTime || '23:59');
+    const nameChanged = existingTask.taskName !== updatedTask.taskName;
+    const shouldRescheduleReminders = deadlineChanged || nameChanged;
+
+    if (shouldRescheduleReminders) {
+      const activeProgress = await StudentTaskProgress.find({
+        taskId,
+        status: 'inprogress',
+      })
+        .select('studentId')
+        .lean();
+
+      if (updatedTask.deadlineDate) {
+        await Promise.all(
+          activeProgress.map((row: { studentId: string }) =>
+            scheduleReminderJobsForStudentItem({
+              studentId: row.studentId,
+              itemType: 'task',
+              itemId: taskId,
+              itemName: updatedTask.taskName,
+              deadlineDate: updatedTask.deadlineDate,
+              deadlineTime: updatedTask.deadlineTime || '23:59',
+            })
+          )
+        );
+      } else {
+        await Promise.all(
+          activeProgress.map((row: { studentId: string }) =>
+            cancelReminderJobsForStudentItem({
+              studentId: row.studentId,
+              taskId,
+            })
+          )
+        );
+      }
     }
 
     console.log('Task updated successfully');
