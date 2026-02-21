@@ -3,12 +3,12 @@
 'use client';
 
 import React from 'react';
-import { FileText, CheckCircle2, Sparkles } from 'lucide-react';
+import { FileText, CheckCircle2, Sparkles, CodeXml } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface TabSelectorProps {
-  activeTab: 'project' | 'task';
-  onTabChange: (tab: 'project' | 'task') => void;
+  activeTab: 'project' | 'task' | 'code';
+  onTabChange: (tab: 'project' | 'task' | 'code') => void;
 }
 
 export default function TabSelector({ activeTab, onTabChange }: TabSelectorProps) {
@@ -111,6 +111,52 @@ export default function TabSelector({ activeTab, onTabChange }: TabSelectorProps
 
           {/* Active indicator dot */}
           {activeTab === 'task' && (
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="w-2 h-2 bg-brand-blue rounded-full ml-1"
+              transition={{ duration: 0.3 }}
+            />
+          )}
+        </motion.button>
+
+        {/* Code Tab */}
+        <motion.button
+          variants={tabVariants}
+          initial="initial"
+          animate="animate"
+          whileHover="hover"
+          whileTap="tap"
+          onClick={() => onTabChange('code')}
+          transition={{ duration: 0.3, delay: 0.05 }}
+          className={`relative px-6 py-3 font-semibold flex items-center gap-2.5 rounded-t-xl transition-all group ${
+            activeTab === 'code'
+              ? 'bg-white text-brand-blue shadow-md shadow-brand-blue/10'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+          }`}
+        >
+          {/* Active Tab Background */}
+          {activeTab === 'code' && (
+            <motion.div
+              layoutId="activeTab"
+              className="absolute inset-0 bg-white rounded-t-xl -z-10"
+              transition={{ duration: 0.3, type: 'spring', stiffness: 380, damping: 30 }}
+            />
+          )}
+
+          {/* Icon with rotation animation */}
+          <motion.div
+            animate={{ rotate: activeTab === 'code' ? 0 : -15 }}
+            transition={{ duration: 0.3 }}
+            className="group-hover:text-brand-blue transition-colors"
+          >
+            <CodeXml size={20} strokeWidth={2.5} />
+          </motion.div>
+
+          <span className="font-semibold tracking-tight">Create Code</span>
+
+          {/* Active indicator dot */}
+          {activeTab === 'code' && (
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}

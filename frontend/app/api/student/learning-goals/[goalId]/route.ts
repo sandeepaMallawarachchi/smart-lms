@@ -38,42 +38,51 @@ export async function PATCH(
 
     const body = await request.json();
 
-    // Find goal and verify ownership
-    const goal = await LearningGoal.findOne({
-      _id: goalId,
-      studentId: payload.userId,
-    });
+    const updateData: Record<string, any> = {};
+    if (body.title !== undefined) updateData.title = body.title;
+    if (body.description !== undefined) updateData.description = body.description;
+    if (body.category !== undefined) updateData.category = body.category;
+    if (body.targetDate !== undefined) updateData.targetDate = new Date(body.targetDate);
+    if (body.priority !== undefined) updateData.priority = body.priority;
+    if (body.status !== undefined) {
+      if (body.status === 'active') updateData.status = 'todo';
+      else if (body.status === 'completed') updateData.status = 'done';
+      else if (body.status === 'overdue' || body.status === 'cancelled') updateData.status = 'todo';
+      else updateData.status = body.status;
+      if (!['todo', 'inprogress', 'done'].includes(updateData.status)) {
+        return serverErrorResponse(`Invalid status value: ${String(updateData.status)}`);
+      }
+    }
+    if (body.progress !== undefined && body.status === undefined) {
+      const progress = Math.min(100, Math.max(0, body.progress));
+      if (progress >= 100) updateData.status = 'done';
+      else if (progress > 0) updateData.status = 'inprogress';
+      else updateData.status = 'todo';
+    }
+    if (body.milestones !== undefined) updateData.milestones = body.milestones;
+    if (body.tags !== undefined) updateData.tags = body.tags;
+    if (body.courseId !== undefined) updateData.courseId = body.courseId;
+
+    if (Object.keys(updateData).length === 0) {
+      return successResponse('No updates provided', null, 200);
+    }
+
+    const statusOnlyUpdate = Object.keys(updateData).every((k) => k === 'status' || k === 'progress');
+
+    const goal = await LearningGoal.findOneAndUpdate(
+      { _id: goalId, studentId: payload.userId },
+      { $set: updateData },
+      { new: true, runValidators: !statusOnlyUpdate }
+    );
 
     if (!goal) {
       return notFoundResponse('Goal not found');
     }
 
-    // Update fields
-    if (body.title !== undefined) goal.title = body.title;
-    if (body.description !== undefined) goal.description = body.description;
-    if (body.category !== undefined) goal.category = body.category;
-    if (body.targetDate !== undefined) goal.targetDate = new Date(body.targetDate);
-    if (body.priority !== undefined) goal.priority = body.priority;
-    if (body.status !== undefined) goal.status = body.status;
-    if (body.progress !== undefined) {
-      goal.progress = Math.min(100, Math.max(0, body.progress));
-      
-      // Auto-complete if progress reaches 100%
-      if (goal.progress === 100 && goal.status !== 'completed') {
-        goal.status = 'completed';
-        goal.completedAt = new Date();
-      }
-    }
-    if (body.milestones !== undefined) goal.milestones = body.milestones;
-    if (body.tags !== undefined) goal.tags = body.tags;
-    if (body.courseId !== undefined) goal.courseId = body.courseId;
-
-    await goal.save();
-
     return successResponse('Goal updated successfully', { goal }, 200);
   } catch (error: any) {
     console.error('Update goal error:', error);
-    return serverErrorResponse('An error occurred while updating goal');
+    return serverErrorResponse(`An error occurred while updating goal: ${error?.message || 'Unknown error'}`);
   }
 }
 

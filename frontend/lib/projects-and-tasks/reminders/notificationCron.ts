@@ -126,6 +126,11 @@ export function startNotificationCron() {
             message: `${item.projectName} deadline is today`,
             description: `Today is the deadline for ${item.projectName}. Complete it now! ${progressSummary}.`,
           },
+          project_overdue: {
+            title: '❌ Deadline Overdue!!!',
+            message: `${item.taskName} deadline is overdued`,
+            description: `Deadline for ${item.taskName} is overdued. Late submit it! ${progressSummary}.`,
+          },
           task_25: {
             title: '⏰ Time to Start!',
             message: `${item.taskName} deadline approaching`,
@@ -145,6 +150,11 @@ export function startNotificationCron() {
             title: '🚨 Deadline Today!',
             message: `${item.taskName} deadline is today`,
             description: `Today is the deadline for ${item.taskName}. Complete it now! ${progressSummary}.`,
+          },
+          task_overdue: {
+            title: '❌ Deadline Overdue!!!',
+            message: `${item.taskName} deadline is overdued`,
+            description: `Deadline for ${item.taskName} is overdued. Late submit it! ${progressSummary}.`,
           },
         };
 

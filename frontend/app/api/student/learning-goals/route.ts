@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
             category: category || 'academic',
             targetDate: new Date(targetDate),
             priority: priority || 'medium',
-            status: 'active',
+            status: 'todo',
             progress: 0,
             milestones: milestones || [],
             tags: tags || [],
@@ -93,7 +93,15 @@ export async function GET(request: NextRequest) {
         let query: any = { studentId: payload.userId };
 
         if (status && status !== 'all') {
-            query.status = status;
+            if (status === 'todo') {
+                query.status = { $in: ['todo', 'active'] };
+            } else if (status === 'inprogress') {
+                query.status = { $in: ['inprogress'] };
+            } else if (status === 'done') {
+                query.status = { $in: ['done', 'completed'] };
+            } else {
+                query.status = status;
+            }
         }
 
         if (category && category !== 'all') {
@@ -112,13 +120,9 @@ export async function GET(request: NextRequest) {
         // Calculate statistics
         const stats = {
             total: goals.length,
-            active: goals.filter((g) => g.status === 'active').length,
-            completed: goals.filter((g) => g.status === 'completed').length,
-            overdue: goals.filter((g) => g.status === 'overdue').length,
-            avgProgress:
-                goals.length > 0
-                    ? goals.reduce((sum, g) => sum + g.progress, 0) / goals.length
-                    : 0,
+            todo: goals.filter((g) => g.status === 'todo' || g.status === 'active').length,
+            inprogress: goals.filter((g) => g.status === 'inprogress').length,
+            done: goals.filter((g) => g.status === 'done' || g.status === 'completed').length,
         };
 
         return successResponse(

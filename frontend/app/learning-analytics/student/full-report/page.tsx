@@ -55,6 +55,7 @@ export default function FullReportPage() {
     const router = useRouter();
     const [studentData, setStudentData] = useState<StudentData | null>(null);
     const [prediction, setPrediction] = useState<PredictionResponse | null>(null);
+    const [inputData, setInputData] = useState<Record<string, any> | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -133,42 +134,26 @@ export default function FullReportPage() {
                 const student = studentResult.data.student;
                 setStudentData(student);
 
-                // Calculate age and age band
-                const age = calculateAge(student.dateOfBirth);
-                const ageBand = getAgeBand(age);
-                const gender = convertGender(student.gender);
+                // Compute real prediction payload from available data sources
+                const featuresResponse = await fetch('/api/learning-analytics/features', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
 
-                // Prepare prediction payload
-                const predictionPayload = {
-                    student_id: student.studentIdNumber,
-                    total_clicks: 5000,
-                    avg_clicks_per_day: 50,
-                    clicks_std: 25,
-                    max_clicks_single_day: 150,
-                    days_active: 100,
-                    study_span_days: 120,
-                    engagement_regularity: 0.5,
-                    pre_course_clicks: 200,
-                    avg_score: 75,
-                    score_std: 10,
-                    min_score: 60,
-                    max_score: 90,
-                    completion_rate: 0.9,
-                    first_score: 70,
-                    score_improvement: 20,
-                    avg_days_early: 2,
-                    timing_consistency: 3,
-                    worst_delay: -1,
-                    late_submission_count: 1,
-                    num_of_prev_attempts: 0,
-                    studied_credits: 60,
-                    early_registration: 1,
-                    withdrew: 0,
-                    gender: gender,
-                    age_band: ageBand,
-                    highest_education: "A Level or Equivalent",
-                    disability: "N"
-                };
+                if (!featuresResponse.ok) {
+                    setError('Failed to compute prediction features');
+                    setIsLoading(false);
+                    return;
+                }
+
+                const featuresData = await featuresResponse.json();
+                const predictionPayload = featuresData.data?.payload;
+
+                if (!predictionPayload) {
+                    setError('Prediction payload missing');
+                    setIsLoading(false);
+                    return;
+                }
+                setInputData(predictionPayload);
 
                 // Call prediction API
                 const predictionResponse = await fetch('http://127.0.0.1:5000/api/predict', {
@@ -187,7 +172,7 @@ export default function FullReportPage() {
 
                 const predictionData = await predictionResponse.json();
                 setPrediction(predictionData);
-                await savePredictionToDatabase(predictionData, student, token);
+                await savePredictionToDatabase(predictionData, predictionPayload, student, token);
                 setIsLoading(false);
             } catch (err) {
                 console.error('Error:', err);
@@ -201,42 +186,16 @@ export default function FullReportPage() {
 
     const savePredictionToDatabase = async (
         predictionData: PredictionResponse,
+        inputPayload: Record<string, any>,
         student: StudentData,
         token: string
     ) => {
         try {
+            const { student_id: _studentId, ...inputData } = inputPayload;
             const savePayload = {
                 studentId: student._id,
-                studentIdNumber: student.studentIdNumber,
-                inputData: {
-                    total_clicks: 5000,
-                    avg_clicks_per_day: 50,
-                    clicks_std: 25,
-                    max_clicks_single_day: 150,
-                    days_active: 100,
-                    study_span_days: 120,
-                    engagement_regularity: 0.5,
-                    pre_course_clicks: 200,
-                    avg_score: 75,
-                    score_std: 10,
-                    min_score: 60,
-                    max_score: 90,
-                    completion_rate: 0.9,
-                    first_score: 70,
-                    score_improvement: 20,
-                    avg_days_early: 2,
-                    timing_consistency: 3,
-                    worst_delay: -1,
-                    late_submission_count: 1,
-                    num_of_prev_attempts: 0,
-                    studied_credits: 60,
-                    early_registration: 1,
-                    withdrew: 0,
-                    gender: convertGender(student.gender),
-                    age_band: getAgeBand(calculateAge(student.dateOfBirth)),
-                    highest_education: "A Level or Equivalent",
-                    disability: "N"
-                },
+                studentIdNumber: student.studentIdNumber.toLowerCase(),
+                inputData,
                 prediction: predictionData.prediction,
                 recommendations: predictionData.prediction.recommendations,
                 apiTimestamp: predictionData.timestamp,
@@ -257,7 +216,8 @@ export default function FullReportPage() {
             if (saveResponse.ok) {
                 console.log('Prediction saved successfully');
             } else {
-                console.error('Failed to save prediction');
+                const errorText = await saveResponse.text();
+                console.error('Failed to save prediction', errorText);
             }
         } catch (err) {
             console.error('Error saving prediction:', err);
@@ -484,30 +444,45 @@ export default function FullReportPage() {
                             <div>
                                 <div className="flex justify-between mb-1">
                                     <span className="text-sm text-gray-600">Engagement</span>
-                                    <span className="text-sm font-semibold text-gray-900">5,000 clicks</span>
+                                    <span className="text-sm font-semibold text-gray-900">
+                                        {(inputData?.total_clicks ?? 0).toLocaleString()} clicks
+                                    </span>
                                 </div>
                                 <div className="w-full bg-gray-200 rounded-full h-2">
-                                    <div className="bg-blue-600 h-2 rounded-full" style={{ width: '85%' }}></div>
+                                    <div
+                                        className="bg-blue-600 h-2 rounded-full"
+                                        style={{ width: `${Math.min(100, (inputData?.total_clicks ?? 0) / 50)}%` }}
+                                    ></div>
                                 </div>
                             </div>
 
                             <div>
                                 <div className="flex justify-between mb-1">
                                     <span className="text-sm text-gray-600">Completion Rate</span>
-                                    <span className="text-sm font-semibold text-gray-900">90%</span>
+                                    <span className="text-sm font-semibold text-gray-900">
+                                        {((inputData?.completion_rate ?? 0) * 100).toFixed(1)}%
+                                    </span>
                                 </div>
                                 <div className="w-full bg-gray-200 rounded-full h-2">
-                                    <div className="bg-green-600 h-2 rounded-full" style={{ width: '90%' }}></div>
+                                    <div
+                                        className="bg-green-600 h-2 rounded-full"
+                                        style={{ width: `${Math.min(100, (inputData?.completion_rate ?? 0) * 100)}%` }}
+                                    ></div>
                                 </div>
                             </div>
 
                             <div>
                                 <div className="flex justify-between mb-1">
                                     <span className="text-sm text-gray-600">Average Score</span>
-                                    <span className="text-sm font-semibold text-gray-900">75%</span>
+                                    <span className="text-sm font-semibold text-gray-900">
+                                        {(inputData?.avg_score ?? 0).toFixed(1)}%
+                                    </span>
                                 </div>
                                 <div className="w-full bg-gray-200 rounded-full h-2">
-                                    <div className="bg-amber-600 h-2 rounded-full" style={{ width: '75%' }}></div>
+                                    <div
+                                        className="bg-amber-600 h-2 rounded-full"
+                                        style={{ width: `${Math.min(100, inputData?.avg_score ?? 0)}%` }}
+                                    ></div>
                                 </div>
                             </div>
                         </div>
@@ -519,19 +494,27 @@ export default function FullReportPage() {
                         <div className="space-y-3">
                             <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
                                 <span className="text-sm text-gray-600">Days Active</span>
-                                <span className="font-bold text-gray-900">100 days</span>
+                                <span className="font-bold text-gray-900">
+                                    {inputData?.days_active ?? 0} days
+                                </span>
                             </div>
                             <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
                                 <span className="text-sm text-gray-600">Score Improvement</span>
-                                <span className="font-bold text-green-600">+20%</span>
+                                <span className="font-bold text-green-600">
+                                    {inputData?.score_improvement ?? 0}%
+                                </span>
                             </div>
                             <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
                                 <span className="text-sm text-gray-600">Late Submissions</span>
-                                <span className="font-bold text-red-600">1</span>
+                                <span className="font-bold text-red-600">
+                                    {inputData?.late_submission_count ?? 0}
+                                </span>
                             </div>
                             <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
                                 <span className="text-sm text-gray-600">Credits Studied</span>
-                                <span className="font-bold text-gray-900">60</span>
+                                <span className="font-bold text-gray-900">
+                                    {inputData?.studied_credits ?? 0}
+                                </span>
                             </div>
                         </div>
                     </div>
