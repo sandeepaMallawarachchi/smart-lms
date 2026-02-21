@@ -8,6 +8,7 @@ import { ChevronRight, FileText, CheckCircle2, Loader, ChevronDown, ChevronUp, D
 import { motion, AnimatePresence } from 'framer-motion';
 import { Edit } from 'lucide-react';
 import EditProjectTaskModal from '@/components/projects-and-tasks/lecturer/view/EditProjectTaskModal';
+import { useRouter } from 'next/navigation';
 
 // ============ INTERFACES ============
 interface Subtask {
@@ -73,18 +74,14 @@ interface SelectedCourse {
 const getDeadlineStatus = (deadlineDate: string, deadlineTime: string = '23:59') => {
   try {
     const deadline = new Date(`${deadlineDate}T${deadlineTime}`);
-    const now = new Date();
-    const hoursUntil = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
-
-    if (hoursUntil < 0) {
-      return { status: 'overdue', color: 'red', bgColor: 'bg-red-50', borderColor: 'border-red-300', textColor: 'text-red-900', icon: '⏰' };
-    } else if (hoursUntil < 24) {
-      return { status: 'urgent', color: 'red', bgColor: 'bg-red-50', borderColor: 'border-red-300', textColor: 'text-red-900', icon: '🔴' };
-    } else if (hoursUntil < 72) {
-      return { status: 'warning', color: 'orange', bgColor: 'bg-orange-50', borderColor: 'border-orange-300', textColor: 'text-orange-900', icon: '🟠' };
-    } else {
-      return { status: 'ok', color: 'green', bgColor: 'bg-green-50', borderColor: 'border-green-300', textColor: 'text-green-900', icon: '🟢' };
+    if (Number.isNaN(deadline.getTime())) {
+      return { status: 'unknown', color: 'gray', bgColor: 'bg-gray-50', borderColor: 'border-gray-300', textColor: 'text-gray-900', icon: '⭕' };
     }
+    const now = new Date();
+    if (deadline.getTime() > now.getTime()) {
+      return { status: 'pending', color: 'yellow', bgColor: 'bg-yellow-50', borderColor: 'border-yellow-300', textColor: 'text-yellow-900', icon: '🟡' };
+    }
+    return { status: 'reached', color: 'green', bgColor: 'bg-green-50', borderColor: 'border-green-300', textColor: 'text-green-900', icon: '🟢' };
   } catch (error) {
     return { status: 'unknown', color: 'gray', bgColor: 'bg-gray-50', borderColor: 'border-gray-300', textColor: 'text-gray-900', icon: '⭕' };
   }
@@ -93,26 +90,12 @@ const getDeadlineStatus = (deadlineDate: string, deadlineTime: string = '23:59')
 const getDeadlineStatusText = (deadlineDate: string, deadlineTime: string = '23:59') => {
   try {
     const deadline = new Date(`${deadlineDate}T${deadlineTime}`);
+    if (Number.isNaN(deadline.getTime())) return '⭕ Invalid date';
     const now = new Date();
-    const msUntil = deadline.getTime() - now.getTime();
-    const hoursUntil = msUntil / (1000 * 60 * 60);
-    const daysUntil = Math.floor(hoursUntil / 24);
-
-    if (msUntil < 0) {
-      return `⏰ Overdue by ${Math.abs(daysUntil)} days`;
-    } else if (hoursUntil < 1) {
-      return `🔴 Due in less than 1 hour!`;
-    } else if (hoursUntil < 24) {
-      return `🔴 Due in ${Math.floor(hoursUntil)} hours!`;
-    } else if (daysUntil === 0) {
-      return `🔴 Due today!`;
-    } else if (daysUntil === 1) {
-      return `🟠 Due tomorrow`;
-    } else if (daysUntil < 7) {
-      return `🟠 Due in ${daysUntil} days`;
-    } else {
-      return `🟢 Due in ${daysUntil} days`;
+    if (deadline.getTime() > now.getTime()) {
+      return `🟡 Due on ${deadlineDate}`;
     }
+    return `🟢 Deadline reached on ${deadlineDate}`;
   } catch (error) {
     return '⭕ Invalid date';
   }
@@ -120,13 +103,17 @@ const getDeadlineStatusText = (deadlineDate: string, deadlineTime: string = '23:
 
 // ============ MAIN COMPONENT ============
 export default function AllProjectsAndTasksPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'project' | 'task'>('project');
   const [selectedCourse, setSelectedCourse] = useState<SelectedCourse | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [lecturerId, setLecturerId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
-  const [isFetching, setIsFetching] = useState(false);
+  const [isFetchingProjects, setIsFetchingProjects] = useState(false);
+  const [isFetchingTasks, setIsFetchingTasks] = useState(false);
+  const [projectsLoadedForCourseId, setProjectsLoadedForCourseId] = useState<string | null>(null);
+  const [tasksLoadedForCourseId, setTasksLoadedForCourseId] = useState<string | null>(null);
   const [expandedProjects, setExpandedProjects] = useState<{ [key: string]: boolean }>({});
   const [expandedTasks, setExpandedTasks] = useState<{ [key: string]: boolean }>({});
   const [error, setError] = useState<string | null>(null);
@@ -172,27 +159,39 @@ export default function AllProjectsAndTasksPage() {
   useEffect(() => {
     if (!selectedCourse?._id || !lecturerId) {
       setProjects([]);
+      setTasks([]);
+      setProjectsLoadedForCourseId(null);
+      setTasksLoadedForCourseId(null);
       return;
     }
 
-    const fetchProjects = async () => {
-      setIsFetching(true);
-      setError(null);
-      try {
-        const token = localStorage.getItem('authToken');
-        if (!token) {
-          setError('Authentication required');
-          setProjects([]);
-          setIsFetching(false);
-          return;
-        }
+    // Clear stale data when course changes and reload lazily by tab.
+    setProjects([]);
+    setTasks([]);
+    setProjectsLoadedForCourseId(null);
+    setTasksLoadedForCourseId(null);
+  }, [selectedCourse?._id, lecturerId]);
 
+  useEffect(() => {
+    const courseId = selectedCourse?._id;
+    if (!courseId || !lecturerId) return;
+
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      setError('Authentication required');
+      return;
+    }
+
+    const fetchProjects = async (_foreground: boolean) => {
+      if (projectsLoadedForCourseId === courseId || isFetchingProjects) return;
+      setIsFetchingProjects(true);
+      try {
         const response = await fetch(
-          `/api/projects-and-tasks/lecturer/create-projects-and-tasks/project?courseId=${selectedCourse._id}&lecturerId=${lecturerId}`,
+          `/api/projects-and-tasks/lecturer/create-projects-and-tasks/project?courseId=${courseId}&lecturerId=${lecturerId}`,
           {
             method: 'GET',
             headers: {
-              'Authorization': `Bearer ${token}`,
+              Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
             },
           }
@@ -205,42 +204,26 @@ export default function AllProjectsAndTasksPage() {
 
         const data = await response.json();
         setProjects(data.data?.projects || []);
+        setProjectsLoadedForCourseId(courseId);
       } catch (error: any) {
         console.error('Error fetching projects:', error);
         setError(error.message || 'Failed to load projects');
         setProjects([]);
       } finally {
-        setIsFetching(false);
+        setIsFetchingProjects(false);
       }
     };
 
-    fetchProjects();
-  }, [selectedCourse?._id, lecturerId]);
-
-  useEffect(() => {
-    if (!selectedCourse?._id || !lecturerId) {
-      setTasks([]);
-      return;
-    }
-
-    const fetchTasks = async () => {
-      setIsFetching(true);
-      setError(null);
+    const fetchTasks = async (_foreground: boolean) => {
+      if (tasksLoadedForCourseId === courseId || isFetchingTasks) return;
+      setIsFetchingTasks(true);
       try {
-        const token = localStorage.getItem('authToken');
-        if (!token) {
-          setError('Authentication required');
-          setTasks([]);
-          setIsFetching(false);
-          return;
-        }
-
         const response = await fetch(
-          `/api/projects-and-tasks/lecturer/create-projects-and-tasks/task?courseId=${selectedCourse._id}&lecturerId=${lecturerId}`,
+          `/api/projects-and-tasks/lecturer/create-projects-and-tasks/task?courseId=${courseId}&lecturerId=${lecturerId}`,
           {
             method: 'GET',
             headers: {
-              'Authorization': `Bearer ${token}`,
+              Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
             },
           }
@@ -253,17 +236,33 @@ export default function AllProjectsAndTasksPage() {
 
         const data = await response.json();
         setTasks(data.data?.tasks || []);
+        setTasksLoadedForCourseId(courseId);
       } catch (error: any) {
         console.error('Error fetching tasks:', error);
         setError(error.message || 'Failed to load tasks');
         setTasks([]);
       } finally {
-        setIsFetching(false);
+        setIsFetchingTasks(false);
       }
     };
 
-    fetchTasks();
-  }, [selectedCourse?._id, lecturerId]);
+    setError(null);
+    if (activeTab === 'project') {
+      fetchProjects(true);
+      fetchTasks(false);
+    } else {
+      fetchTasks(true);
+      fetchProjects(false);
+    }
+  }, [
+    activeTab,
+    lecturerId,
+    selectedCourse?._id,
+    isFetchingProjects,
+    isFetchingTasks,
+    projectsLoadedForCourseId,
+    tasksLoadedForCourseId,
+  ]);
 
   const getMainTasks = (project: Project): MainTask[] => {
     return (project.mainTasks && Array.isArray(project.mainTasks)) ? project.mainTasks : [];
@@ -434,9 +433,31 @@ export default function AllProjectsAndTasksPage() {
             </h1>
           </motion.div> */}
 
-          <motion.p className="text-gray-600 text-lg ml-16" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
-            {selectedCourse ? `Viewing ${activeTab === 'project' ? 'projects' : 'tasks'} for ${selectedCourse.courseName}` : 'Select a course to view content'}
-          </motion.p>
+          <motion.div
+            className="ml-16 flex flex-wrap items-center gap-3"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+          >
+            <p className="text-gray-600 text-lg">
+              {selectedCourse ? `Viewing ${activeTab === 'project' ? 'projects' : 'tasks'} for ${selectedCourse.courseName}` : 'Select a course to view content'}
+            </p>
+            <button
+              type="button"
+              disabled={!selectedCourse}
+              onClick={() => {
+                if (!selectedCourse) return;
+                router.push(
+                  `/projects-and-tasks/lecturer/create-projects-and-tasks?courseId=${selectedCourse._id}&courseName=${encodeURIComponent(
+                    selectedCourse.courseName
+                  )}`
+                );
+              }}
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-blue px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+            >
+              {activeTab === 'project' ? 'Create Project' : 'Create Task'}
+            </button>
+          </motion.div>
         </motion.div>
 
         {/* Error Message */}
@@ -504,7 +525,7 @@ export default function AllProjectsAndTasksPage() {
                 <p className="text-gray-600 text-lg mb-2 font-semibold">No Course Selected</p>
                 <p className="text-gray-500">Please select a course from the dropdown to view content</p>
               </motion.div>
-            ) : isFetching ? (
+            ) : (activeTab === 'project' ? isFetchingProjects : isFetchingTasks) ? (
               <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center justify-center py-20">
                 <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 2, repeat: Infinity }} className="mr-4">
                   <Loader className="animate-spin text-brand-blue" size={32} />
@@ -579,8 +600,8 @@ export default function AllProjectsAndTasksPage() {
                                     whileHover={{ scale: 1.05 }}
                                     className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold border-2 ${deadlineStatus.color === 'red'
                                       ? 'bg-red-100 border-red-400 text-red-900'
-                                      : deadlineStatus.color === 'orange'
-                                        ? 'bg-orange-100 border-orange-400 text-orange-900'
+                                      : deadlineStatus.color === 'yellow'
+                                        ? 'bg-yellow-100 border-yellow-400 text-yellow-900'
                                         : 'bg-green-100 border-green-400 text-green-900'
                                       }`}
                                   >
@@ -844,8 +865,8 @@ export default function AllProjectsAndTasksPage() {
                                     <div
                                       className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 inline-flex items-center gap-1 ${deadlineStatus?.color === 'red'
                                         ? 'bg-red-100 border-red-400 text-red-900'
-                                        : deadlineStatus?.color === 'orange'
-                                          ? 'bg-orange-100 border-orange-400 text-orange-900'
+                                        : deadlineStatus?.color === 'yellow'
+                                          ? 'bg-yellow-100 border-yellow-400 text-yellow-900'
                                           : 'bg-green-100 border-green-400 text-green-900'
                                         }`}
                                     >
@@ -911,16 +932,16 @@ export default function AllProjectsAndTasksPage() {
                                     transition={{ delay: 0.08 }}
                                     className={`p-4 border-2 rounded-lg ml-6 ${deadlineStatus?.color === 'red'
                                       ? 'bg-red-100 border-red-400'
-                                      : deadlineStatus?.color === 'orange'
-                                        ? 'bg-orange-100 border-orange-400'
+                                      : deadlineStatus?.color === 'yellow'
+                                        ? 'bg-yellow-100 border-yellow-400'
                                         : 'bg-green-100 border-green-400'
                                       }`}
                                   >
                                     <p
                                       className={`text-sm font-bold flex items-center gap-2 ${deadlineStatus?.color === 'red'
                                         ? 'text-red-900'
-                                        : deadlineStatus?.color === 'orange'
-                                          ? 'text-orange-900'
+                                        : deadlineStatus?.color === 'yellow'
+                                          ? 'text-yellow-900'
                                           : 'text-green-900'
                                         }`}
                                     >
@@ -1052,7 +1073,6 @@ export default function AllProjectsAndTasksPage() {
         </motion.div>
       </div>
 
-      ───────────────────────────────────────
       <EditProjectTaskModal
         isOpen={editModalOpen}
         type={editType}

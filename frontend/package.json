@@ -10,6 +10,11 @@
     "worker:notifications": "tsx workers/notificationWorker.ts"
   },
   "dependencies": {
+    "@tiptap/extension-link": "^2.26.4",
+    "@tiptap/extension-placeholder": "^2.26.4",
+    "@tiptap/extension-underline": "^2.26.4",
+    "@tiptap/react": "^2.26.4",
+    "@tiptap/starter-kit": "^2.26.4",
     "aws-sdk": "^2.1693.0",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.69.4",

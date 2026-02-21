@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useEffect } from 'react';
 import {
   Bold,
   Italic,
@@ -11,6 +11,11 @@ import {
   ListOrdered,
   Code,
 } from 'lucide-react';
+import { EditorContent, useEditor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import UnderlineExtension from '@tiptap/extension-underline';
+import LinkExtension from '@tiptap/extension-link';
+import PlaceholderExtension from '@tiptap/extension-placeholder';
 
 interface RichTextContent {
   html: string;
@@ -32,41 +37,66 @@ export default function RichTextEditor({
   placeholder = 'Enter text...',
   required = false,
 }: RichTextEditorProps) {
-  const editorRef = useRef<HTMLDivElement>(null);
-  const [isToolbarOpen, setIsToolbarOpen] = useState(true);
-
-  const execCommand = (command: string, value?: string) => {
-    document.execCommand(command, false, value);
-    editorRef.current?.focus();
-    updateContent();
-  };
-
-  const updateContent = () => {
-    if (editorRef.current) {
-      const html = editorRef.current.innerHTML;
-      const text = editorRef.current.innerText;
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        codeBlock: {
+          HTMLAttributes: {
+            style:
+              'background:#f5f5f5;padding:10px;border-radius:4px;font-family:monospace;',
+          },
+        },
+      }),
+      UnderlineExtension,
+      LinkExtension.configure({
+        openOnClick: false,
+        autolink: true,
+      }),
+      PlaceholderExtension.configure({
+        placeholder,
+      }),
+    ],
+    content: value.html || '',
+    editorProps: {
+      attributes: {
+        class:
+          'tiptap-editor w-full min-h-64 p-4 focus:outline-none bg-white text-gray-900 leading-relaxed whitespace-pre-wrap text-left',
+        dir: 'ltr',
+      },
+    },
+    onUpdate({ editor }) {
+      const text = editor.getText().trim();
+      const html = text.length === 0 ? '' : editor.getHTML();
       onChange({ html, text });
-    }
-  };
+    },
+  });
 
-  const insertList = (ordered: boolean) => {
-    const command = ordered ? 'insertOrderedList' : 'insertUnorderedList';
-    execCommand(command);
-  };
+  useEffect(() => {
+    if (!editor) return;
 
-  const insertCodeBlock = () => {
-    const code = document.createElement('pre');
-    code.style.backgroundColor = '#f5f5f5';
-    code.style.padding = '10px';
-    code.style.borderRadius = '4px';
-    code.style.fontFamily = 'monospace';
-    code.contentEditable = 'true';
-    code.textContent = 'Code here...';
-    
-    if (editorRef.current) {
-      editorRef.current.appendChild(code);
-      updateContent();
+    const incomingHtml = value.html || '';
+    const currentHtml = editor.getHTML();
+
+    // Avoid cursor jumps by only syncing external updates when content actually differs.
+    if (incomingHtml !== currentHtml) {
+      editor.commands.setContent(incomingHtml, { emitUpdate: false });
     }
+  }, [editor, value.html]);
+
+  const insertLink = () => {
+    if (!editor) return;
+
+    const previousUrl = editor.getAttributes('link').href as string | undefined;
+    const url = prompt('Enter URL:', previousUrl || '')?.trim();
+
+    if (url === null) return;
+
+    if (url === '') {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      return;
+    }
+
+    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
   };
 
   return (
@@ -79,31 +109,33 @@ export default function RichTextEditor({
       )}
 
       <div className="border border-gray-300 rounded-lg overflow-hidden">
-        {/* Toolbar */}
         <div className="bg-gray-100 border-b border-gray-300 p-2 flex flex-wrap gap-1">
           <button
-            onClick={() => execCommand('bold')}
+            onClick={() => editor?.chain().focus().toggleBold().run()}
             className="p-2 hover:bg-gray-200 rounded transition-colors"
             title="Bold (Ctrl+B)"
             type="button"
+            disabled={!editor}
           >
             <Bold size={18} className="text-gray-700" />
           </button>
 
           <button
-            onClick={() => execCommand('italic')}
+            onClick={() => editor?.chain().focus().toggleItalic().run()}
             className="p-2 hover:bg-gray-200 rounded transition-colors"
             title="Italic (Ctrl+I)"
             type="button"
+            disabled={!editor}
           >
             <Italic size={18} className="text-gray-700" />
           </button>
 
           <button
-            onClick={() => execCommand('underline')}
+            onClick={() => editor?.chain().focus().toggleUnderline().run()}
             className="p-2 hover:bg-gray-200 rounded transition-colors"
             title="Underline (Ctrl+U)"
             type="button"
+            disabled={!editor}
           >
             <Underline size={18} className="text-gray-700" />
           </button>
@@ -111,19 +143,21 @@ export default function RichTextEditor({
           <div className="w-px bg-gray-300"></div>
 
           <button
-            onClick={() => insertList(false)}
+            onClick={() => editor?.chain().focus().toggleBulletList().run()}
             className="p-2 hover:bg-gray-200 rounded transition-colors"
             title="Bullet List"
             type="button"
+            disabled={!editor}
           >
             <List size={18} className="text-gray-700" />
           </button>
 
           <button
-            onClick={() => insertList(true)}
+            onClick={() => editor?.chain().focus().toggleOrderedList().run()}
             className="p-2 hover:bg-gray-200 rounded transition-colors"
             title="Numbered List"
             type="button"
+            disabled={!editor}
           >
             <ListOrdered size={18} className="text-gray-700" />
           </button>
@@ -131,19 +165,21 @@ export default function RichTextEditor({
           <div className="w-px bg-gray-300"></div>
 
           <button
-            onClick={() => execCommand('createLink', prompt('Enter URL:') || '')}
+            onClick={insertLink}
             className="p-2 hover:bg-gray-200 rounded transition-colors text-sm font-medium"
             title="Link"
             type="button"
+            disabled={!editor}
           >
             Link
           </button>
 
           <button
-            onClick={() => insertCodeBlock()}
+            onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
             className="p-2 hover:bg-gray-200 rounded transition-colors"
             title="Code Block"
             type="button"
+            disabled={!editor}
           >
             <Code size={18} className="text-gray-700" />
           </button>
@@ -151,40 +187,20 @@ export default function RichTextEditor({
           <div className="flex-1"></div>
 
           <button
-            onClick={() => execCommand('removeFormat')}
+            onClick={() => editor?.chain().focus().clearNodes().unsetAllMarks().run()}
             className="p-2 hover:bg-gray-200 rounded transition-colors text-sm font-medium text-gray-700"
             title="Clear Formatting"
             type="button"
+            disabled={!editor}
           >
             Clear
           </button>
         </div>
 
-        {/* Editor */}
-        <div
-          ref={editorRef}
-          contentEditable
-          suppressContentEditableWarning
-          onInput={updateContent}
-          onBlur={updateContent}
-          className="w-full min-h-64 p-4 focus:outline-none bg-white text-gray-900 leading-relaxed"
-          style={{
-            wordWrap: 'break-word',
-            overflowWrap: 'break-word',
-          }}
-        >
-          {value.html ? (
-            <div dangerouslySetInnerHTML={{ __html: value.html }} />
-          ) : (
-            <span className="text-gray-400">{placeholder}</span>
-          )}
-        </div>
+        <EditorContent editor={editor} />
       </div>
 
-      {/* Character count */}
-      <div className="text-xs text-gray-500 mt-1">
-        {value.text.length} characters
-      </div>
+      <div className="text-xs text-gray-500 mt-1">{value.text.length} characters</div>
     </div>
   );
 }
