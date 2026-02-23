@@ -285,11 +285,6 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           label: 'Teams',
           icon: <Users size={22} />,
           href: '/projects-and-tasks/lecturer/teams',
-          subsections: [
-            { id: 'all-teams', label: 'All Teams' },
-            { id: 'team-performance', label: 'Performance' },
-            { id: 'collaboration-metrics', label: 'Collaboration' },
-          ],
         },
         {
           id: 'interventions',

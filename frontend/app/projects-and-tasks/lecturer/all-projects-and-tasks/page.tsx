@@ -30,11 +30,18 @@ interface Document {
   fileSize: number;
 }
 
+interface AssignedGroup {
+  _id: string;
+  groupName: string;
+}
+
 interface Project {
   _id: string;
   projectName: string;
   description: { html: string; text: string };
   projectType: 'group' | 'individual';
+  assignedGroupIds?: string[];
+  assignedGroups?: AssignedGroup[];
   deadlineDate: string;
   deadlineTime: string;
   courseId: string;
@@ -594,6 +601,15 @@ export default function AllProjectsAndTasksPage() {
                                   >
                                     {project.projectType === 'group' ? '👥 Group' : '👤 Individual'}
                                   </motion.span>
+                                  {project.projectType === 'group' &&
+                                    (project.assignedGroups || []).map((group) => (
+                                      <span
+                                        key={group._id}
+                                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border border-indigo-200 bg-indigo-50 text-indigo-700"
+                                      >
+                                        {group.groupName}
+                                      </span>
+                                    ))}
 
                                   {/* Highlighted Deadline */}
                                   <motion.span
