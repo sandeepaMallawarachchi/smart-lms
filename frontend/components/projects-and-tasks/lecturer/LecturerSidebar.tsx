@@ -75,12 +75,10 @@ export default function LecturerSidebar() {
       id: 'interventions',
       label: 'Alerts',
       icon: <AlertCircle size={22} />,
-      badge: 2,
       href: '/lecturer/interventions',
       subsections: [
-        { id: 'at-risk-projects', label: 'At-Risk' },
-        { id: 'inactivity-alerts', label: 'Inactivity' },
-        { id: 'deadline-warnings', label: 'Warnings' },
+        { id: 'create-alert', label: 'Create Alert', href: '/projects-and-tasks/lecturer/interventions?tab=create' },
+        { id: 'all-alerts', label: 'All Alerts', href: '/projects-and-tasks/lecturer/interventions?tab=all' },
       ],
     },
     {

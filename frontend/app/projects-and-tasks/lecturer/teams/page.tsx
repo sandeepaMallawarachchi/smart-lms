@@ -250,8 +250,8 @@ export default function LecturerTeamsPage() {
           <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div className="bg-white border border-gray-200 rounded-xl p-4">
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Course</p>
-                <p className="text-sm font-semibold text-gray-900 mt-1">{selectedCourse.courseCode}</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Module</p>
+                <p className="text-sm font-semibold text-gray-900 mt-1">{selectedCourse.courseName}</p>
               </div>
               <div className="bg-white border border-gray-200 rounded-xl p-4">
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Total Groups</p>

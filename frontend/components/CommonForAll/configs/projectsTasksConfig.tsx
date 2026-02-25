@@ -268,34 +268,30 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           ],
         },
         {
-          id: 'analytics',
-          label: 'Analytics',
-          icon: <BarChart3 size={22} />,
-          badge: 3,
-          href: '/projects-and-tasks/lecturer/analytics',
-          subsections: [
-            { id: 'activity-heatmap', label: 'Activity Heatmap' },
-            { id: 'workload-distribution', label: 'Workload' },
-            { id: 'completion-trends', label: 'Trends' },
-            { id: 'deadline-adherence', label: 'Deadlines' },
-          ],
-        },
-        {
           id: 'teams',
           label: 'Teams',
           icon: <Users size={22} />,
           href: '/projects-and-tasks/lecturer/teams',
         },
         {
+          id: 'analytics',
+          label: 'Analytics',
+          icon: <BarChart3 size={22} />,
+          href: '/projects-and-tasks/lecturer/analytics/heatmap',
+          subsections: [
+            { id: 'activity-heatmap', label: 'Activity Heatmap', href: '/projects-and-tasks/lecturer/analytics/heatmap' },
+            { id: 'workload-distribution', label: 'Workload', href: '/projects-and-tasks/lecturer/analytics/workload' },
+            { id: 'completion-trends', label: 'Trends', href: '/projects-and-tasks/lecturer/analytics/trends' },
+          ],
+        },
+        {
           id: 'interventions',
           label: 'Alerts',
           icon: <AlertCircle size={22} />,
-          badge: 2,
           href: '/projects-and-tasks/lecturer/interventions',
           subsections: [
-            { id: 'at-risk-projects', label: 'At-Risk' },
-            { id: 'inactivity-alerts', label: 'Inactivity' },
-            { id: 'deadline-warnings', label: 'Warnings' },
+            { id: 'create-alert', label: 'Create Alert', href: '/projects-and-tasks/lecturer/interventions?tab=create' },
+            { id: 'all-alerts', label: 'All Alerts', href: '/projects-and-tasks/lecturer/interventions?tab=all' },
           ],
         },
         {
