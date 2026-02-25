@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Loader, AlertCircle, ChevronDown, ChevronRight, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import RichTextEditor from '../RichTextEditor';
@@ -24,10 +24,24 @@ interface FormState {
   projectName: string;
   description: { html: string; text: string };
   projectType: 'group' | 'individual' | '';
+  assignedGroupIds: string[];
   deadlineDate: string;
   deadlineTime: string;
   specialNotes: { html: string; text: string };
   mainTasks: MainTask[];
+}
+
+interface GroupStudent {
+  _id: string;
+  name: string;
+  studentIdNumber: string;
+}
+
+interface CourseGroup {
+  _id: string;
+  groupName: string;
+  studentIds: string[];
+  students?: GroupStudent[];
 }
 
 interface ProjectCreationFormProps {
@@ -46,6 +60,8 @@ export default function ProjectCreationForm({
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newSubtaskTitle, setNewSubtaskTitle] = useState<{ [key: string]: string }>({});
   const [expandedTasks, setExpandedTasks] = useState<{ [key: string]: boolean }>({});
+  const [courseGroups, setCourseGroups] = useState<CourseGroup[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
 
   // File upload states
   const [templateDocs, setTemplateDocs] = useState<File[]>([]);
@@ -56,11 +72,44 @@ export default function ProjectCreationForm({
     projectName: '',
     description: { html: '', text: '' },
     projectType: '',
+    assignedGroupIds: [],
     deadlineDate: '',
     deadlineTime: '23:59',
     specialNotes: { html: '', text: '' },
     mainTasks: [],
   });
+
+  useEffect(() => {
+    const fetchCourseGroups = async () => {
+      if (!courseId) return;
+      setGroupsLoading(true);
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(
+          `/api/projects-and-tasks/lecturer/course-groups?courseId=${courseId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch groups');
+        }
+
+        const data = await response.json();
+        setCourseGroups(data?.data?.groups || []);
+      } catch (error) {
+        console.error('Error fetching course groups:', error);
+        setCourseGroups([]);
+      } finally {
+        setGroupsLoading(false);
+      }
+    };
+
+    fetchCourseGroups();
+  }, [courseId]);
 
   // Validate form
   const validateForm = () => {
@@ -72,6 +121,9 @@ export default function ProjectCreationForm({
 
     if (!formState.projectType) {
       newErrors.projectType = 'Project type is required';
+    }
+    if (formState.projectType === 'group' && formState.assignedGroupIds.length === 0) {
+      newErrors.assignedGroupIds = 'Select at least one group for a group project';
     }
 
     if (!formState.deadlineDate) {
@@ -101,6 +153,7 @@ export default function ProjectCreationForm({
       formData.append('projectName', formState.projectName);
       formData.append('description', JSON.stringify(formState.description));
       formData.append('projectType', formState.projectType);
+      formData.append('assignedGroupIds', JSON.stringify(formState.assignedGroupIds));
       formData.append('deadlineDate', formState.deadlineDate);
       formData.append('deadlineTime', formState.deadlineTime);
       formData.append('specialNotes', JSON.stringify(formState.specialNotes));
@@ -276,6 +329,14 @@ export default function ProjectCreationForm({
   };
 
   const today = new Date().toISOString().split('T')[0];
+  const toggleGroupSelection = (groupId: string) => {
+    setFormState((prev) => ({
+      ...prev,
+      assignedGroupIds: prev.assignedGroupIds.includes(groupId)
+        ? prev.assignedGroupIds.filter((id) => id !== groupId)
+        : [...prev.assignedGroupIds, groupId],
+    }));
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
@@ -337,7 +398,13 @@ export default function ProjectCreationForm({
             <button
               key={type}
               type="button"
-              onClick={() => setFormState({ ...formState, projectType: type })}
+              onClick={() =>
+                setFormState({
+                  ...formState,
+                  projectType: type,
+                  assignedGroupIds: type === 'group' ? formState.assignedGroupIds : [],
+                })
+              }
               className={`p-4 rounded-lg border-2 transition-all text-left ${
                 formState.projectType === type
                   ? 'border-brand-blue bg-blue-50'
@@ -354,6 +421,48 @@ export default function ProjectCreationForm({
           ))}
         </div>
       </div>
+
+      {formState.projectType === 'group' && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <label className="block text-sm font-semibold text-gray-900 mb-3">
+            Assign Groups <span className="text-red-600">*</span>
+          </label>
+          {groupsLoading ? (
+            <p className="text-sm text-gray-500">Loading groups...</p>
+          ) : courseGroups.length === 0 ? (
+            <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+              No groups found for this course. Create groups in Admin Course Management first.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {courseGroups.map((group) => {
+                const isChecked = formState.assignedGroupIds.includes(group._id);
+                return (
+                  <label
+                    key={group._id}
+                    className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                      isChecked ? 'border-brand-blue bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleGroupSelection(group._id)}
+                      className="mt-1 h-4 w-4 accent-brand-blue"
+                    />
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">{group.groupName}</p>
+                      <p className="text-xs text-gray-600">
+                        {(group.students || []).length} students
+                      </p>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Deadline */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">

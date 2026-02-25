@@ -6,19 +6,26 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "worker:notifications": "tsx workers/notificationWorker.ts"
   },
   "dependencies": {
+    "@tiptap/extension-link": "^2.26.4",
+    "@tiptap/extension-placeholder": "^2.26.4",
+    "@tiptap/extension-underline": "^2.26.4",
+    "@tiptap/react": "^2.26.4",
+    "@tiptap/starter-kit": "^2.26.4",
     "@monaco-editor/react": "^4.7.0",
     "aws-sdk": "^2.1693.0",
     "bcryptjs": "^3.0.3",
+    "bullmq": "^5.69.4",
     "chart.js": "^4.5.1",
-    "framer-motion": "^12.24.7",
+    "framer-motion": "^12.23.26",
+    "ioredis": "^5.8.1",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.561.0",
     "mongoose": "^9.0.2",
     "next": "16.0.10",
-    "node-cron": "^4.2.1",
     "react": "19.2.1",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "19.2.1",
@@ -29,12 +36,12 @@
     "@tailwindcss/postcss": "^4",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20",
-    "@types/node-cron": "^3.0.11",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   }
 }

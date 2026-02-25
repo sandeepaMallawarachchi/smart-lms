@@ -67,7 +67,7 @@ const getColorClass = (type: string, isRead: boolean) => {
 
 export default function NotificationCard({ notification, onMarkRead }: NotificationCardProps) {
   const sentDate = new Date(notification.sentAt);
-  const timeAgo = getTimeAgo(sentDate);
+  const formattedDate = formatDateDDMMYYYY(sentDate);
 
   const totalTasks = notification.taskProgress?.reduce((sum, task) => sum + (task.totalTasks || 0), 0) || 0;
   const completedTasks = notification.taskProgress?.reduce((sum, task) => sum + (task.completedCount || 0), 0) || 0;
@@ -151,21 +151,17 @@ export default function NotificationCard({ notification, onMarkRead }: Notificat
             </div>
           )}
 
-          <p className="text-xs text-gray-500 mt-3">{timeAgo}</p>
+          <p className="text-xs text-gray-500 mt-3">{formattedDate}</p>
         </div>
       </div>
     </motion.div>
   );
 }
 
-function getTimeAgo(date: Date): string {
-  const now = new Date();
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  if (seconds < 60) return 'Just now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-
-  return date.toLocaleDateString();
+function formatDateDDMMYYYY(date: Date): string {
+  if (Number.isNaN(date.getTime())) return '';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = String(date.getFullYear());
+  return `${day}-${month}-${year}`;
 }
