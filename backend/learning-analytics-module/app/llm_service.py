@@ -1,8 +1,3 @@
-"""
-LLM-based Recommendation Service using Groq API
-Cloud-based, fast, reliable - no local model needed
-"""
-
 import os
 import logging
 import requests
@@ -52,6 +47,7 @@ class LLMRecommendationService:
             
             if not response:
                 logger.warning("API call failed.")
+                return self._fallback_recommendations()
             
             # Parse response
             result = self._parse_response(response)
@@ -64,6 +60,7 @@ class LLMRecommendationService:
             
         except Exception as e:
             logger.error(f"Error generating recommendations: {str(e)}")    
+            return self._fallback_recommendations()
     
     def _call_groq_api(self, prompt):
         """
@@ -193,6 +190,9 @@ Be supportive, specific, and actionable. Focus on what the student can control."
         """
         import re
         
+        if not response_text:
+            return self._fallback_recommendations()
+        
         result = {
             'explanation': '',
             'action_steps': [],
@@ -233,6 +233,20 @@ Be supportive, specific, and actionable. Focus on what the student can control."
             result['motivation'] = "You can succeed with consistent effort and support!"
         
         return result
+
+    def _fallback_recommendations(self):
+        return {
+            'explanation': "We couldn't generate a personalized summary right now, but your recent activity has been analyzed.",
+            'action_steps': [
+                "Keep a consistent weekly study schedule",
+                "Focus on completing pending tasks on time",
+                "Reach out to your instructor when stuck"
+            ],
+            'motivation': "Small, steady steps make a big difference. You’ve got this!",
+            'source': 'fallback',
+            'model': 'n/a',
+            'generated_at': datetime.utcnow().isoformat()
+        }
     
     
     def _update_student_history(self, student_id, prediction_result):

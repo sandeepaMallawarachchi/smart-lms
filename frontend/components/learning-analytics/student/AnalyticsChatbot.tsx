@@ -63,7 +63,7 @@ export default function AnalyticsChatbot() {
       const payload = JSON.parse(atob(token.split('.')[1]));
       const studentId = payload.userId || payload.studentIdNumber || payload.id;
 
-      const response = await fetch('http://localhost:5001/chat', {
+      const response = await fetch('/api/chat/analytics', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -93,7 +93,7 @@ export default function AnalyticsChatbot() {
       console.error('Chat error:', error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: 'Sorry, I encountered an error. Please make sure the chatbot server is running on http://localhost:5001',
+        text: 'Sorry, I encountered an error. Please try again in a moment.',
         sender: 'bot',
         timestamp: new Date(),
       };

@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageCircle, X, Send, Loader, Bot, User, CheckSquare, MessageCircleMore } from 'lucide-react';
+import { MessageCircle, X, Send, Loader, Bot, User, CheckSquare } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -117,7 +117,7 @@ export default function ProjectTaskChatbot() {
             onClick={() => setIsOpen(true)}
             className="fixed cursor-pointer bottom-6 right-6 w-16 h-16 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full shadow-2xl flex items-center justify-center z-50"
           >
-            <MessageCircleMore className="text-white" size={28} />
+            <CheckSquare className="text-white" size={28} />
           </motion.button>
         )}
       </AnimatePresence>
@@ -135,7 +135,7 @@ export default function ProjectTaskChatbot() {
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center">
-                  <MessageCircleMore className="text-blue-500" size={24} />
+                  <CheckSquare className="text-blue-500" size={24} />
                 </div>
                 <div>
                   <h3 className="text-white font-bold">Task Manager</h3>

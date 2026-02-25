@@ -7,7 +7,7 @@ export interface ILearningGoal extends Document {
   category: 'academic' | 'skill' | 'project' | 'career' | 'personal';
   targetDate: Date;
   priority: 'low' | 'medium' | 'high';
-  status: 'active' | 'completed' | 'overdue' | 'cancelled';
+  status: 'todo' | 'inprogress' | 'done' | 'active' | 'completed' | 'overdue' | 'cancelled';
   progress: number;
   milestones: Array<{
     id: string;
@@ -59,8 +59,8 @@ const LearningGoalSchema: Schema<ILearningGoal> = new Schema(
     },
     status: {
       type: String,
-      enum: ['active', 'completed', 'overdue', 'cancelled'],
-      default: 'active',
+      enum: ['todo', 'inprogress', 'done', 'active', 'completed', 'overdue', 'cancelled'],
+      default: 'todo',
       index: true,
     },
     progress: {
@@ -103,17 +103,20 @@ LearningGoalSchema.index({ studentId: 1, targetDate: 1 });
 LearningGoalSchema.index({ studentId: 1, category: 1 });
 
 LearningGoalSchema.pre('save', function () {
-  if (this.progress === 100 && this.status !== 'completed' && this.status !== 'cancelled') {
-    this.status = 'completed';
-    this.completedAt = new Date();
-  }
+  if (this.status === 'active') this.status = 'todo';
+  if (this.status === 'completed') this.status = 'done';
+  if (this.status === 'overdue' || this.status === 'cancelled') this.status = 'todo';
 
-  if (
-    this.targetDate < new Date() &&
-    this.status === 'active' &&
-    this.progress < 100
-  ) {
-    this.status = 'overdue';
+  // Keep legacy progress field synchronized with the 3-status model.
+  if (this.status === 'done') {
+    this.progress = 100;
+    if (!this.completedAt) this.completedAt = new Date();
+  } else if (this.status === 'inprogress') {
+    this.progress = 50;
+    this.completedAt = undefined;
+  } else {
+    this.progress = 0;
+    this.completedAt = undefined;
   }
 });
 

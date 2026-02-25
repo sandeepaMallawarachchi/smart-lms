@@ -2,7 +2,7 @@ import React from 'react';
 import {
   LayoutGrid,
   Trello,
-  CheckCircle2,
+  CodeXml,
   Clock,
   AlertCircle,
   Users,
@@ -15,14 +15,14 @@ import {
   BellIcon
 } from 'lucide-react';
 
-interface SubSection {
+export interface SubSection {
   id: string;
   label: string;
   badge?: number;
   href?: string;
 }
 
-interface NavItem {
+export interface NavItem {
   id: string;
   label: string;
   icon: React.ReactNode;
@@ -32,7 +32,7 @@ interface NavItem {
   subsections?: SubSection[];
 }
 
-interface Notification {
+export interface Notification {
   id: number;
   message: string;
   time: string;
@@ -40,7 +40,7 @@ interface Notification {
   icon: React.ComponentType<any>;
 }
 
-interface SidebarConfig {
+export interface SidebarConfig {
   roleLabel?: string;
   showStats?: boolean;
   stats?: {
@@ -55,7 +55,7 @@ interface SidebarConfig {
   };
 }
 
-interface HeaderConfig {
+export interface HeaderConfig {
   courseCode: string;
   courseName: string;
   searchPlaceholder: string;
@@ -66,9 +66,28 @@ interface HeaderConfig {
   pendingTasksCount?: number;
 }
 
-interface ModuleConfig {
-  header: HeaderConfig;
-  sidebar: SidebarConfig;
+export interface ModuleConfig {
+  header: HeaderConfig
+  sidebar: SidebarConfig
+}
+
+export interface Course {
+  _id: string
+  courseName: string
+  credits: number
+  year: number
+  semester: number
+  specializations: string[]
+}
+
+export interface CoursesApiResponse {
+  success: boolean
+  message: string
+  data: {
+    student: any
+    courses: Course[]
+    totalCourses: number
+  }
 }
 
 export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = {
@@ -147,6 +166,16 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
         //     { id: 'archived', label: 'Archived' },
         //   ],
         // },
+        {
+          id: 'code-projects',
+          label: 'Code Assignments',
+          icon: <CodeXml size={20} />,
+          description: 'Practice coding challenges & labs',
+          href: '/projects-and-tasks/student/code-assignments',
+          subsections: [
+
+          ],
+        },
         {
           id: 'heatmap',
           label: 'Activity Heatmap',

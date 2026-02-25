@@ -194,68 +194,68 @@ class ProjectTaskChatbot:
     def generate_heatmap(self, student_id):
         project_progress = list(self.db.studentprojectprogresses.find({"studentId": student_id}))
         task_progress = list(self.db.studenttaskprogresses.find({"studentId": student_id}))
-
-        projects = self.get_student_projects(student_id)
-        tasks = self.get_student_tasks(student_id)
-
-        project_map = {str(p["_id"]): p["projectName"] for p in projects}
-        task_map = {str(t["_id"]): t["taskName"] for t in tasks}
-
-        now = datetime.now()
-        start_date = datetime(now.year, 1, 1)
-        end_date = datetime(now.year, 12, 31)
-
+        
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=365)
         activity_map = {}
         current_date = start_date
-
+        
         while current_date <= end_date:
             date_str = current_date.strftime('%Y-%m-%d')
-            activity_map[date_str] = {
-                "count": 0,
-                "items": []
-            }
+            activity_map[date_str] = 0
             current_date += timedelta(days=1)
-
+        
         for progress in project_progress + task_progress:
-            updated_at = progress.get("updatedAt")
-            if not updated_at:
-                continue
-
-            if isinstance(updated_at, str):
-                try:
-                    updated_at = datetime.fromisoformat(updated_at.replace("Z", ""))
-                except ValueError:
-                    continue
-
-            date_str = updated_at.strftime('%Y-%m-%d')
-            if date_str not in activity_map:
-                continue
-
-            item_id = str(progress.get("projectId") or progress.get("taskId"))
-            is_project = "projectId" in progress
-
-            activity_map[date_str]["count"] += 1
-            activity_map[date_str]["items"].append({
-                "type": "project" if is_project else "task",
-                "name": project_map.get(item_id) if is_project else task_map.get(item_id),
-                "status": progress.get("status"),
-                "id": item_id
-            })
-
+            if 'updatedAt' in progress:
+                date_str = progress['updatedAt'].strftime('%Y-%m-%d')
+                if date_str in activity_map:
+                    activity_map[date_str] += 1
+        
         heatmap_data = []
-        for date_str, data in activity_map.items():
-            heatmap_data.append({
-                "date": date_str,
-                "count": data["count"],
-                "level": min(data["count"], 4),
-                "items": data["items"]
-            })
-
+        for date_str, count in activity_map.items():
+            heatmap_data.append({'date': date_str, 'count': count, 'level': min(count, 4)})
+        
         return {
-            "heatmap": heatmap_data,
-            "totalDays": len(heatmap_data),
-            "totalActivities": sum(d["count"] for d in heatmap_data)
-    }
+            'heatmap': heatmap_data,
+            'totalDays': len(heatmap_data),
+            'totalActivities': sum(d['count'] for d in heatmap_data)
+        }
+    
+    def handle_query(self, user_query, student_id):
+        intent = self.classify_intent(user_query)
+        
+        if intent == "list_projects":
+            projects = self.get_student_projects(student_id)
+            response = self.format_project_response(projects)
+        elif intent == "prioritized_tasks":
+            response = self.get_prioritized_tasks(student_id)
+        elif intent == "task_summary":
+            response = self.get_completion_summary(student_id)
+        elif intent == "upcoming_deadlines":
+            projects = self.get_student_projects(student_id)
+            tasks = self.get_student_tasks(student_id)
+            all_items = []
+            
+            for project in projects:
+                progress = project.get('progress', {})
+                status = progress.get('status', 'todo') if progress else 'todo'
+                if status != 'done':
+                    all_items.append({'name': project['projectName'], 'deadline': project['deadlineDate'], 'type': 'project'})
+            
+            for task in tasks:
+                progress = task.get('progress', {})
+                status = progress.get('status', 'todo') if progress else 'todo'
+                if status != 'done' and task.get('deadlineDate'):
+                    all_items.append({'name': task['taskName'], 'deadline': task['deadlineDate'], 'type': 'task'})
+            
+            all_items.sort(key=lambda x: x['deadline'])
+            response = "**Upcoming Deadlines:**\n\n"
+            for item in all_items[:5]:
+                response += f"- **{item['name']}** ({item['type']}): {item['deadline']}\n"
+        else:
+            response = "I can help you with:\n- Listing your projects\n- Showing prioritized tasks\n- Progress summaries\n- Upcoming deadlines"
+        
+        return {'response': response, 'intent': intent, 'module': 'project_task'}
     
     def test_connection(self, student_id):
         try:

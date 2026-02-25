@@ -239,13 +239,13 @@ export const submissionsConfig: Record<'student' | 'lecture', ModuleConfig> = {
                     description: 'Overview of all activities',
                     href: '/submissions/lecturer',
                 },
-                {
-                    id: 'create-assignment',
-                    label: 'Create Assignment',
-                    icon: <Plus size={22} />,
-                    description: 'New assignment',
-                    href: '/submissions/lecturer/assignments/create',
-                },
+                // {
+                //     id: 'create-assignment',
+                //     label: 'Create Assignment',
+                //     icon: <Plus size={22} />,
+                //     description: 'New assignment',
+                //     href: '/submissions/lecturer/assignments/create',
+                // },
                 {
                     id: 'assignments',
                     label: 'Manage Assignments',
