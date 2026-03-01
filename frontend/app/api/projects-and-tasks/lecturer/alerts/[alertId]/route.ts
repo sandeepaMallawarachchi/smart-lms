@@ -6,11 +6,15 @@ import { errorResponse, serverErrorResponse, successResponse, unauthorizedRespon
 import Course from '@/model/Course';
 import CourseGroup from '@/model/CourseGroup';
 import Alert from '@/model/projects-and-tasks/lecturer/Alert';
+import { Notification } from '@/model/projects-and-tasks/notificationModel';
 import { getEligibleStudentsForCourse } from '@/lib/course-students';
 import { Project, StudentProjectProgress, StudentTaskProgress, Task } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
 
 type StudentLite = {
   _id: { toString(): string };
+};
+type CourseLite = {
+  courseName?: string;
 };
 type DeadlineItem = {
   _id: { toString(): string };
@@ -44,6 +48,43 @@ async function assertLecturerCourseAccess(courseId: string, lecturerId: string) 
     $or: [{ lecturerInCharge: lecturerId }, { lecturers: lecturerId }],
   });
   return Boolean(hasAccess);
+}
+
+async function syncAlertNotifications(params: {
+  alertId: string;
+  recipientStudentIds: string[];
+  level: 'low' | 'medium' | 'high';
+  message: string;
+  courseName?: string;
+}) {
+  const academicLevelLabel: Record<'low' | 'medium' | 'high', string> = {
+    low: 'General Guidance',
+    medium: 'Priority Review',
+    high: 'Immediate Action',
+  };
+  const now = new Date();
+  const title = `${academicLevelLabel[params.level]}${params.courseName ? ` • ${params.courseName}` : ''}`;
+  const description = `Message from lecturer (${params.level} priority)`;
+
+  await Notification.deleteMany({ sourceAlertId: params.alertId });
+  if (params.recipientStudentIds.length === 0) return;
+
+  await Notification.insertMany(
+    params.recipientStudentIds.map((studentId) => ({
+      studentId,
+      sourceAlertId: params.alertId,
+      alertLevel: params.level,
+      type: 'lecturer_alert' as const,
+      title,
+      message: params.message,
+      description,
+      dedupeKey: `lecturer_alert:${params.alertId}:${studentId}`,
+      isRead: false,
+      isSent: true,
+      sentAt: now,
+      scheduledFor: now,
+    }))
+  );
 }
 
 async function resolveRecipients(
@@ -222,6 +263,15 @@ export async function PUT(
     existingAlert.recipientStudentIds = [...new Set(resolved.recipientStudentIds)];
     await existingAlert.save();
 
+    const course = courseAndStudents.course as CourseLite;
+    await syncAlertNotifications({
+      alertId: existingAlert._id.toString(),
+      recipientStudentIds: existingAlert.recipientStudentIds,
+      level,
+      message,
+      courseName: course.courseName,
+    });
+
     return successResponse('Alert updated successfully', { alert: existingAlert }, 200);
   } catch (error: unknown) {
     console.error('Update alert error:', error);
@@ -265,6 +315,7 @@ export async function DELETE(
     }
 
     await Alert.deleteOne({ _id: alertId });
+    await Notification.deleteMany({ sourceAlertId: alertId });
 
     return successResponse('Alert deleted successfully', {}, 200);
   } catch (error: unknown) {

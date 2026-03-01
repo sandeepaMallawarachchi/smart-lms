@@ -43,6 +43,8 @@ const getIcon = (type: string) => {
       return <AlertCircle className="text-orange-600" size={24} />;
     case 'overdue':
       return <AlertCircle className="text-red-600" size={24} />;
+    case 'lecturer_alert':
+      return <AlertCircle className="text-purple-600" size={24} />;
     case 'progress_update':
       return <CheckCircle2 className="text-green-600" size={24} />;
     default:
@@ -58,6 +60,8 @@ const getColorClass = (type: string, isRead: boolean) => {
       return `${!isRead ? 'bg-orange-50 border-orange-200' : baseClass}`;
     case 'overdue':
       return `${!isRead ? 'bg-red-50 border-red-200' : baseClass}`;
+    case 'lecturer_alert':
+      return `${!isRead ? 'bg-purple-50 border-purple-200' : baseClass}`;
     case 'progress_update':
       return `${!isRead ? 'bg-green-50 border-green-200' : baseClass}`;
     default:

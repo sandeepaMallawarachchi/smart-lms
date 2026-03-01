@@ -74,6 +74,7 @@ export interface ModuleConfig {
 export interface Course {
   _id: string
   courseName: string
+  courseCode?: string
   credits: number
   year: number
   semester: number
@@ -84,7 +85,7 @@ export interface CoursesApiResponse {
   success: boolean
   message: string
   data: {
-    student: any
+    student: unknown
     courses: Course[]
     totalCourses: number
   }
@@ -220,9 +221,9 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
         // },
         {
           id: 'notifications',
-          label: 'Project Notifications',
+          label: 'Notifications & Alerts',
           icon: <BellIcon size={20} />,
-          description: 'Your project notifications',
+          description: 'Your notifications & alerts',
           href: '/projects-and-tasks/student/notifications',
         },
         {
@@ -328,11 +329,6 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           label: 'Reports',
           icon: <FileText size={22} />,
           href: '/projects-and-tasks/lecturer/reports',
-          subsections: [
-            { id: 'project-summary', label: 'Summary' },
-            { id: 'student-progress', label: 'Progress' },
-            { id: 'export-data', label: 'Export' },
-          ],
         },
         {
           id: 'settings',
@@ -349,3 +345,26 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
     },
   },
 };
+
+export function updateConfigWithCourses(
+  baseConfig: Record<'student' | 'lecture', ModuleConfig>,
+  courses: Course[]
+): Record<'student' | 'lecture', ModuleConfig> {
+  if (!courses || courses.length === 0) {
+    return baseConfig;
+  }
+
+  const primaryCourse = courses[0];
+
+  return {
+    ...baseConfig,
+    student: {
+      ...baseConfig.student,
+      header: {
+        ...baseConfig.student.header,
+        courseCode: primaryCourse.courseCode || baseConfig.student.header.courseCode,
+        courseName: primaryCourse.courseName || baseConfig.student.header.courseName,
+      },
+    },
+  };
+}
