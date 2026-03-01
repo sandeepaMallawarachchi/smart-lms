@@ -6,6 +6,7 @@ import { errorResponse, serverErrorResponse, successResponse, unauthorizedRespon
 import Course from '@/model/Course';
 import CourseGroup from '@/model/CourseGroup';
 import Alert from '@/model/projects-and-tasks/lecturer/Alert';
+import { Notification } from '@/model/projects-and-tasks/notificationModel';
 import { getEligibleStudentsForCourse } from '@/lib/course-students';
 import { Project, StudentProjectProgress, StudentTaskProgress, Task } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
 
@@ -25,6 +26,35 @@ type CreateAlertBody = {
   groupId?: string;
   filterType?: 'all_students' | 'at_risk' | 'low_activity';
 };
+type CourseLite = {
+  courseName?: string;
+};
+type DeadlineItem = {
+  _id: { toString(): string };
+  deadlineDate?: string;
+  deadlineTime?: string;
+};
+type StatusProgressRow = {
+  studentId: string;
+  status?: string;
+  projectId?: string;
+  taskId?: string;
+};
+type ActivityProgressRow = {
+  studentId: string;
+  updatedAt?: string | Date;
+};
+type GroupLite = {
+  _id: { toString(): string };
+  groupName?: string;
+  studentIds?: unknown[];
+};
+type AlertLite = {
+  _id: { toString(): string };
+  groupId?: string;
+  recipientStudentIds?: string[];
+  [key: string]: unknown;
+};
 
 async function assertLecturerCourseAccess(courseId: string, lecturerId: string) {
   const hasAccess = await Course.exists({
@@ -32,6 +62,43 @@ async function assertLecturerCourseAccess(courseId: string, lecturerId: string) 
     $or: [{ lecturerInCharge: lecturerId }, { lecturers: lecturerId }],
   });
   return Boolean(hasAccess);
+}
+
+async function syncAlertNotifications(params: {
+  alertId: string;
+  recipientStudentIds: string[];
+  level: 'low' | 'medium' | 'high';
+  message: string;
+  courseName?: string;
+}) {
+  const academicLevelLabel: Record<'low' | 'medium' | 'high', string> = {
+    low: 'General Guidance',
+    medium: 'Priority Review',
+    high: 'Immediate Action',
+  };
+  const now = new Date();
+  const title = `${academicLevelLabel[params.level]}${params.courseName ? ` • ${params.courseName}` : ''}`;
+  const description = `Message from lecturer (${params.level} priority)`;
+
+  await Notification.deleteMany({ sourceAlertId: params.alertId });
+  if (params.recipientStudentIds.length === 0) return;
+
+  await Notification.insertMany(
+    params.recipientStudentIds.map((studentId) => ({
+      studentId,
+      sourceAlertId: params.alertId,
+      alertLevel: params.level,
+      type: 'lecturer_alert' as const,
+      title,
+      message: params.message,
+      description,
+      dedupeKey: `lecturer_alert:${params.alertId}:${studentId}`,
+      isRead: false,
+      isSent: true,
+      sentAt: now,
+      scheduledFor: now,
+    }))
+  );
 }
 
 export async function GET(request: NextRequest) {
@@ -75,11 +142,11 @@ export async function GET(request: NextRequest) {
       ])
     );
 
-    const groups = await CourseGroup.find({ courseId, isArchived: false }).select('_id groupName').lean();
-    const groupMap = new Map(groups.map((group: any) => [group._id.toString(), group.groupName || 'Group']));
+    const groups = (await CourseGroup.find({ courseId, isArchived: false }).select('_id groupName').lean()) as GroupLite[];
+    const groupMap = new Map(groups.map((group) => [group._id.toString(), group.groupName || 'Group']));
 
-    const alerts = await Alert.find({ courseId, lecturerId: payload.userId }).sort({ createdAt: -1 }).lean();
-    const enrichedAlerts = alerts.map((alert: any) => ({
+    const alerts = (await Alert.find({ courseId, lecturerId: payload.userId }).sort({ createdAt: -1 }).lean()) as AlertLite[];
+    const enrichedAlerts = alerts.map((alert) => ({
       ...alert,
       recipientStudents: (alert.recipientStudentIds || [])
         .map((studentId: string) => studentMap.get(studentId))
@@ -96,7 +163,7 @@ export async function GET(request: NextRequest) {
           name: student.name || '',
           studentIdNumber: student.studentIdNumber || '',
         })),
-        groups: groups.map((group: any) => ({
+        groups: groups.map((group) => ({
           _id: group._id.toString(),
           groupName: group.groupName || 'Group',
         })),
@@ -152,6 +219,7 @@ export async function POST(request: NextRequest) {
     }
 
     const students = courseAndStudents.students as StudentLite[];
+    const course = courseAndStudents.course as CourseLite;
     const eligibleIds = new Set(students.map((student) => student._id.toString()));
 
     let recipientStudentIds: string[] = [];
@@ -173,7 +241,7 @@ export async function POST(request: NextRequest) {
       if (!groupId) {
         return errorResponse('Group is required', { groupId: ['Select a group'] }, 400);
       }
-      const group = await CourseGroup.findOne({ _id: groupId, courseId, isArchived: false }).lean();
+      const group = (await CourseGroup.findOne({ _id: groupId, courseId, isArchived: false }).lean()) as GroupLite | null;
       if (!group) {
         return errorResponse('Group not found', { groupId: ['Invalid group for selected module'] }, 400);
       }
@@ -201,17 +269,18 @@ export async function POST(request: NextRequest) {
 
         const now = Date.now();
         const projectDeadline = new Map(
-          (projects as any[]).map((p) => [p._id.toString(), p.deadlineDate ? new Date(`${p.deadlineDate}T${p.deadlineTime || '23:59'}:00`).getTime() : null])
+          (projects as DeadlineItem[]).map((p) => [p._id.toString(), p.deadlineDate ? new Date(`${p.deadlineDate}T${p.deadlineTime || '23:59'}:00`).getTime() : null])
         );
         const taskDeadline = new Map(
-          (tasks as any[]).map((t) => [t._id.toString(), t.deadlineDate ? new Date(`${t.deadlineDate}T${t.deadlineTime || '23:59'}:00`).getTime() : null])
+          (tasks as DeadlineItem[]).map((t) => [t._id.toString(), t.deadlineDate ? new Date(`${t.deadlineDate}T${t.deadlineTime || '23:59'}:00`).getTime() : null])
         );
         const risky = new Set<string>();
-        [...projectProgress, ...taskProgress].forEach((row: any) => {
-          const studentId = String(row.studentId);
-          const status = row.status || 'todo';
+        [...projectProgress, ...taskProgress].forEach((row) => {
+          const typedRow = row as StatusProgressRow;
+          const studentId = String(typedRow.studentId);
+          const status = typedRow.status || 'todo';
           const deadline =
-            'projectId' in row ? projectDeadline.get(String(row.projectId)) : taskDeadline.get(String(row.taskId));
+            typedRow.projectId ? projectDeadline.get(String(typedRow.projectId)) : taskDeadline.get(String(typedRow.taskId));
           if (status !== 'done' && deadline && deadline < now) risky.add(studentId);
         });
         recipientStudentIds = [...risky].filter((id) => eligibleIds.has(id));
@@ -223,9 +292,10 @@ export async function POST(request: NextRequest) {
           StudentTaskProgress.find({ studentId: { $in: [...eligibleIds] } }).select('studentId updatedAt').lean(),
         ]);
         const activeRecently = new Set<string>();
-        [...projectProgress, ...taskProgress].forEach((row: any) => {
-          const updated = row.updatedAt ? new Date(row.updatedAt) : null;
-          if (updated && updated >= threshold) activeRecently.add(String(row.studentId));
+        [...projectProgress, ...taskProgress].forEach((row) => {
+          const typedRow = row as ActivityProgressRow;
+          const updated = typedRow.updatedAt ? new Date(typedRow.updatedAt) : null;
+          if (updated && updated >= threshold) activeRecently.add(String(typedRow.studentId));
         });
         recipientStudentIds = [...eligibleIds].filter((id) => !activeRecently.has(id));
       }
@@ -244,6 +314,14 @@ export async function POST(request: NextRequest) {
       filterType: targetMode === 'filter' ? body.filterType : undefined,
       groupId: targetMode === 'group' ? body.groupId : undefined,
       recipientStudentIds: [...new Set(recipientStudentIds)],
+    });
+
+    await syncAlertNotifications({
+      alertId: created._id.toString(),
+      recipientStudentIds: created.recipientStudentIds,
+      level,
+      message,
+      courseName: course.courseName,
     });
 
     return successResponse('Alert created successfully', { alert: created }, 201);

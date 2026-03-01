@@ -85,11 +85,11 @@ export default function LecturerSidebar() {
       id: 'reports',
       label: 'Reports',
       icon: <FileText size={22} />,
-      href: '/lecturer/reports',
+      href: '/projects-and-tasks/lecturer/reports',
       subsections: [
-        { id: 'project-summary', label: 'Summary' },
-        { id: 'student-progress', label: 'Progress' },
-        { id: 'export-data', label: 'Export' },
+        { id: 'project-summary', label: 'Summary', href: '/projects-and-tasks/lecturer/reports' },
+        { id: 'student-progress', label: 'Progress', href: '/projects-and-tasks/lecturer/reports?view=progress' },
+        { id: 'export-data', label: 'Export', href: '/projects-and-tasks/lecturer/reports?view=export' },
       ],
     },
     {

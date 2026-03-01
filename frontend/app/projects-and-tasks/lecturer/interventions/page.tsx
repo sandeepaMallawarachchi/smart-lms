@@ -48,6 +48,11 @@ const LEVEL_BADGE: Record<AlertLevel, string> = {
   medium: 'bg-amber-50 text-amber-700 border-amber-200',
   high: 'bg-red-50 text-red-700 border-red-200',
 };
+const LEVEL_LABEL: Record<AlertLevel, string> = {
+  low: 'General Guidance',
+  medium: 'Priority Review',
+  high: 'Immediate Action',
+};
 
 const TARGET_LABEL: Record<TargetMode, string> = {
   student: 'Single Student',
@@ -466,7 +471,7 @@ export default function LecturerAlertsPage() {
                         : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                     }`}
                   >
-                    {currentLevel}
+                    {LEVEL_LABEL[currentLevel]}
                   </button>
                 ))}
               </div>
@@ -530,7 +535,7 @@ export default function LecturerAlertsPage() {
                 <div className="flex flex-wrap items-center gap-2 justify-between">
                   <div className="flex items-center gap-2">
                     <span className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${LEVEL_BADGE[alert.level]}`}>
-                      {alert.level.toUpperCase()}
+                      {LEVEL_LABEL[alert.level]}
                     </span>
                     <span className="text-xs text-gray-500">
                       {new Date(alert.createdAt).toLocaleString('en-GB', {

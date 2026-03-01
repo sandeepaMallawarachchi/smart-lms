@@ -15,13 +15,15 @@ interface ITaskProgress {
 
 export interface INotification extends Document {
   studentId: string;
+  sourceAlertId?: string;
+  alertLevel?: 'low' | 'medium' | 'high';
   projectId?: string;
   taskId?: string;
   itemType?: 'project' | 'task';
   itemName?: string;
   reminderType?: 'project_25' | 'project_50' | 'project_75' | 'project_deadline' | 'task_25' | 'task_50' | 'task_75' | 'task_deadline';
   dedupeKey?: string;
-  type: 'project_reminder' | 'task_reminder' | 'deadline_warning' | 'overdue' | 'progress_update';
+  type: 'project_reminder' | 'task_reminder' | 'deadline_warning' | 'overdue' | 'progress_update' | 'lecturer_alert';
   reminderPercentage?: number;
   title: string;
   message: string;
@@ -60,6 +62,14 @@ const notificationSchema = new Schema<INotification>(
       required: true,
       index: true,
     },
+    sourceAlertId: {
+      type: String,
+      index: true,
+    },
+    alertLevel: {
+      type: String,
+      enum: ['low', 'medium', 'high'],
+    },
     projectId: {
       type: String,
       index: true,
@@ -85,7 +95,7 @@ const notificationSchema = new Schema<INotification>(
     },
     type: {
       type: String,
-      enum: ['project_reminder', 'task_reminder', 'deadline_warning', 'overdue', 'progress_update'],
+      enum: ['project_reminder', 'task_reminder', 'deadline_warning', 'overdue', 'progress_update', 'lecturer_alert'],
       required: true,
     },
     reminderPercentage: Number,
