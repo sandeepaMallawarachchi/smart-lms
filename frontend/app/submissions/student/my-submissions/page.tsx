@@ -1,456 +1,357 @@
 'use client';
 
-import React, {useState} from 'react';
-import {useRouter} from 'next/navigation';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import {
     Award,
-    Calendar,
-    CheckCircle2,
-    Clock,
-    Eye,
     FileText,
     GitBranch,
+    Loader,
+    Plus,
+    RefreshCw,
     Shield,
     Star,
+    AlertCircle,
 } from 'lucide-react';
+import SubmissionCard from '@/components/submissions/SubmissionCard';
+import { useSubmissions } from '@/hooks/useSubmissions';
+import type { Submission, SubmissionStatus } from '@/types/submission.types';
 
-interface Submission {
-    id: string;
-    assignmentTitle: string;
-    module: {
-        code: string;
-        name: string;
-    };
-    submittedAt: string;
-    totalVersions: number;
-    latestVersion: number;
-    status: 'submitted' | 'graded' | 'pending-review';
-    grade?: number;
-    totalMarks: number;
-    plagiarismScore: number;
-    aiScore: number;
-    wordCount: number;
-    feedback?: {
-        lecturer?: string;
-        ai?: string;
-    };
+// ─── Skeleton loading ─────────────────────────────────────────
+
+function SubmissionCardSkeleton() {
+    return (
+        <div className="bg-white rounded-lg border border-gray-200 p-6 animate-pulse">
+            <div className="flex gap-4">
+                <div className="w-12 h-12 bg-gray-200 rounded-lg shrink-0" />
+                <div className="flex-1 space-y-3">
+                    <div className="h-5 bg-gray-200 rounded w-2/3" />
+                    <div className="h-4 bg-gray-100 rounded w-1/3" />
+                    <div className="grid grid-cols-4 gap-3 mt-2">
+                        {[1, 2, 3, 4].map((i) => (
+                            <div key={i} className="h-16 bg-gray-100 rounded-lg" />
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 }
+
+// ─── Stat card ────────────────────────────────────────────────
+
+function StatCard({
+    value,
+    label,
+    colorClass,
+    bgClass,
+    borderClass,
+}: {
+    value: number | string;
+    label: string;
+    colorClass: string;
+    bgClass: string;
+    borderClass: string;
+}) {
+    return (
+        <div className={`p-4 rounded-lg border ${bgClass} ${borderClass}`}>
+            <div className={`text-2xl font-bold ${colorClass}`}>{value}</div>
+            <div className="text-xs text-gray-600 mt-1">{label}</div>
+        </div>
+    );
+}
+
+// ─── Filter buttons ───────────────────────────────────────────
+
+type Filter = 'all' | SubmissionStatus;
+
+const FILTERS: { key: Filter; label: string; activeClass: string }[] = [
+    { key: 'all',          label: 'All',            activeClass: 'bg-gray-800 text-white' },
+    { key: 'GRADED',       label: 'Graded',         activeClass: 'bg-green-600 text-white' },
+    { key: 'SUBMITTED',    label: 'Submitted',      activeClass: 'bg-purple-600 text-white' },
+    { key: 'PENDING_REVIEW', label: 'Pending Review', activeClass: 'bg-amber-500 text-white' },
+    { key: 'DRAFT',        label: 'Draft',          activeClass: 'bg-gray-500 text-white' },
+];
+
+// ─── Page ─────────────────────────────────────────────────────
 
 export default function MySubmissionsPage() {
     const router = useRouter();
-    const [filterStatus, setFilterStatus] = useState<'all' | 'submitted' | 'graded'>('all');
+    const [filter, setFilter] = useState<Filter>('all');
+    const [studentId, setStudentId] = useState<string | null>(null);
 
-    // Hardcoded submissions data
-    const submissions: Submission[] = [
-        {
-            id: '1',
-            assignmentTitle: 'Python Programming Basics',
-            module: {code: 'CS1001', name: 'Programming Fundamentals'},
-            submittedAt: '2025-01-04 18:30',
-            totalVersions: 5,
-            latestVersion: 5,
-            status: 'graded',
-            grade: 95,
-            totalMarks: 100,
-            plagiarismScore: 3,
-            aiScore: 92,
-            wordCount: 1250,
-            feedback: {
-                lecturer: 'Excellent work! Your code is well-structured and demonstrates strong understanding of Python fundamentals.',
-                ai: 'Great implementation of functions and data structures. Consider adding more comments for complex logic.',
-            },
-        },
-        {
-            id: '2',
-            assignmentTitle: 'Data Structures Implementation',
-            module: {code: 'CS2002', name: 'Data Structures & Algorithms'},
-            submittedAt: '2025-01-07 22:45',
-            totalVersions: 4,
-            latestVersion: 4,
-            status: 'submitted',
-            totalMarks: 100,
-            plagiarismScore: 8,
-            aiScore: 88,
-            wordCount: 2100,
-            feedback: {
-                ai: 'Good implementation of tree structures. Your AVL tree balancing logic is correct and efficient.',
-            },
-        },
-        {
-            id: '3',
-            assignmentTitle: 'Software Development Lifecycle Quiz',
-            module: {code: 'SE2001', name: 'Software Engineering'},
-            submittedAt: '2025-01-08 17:15',
-            totalVersions: 2,
-            latestVersion: 2,
-            status: 'pending-review',
-            totalMarks: 50,
-            plagiarismScore: 5,
-            aiScore: 85,
-            wordCount: 850,
-            feedback: {
-                ai: 'Solid understanding of Agile methodologies. Consider providing more specific examples in your answers.',
-            },
-        },
-        {
-            id: '4',
-            assignmentTitle: 'Web Development Project',
-            module: {code: 'WT2001', name: 'Web Technologies'},
-            submittedAt: '2024-12-20 23:59',
-            totalVersions: 8,
-            latestVersion: 8,
-            status: 'graded',
-            grade: 88,
-            totalMarks: 100,
-            plagiarismScore: 6,
-            aiScore: 90,
-            wordCount: 1800,
-            feedback: {
-                lecturer: 'Good project overall. Your React components are well-organized. The UI could be more polished.',
-                ai: 'Excellent use of modern React patterns. Your state management is efficient and clean.',
-            },
-        },
-        {
-            id: '5',
-            assignmentTitle: 'Object-Oriented Design Patterns',
-            module: {code: 'CS3003', name: 'Advanced Programming'},
-            submittedAt: '2024-12-15 20:30',
-            totalVersions: 6,
-            latestVersion: 6,
-            status: 'graded',
-            grade: 82,
-            totalMarks: 100,
-            plagiarismScore: 12,
-            aiScore: 78,
-            wordCount: 1600,
-            feedback: {
-                lecturer: 'You understand the patterns but implementation could be improved. Review the Factory pattern examples.',
-                ai: 'Good attempt at implementing design patterns. Some implementations deviate from standard patterns.',
-            },
-        },
-    ];
-
-    const filteredSubmissions = submissions.filter(sub => {
-        if (filterStatus === 'all') return true;
-        return sub.status === filterStatus;
-    });
-
-    const stats = {
-        total: submissions.length,
-        graded: submissions.filter(s => s.status === 'graded').length,
-        submitted: submissions.filter(s => s.status === 'submitted').length,
-        pendingReview: submissions.filter(s => s.status === 'pending-review').length,
-        averageGrade: Math.round(
-            submissions.filter(s => s.grade).reduce((sum, s) => sum + (s.grade || 0), 0) /
-            submissions.filter(s => s.grade).length
-        ),
-        totalVersions: submissions.reduce((sum, s) => sum + s.totalVersions, 0),
-    };
-
-    const getStatusBadge = (status: string, grade?: number) => {
-        switch (status) {
-            case 'graded':
-                return (
-                    <span
-                        className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-            <Award size={14}/>
-            Graded {grade && `(${grade}%)`}
-          </span>
-                );
-            case 'submitted':
-                return (
-                    <span
-                        className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-            <CheckCircle2 size={14}/>
-            Submitted
-          </span>
-                );
-            case 'pending-review':
-                return (
-                    <span
-                        className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-            <Clock size={14}/>
-            Pending Review
-          </span>
-                );
+    // Decode student ID from JWT
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                setStudentId(payload.userId ?? payload.sub ?? null);
+            }
+        } catch {
+            setStudentId(null);
         }
+    }, []);
+
+    const { data: submissions, loading, error, refetch } = useSubmissions(studentId);
+
+    // ── Filtered list
+    const filtered = useMemo(() => {
+        if (!submissions) return [];
+        if (filter === 'all') return submissions;
+        return submissions.filter((s) => s.status === filter);
+    }, [submissions, filter]);
+
+    // ── Computed stats
+    const stats = useMemo(() => {
+        const list = submissions ?? [];
+        const graded = list.filter((s) => s.status === 'GRADED');
+        return {
+            total: list.length,
+            graded: graded.length,
+            submitted: list.filter((s) => s.status === 'SUBMITTED').length,
+            pending: list.filter((s) => s.status === 'PENDING_REVIEW').length,
+            draft: list.filter((s) => s.status === 'DRAFT').length,
+            avgGrade:
+                graded.length > 0
+                    ? Math.round(
+                          graded.reduce((acc, s) => acc + (s.grade ?? 0), 0) / graded.length
+                      )
+                    : null,
+            totalVersions: list.reduce((acc, s) => acc + s.totalVersions, 0),
+        };
+    }, [submissions]);
+
+    // ── Filter button counts
+    const countFor = (f: Filter) => {
+        if (!submissions) return 0;
+        return f === 'all' ? submissions.length : submissions.filter((s) => s.status === f).length;
     };
 
     return (
         <div>
             {/* Header */}
-            <div className="mb-8">
-                <h1 className="text-4xl font-bold text-gray-900 mb-2">My Submissions</h1>
-                <p className="text-gray-600">View all your submitted assignments and their
-                    feedback</p>
+            <div className="flex items-start justify-between mb-8">
+                <div>
+                    <h1 className="text-4xl font-bold text-gray-900 mb-2">My Submissions</h1>
+                    <p className="text-gray-600">
+                        View all your submitted assignments, grades and feedback
+                    </p>
+                </div>
+                <div className="flex gap-3">
+                    <button
+                        onClick={() => refetch()}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50"
+                        title="Refresh"
+                    >
+                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                        Refresh
+                    </button>
+                    <button
+                        onClick={() => router.push('/submissions/student/submit')}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-semibold shadow-md"
+                    >
+                        <Plus size={16} />
+                        New Submission
+                    </button>
+                </div>
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-                <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                    <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-                    <div className="text-xs text-gray-600 mt-1">Total Submissions</div>
-                </div>
-                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                    <div className="text-2xl font-bold text-green-700">{stats.graded}</div>
-                    <div className="text-xs text-green-600 mt-1">Graded</div>
-                </div>
-                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                    <div className="text-2xl font-bold text-purple-700">{stats.submitted}</div>
-                    <div className="text-xs text-purple-600 mt-1">Submitted</div>
-                </div>
-                <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
-                    <div className="text-2xl font-bold text-amber-700">{stats.pendingReview}</div>
-                    <div className="text-xs text-amber-600 mt-1">Pending Review</div>
-                </div>
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                    <div className="text-2xl font-bold text-blue-700">{stats.averageGrade}%</div>
-                    <div className="text-xs text-blue-600 mt-1">Average Grade</div>
-                </div>
-                <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
-                    <div className="text-2xl font-bold text-indigo-700">{stats.totalVersions}</div>
-                    <div className="text-xs text-indigo-600 mt-1">Total Versions</div>
-                </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
+                <StatCard value={stats.total}    label="Total"         colorClass="text-gray-900"   bgClass="bg-white"        borderClass="border-gray-200" />
+                <StatCard value={stats.graded}   label="Graded"        colorClass="text-green-700"  bgClass="bg-green-50"     borderClass="border-green-200" />
+                <StatCard value={stats.submitted} label="Submitted"    colorClass="text-purple-700" bgClass="bg-purple-50"    borderClass="border-purple-200" />
+                <StatCard value={stats.pending}  label="Pending"       colorClass="text-amber-700"  bgClass="bg-amber-50"     borderClass="border-amber-200" />
+                <StatCard value={stats.draft}    label="Drafts"        colorClass="text-gray-600"   bgClass="bg-gray-50"      borderClass="border-gray-200" />
+                <StatCard
+                    value={stats.avgGrade != null ? `${stats.avgGrade}%` : '–'}
+                    label="Avg Grade"
+                    colorClass="text-blue-700"
+                    bgClass="bg-blue-50"
+                    borderClass="border-blue-200"
+                />
+                <StatCard
+                    value={stats.totalVersions}
+                    label="Total Versions"
+                    colorClass="text-indigo-700"
+                    bgClass="bg-indigo-50"
+                    borderClass="border-indigo-200"
+                />
             </div>
 
-            {/* Filter */}
+            {/* Filter bar */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-                <div className="flex items-center gap-4">
-                    <span className="text-sm font-medium text-gray-700">Filter by status:</span>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => setFilterStatus('all')}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                filterStatus === 'all'
-                                    ? 'bg-purple-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            All ({submissions.length})
-                        </button>
-                        <button
-                            onClick={() => setFilterStatus('graded')}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                filterStatus === 'graded'
-                                    ? 'bg-green-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            Graded ({stats.graded})
-                        </button>
-                        <button
-                            onClick={() => setFilterStatus('submitted')}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                filterStatus === 'submitted'
-                                    ? 'bg-purple-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            Submitted ({stats.submitted})
-                        </button>
+                <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-sm font-medium text-gray-700">Filter:</span>
+                    <div className="flex flex-wrap gap-2">
+                        {FILTERS.map(({ key, label, activeClass }) => (
+                            <button
+                                key={key}
+                                onClick={() => setFilter(key)}
+                                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                                    filter === key
+                                        ? activeClass
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                            >
+                                {label} ({countFor(key)})
+                            </button>
+                        ))}
                     </div>
                 </div>
             </div>
 
-            {/* Submissions List */}
-            <div className="space-y-4">
-                {filteredSubmissions.map((submission) => (
-                    <div
-                        key={submission.id}
-                        className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
-                    >
-                        <div
-                            className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
-                            {/* Left Section */}
-                            <div className="flex-1">
-                                <div className="flex items-start gap-4 mb-4">
-                                    <div
-                                        className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                                            submission.status === 'graded' ? 'bg-green-100' :
-                                                submission.status === 'submitted' ? 'bg-purple-100' :
-                                                    'bg-amber-100'
-                                        }`}>
-                                        <FileText size={24} className={
-                                            submission.status === 'graded' ? 'text-green-600' :
-                                                submission.status === 'submitted' ? 'text-purple-600' :
-                                                    'text-amber-600'
-                                        }/>
-                                    </div>
-
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <h3 className="text-lg font-semibold text-gray-900">{submission.assignmentTitle}</h3>
-                                            {getStatusBadge(submission.status, submission.grade)}
-                                        </div>
-
-                                        <div
-                                            className="flex items-center gap-2 text-sm text-gray-600 mb-3">
-                                            <span
-                                                className="font-medium">{submission.module.code}</span>
-                                            <span>•</span>
-                                            <span>{submission.module.name}</span>
-                                        </div>
-
-                                        <div
-                                            className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-                                            <div className="flex items-center gap-1">
-                                                <Calendar size={16}/>
-                                                <span>Submitted {new Date(submission.submittedAt).toLocaleDateString('en-US', {
-                                                    month: 'short',
-                                                    day: 'numeric',
-                                                    year: 'numeric',
-                                                    hour: '2-digit',
-                                                    minute: '2-digit',
-                                                })}</span>
-                                            </div>
-                                            <div
-                                                className="flex items-center gap-1 text-purple-600 font-medium">
-                                                <GitBranch size={16}/>
-                                                <span>{submission.totalVersions} version(s) • Latest: v{submission.latestVersion}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Metrics Grid */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                                    {submission.grade !== undefined && (
-                                        <div
-                                            className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                                            <div
-                                                className="flex items-center gap-1 text-xs text-gray-600 mb-1">
-                                                <Award size={14}/>
-                                                Grade
-                                            </div>
-                                            <div
-                                                className="text-xl font-bold text-green-600">{submission.grade}%
-                                            </div>
-                                            <div
-                                                className="text-xs text-gray-500">{submission.totalMarks} marks
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div className={`p-3 border rounded-lg ${
-                                        submission.plagiarismScore < 10
-                                            ? 'bg-green-50 border-green-200'
-                                            : submission.plagiarismScore < 20
-                                                ? 'bg-amber-50 border-amber-200'
-                                                : 'bg-red-50 border-red-200'
-                                    }`}>
-                                        <div
-                                            className="flex items-center gap-1 text-xs text-gray-600 mb-1">
-                                            <Shield size={14}/>
-                                            Plagiarism
-                                        </div>
-                                        <div className={`text-xl font-bold ${
-                                            submission.plagiarismScore < 10
-                                                ? 'text-green-600'
-                                                : submission.plagiarismScore < 20
-                                                    ? 'text-amber-600'
-                                                    : 'text-red-600'
-                                        }`}>
-                                            {submission.plagiarismScore}%
-                                        </div>
-                                        <div className="text-xs text-gray-500">
-                                            {submission.plagiarismScore < 10 ? 'Excellent' : submission.plagiarismScore < 20 ? 'Good' : 'High'}
-                                        </div>
-                                    </div>
-                                    <div
-                                        className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                                        <div
-                                            className="flex items-center gap-1 text-xs text-gray-600 mb-1">
-                                            <Star size={14}/>
-                                            AI Score
-                                        </div>
-                                        <div
-                                            className="text-xl font-bold text-purple-600">{submission.aiScore}/100
-                                        </div>
-                                        <div className="text-xs text-gray-500">Quality</div>
-                                    </div>
-                                    <div
-                                        className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                                        <div
-                                            className="flex items-center gap-1 text-xs text-gray-600 mb-1">
-                                            <FileText size={14}/>
-                                            Words
-                                        </div>
-                                        <div
-                                            className="text-xl font-bold text-blue-600">{submission.wordCount}</div>
-                                        <div className="text-xs text-gray-500">Total</div>
-                                    </div>
-                                </div>
-
-                                {/* Feedback Section */}
-                                {submission.feedback && (
-                                    <div className="space-y-2">
-                                        {submission.feedback.lecturer && (
-                                            <div
-                                                className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
-                                                <div className="flex items-start gap-2">
-                                                    <Award className="text-blue-600 mt-0.5"
-                                                           size={18}/>
-                                                    <div>
-                                                        <p className="text-xs font-medium text-blue-900 mb-1">Lecturer
-                                                            Feedback:</p>
-                                                        <p className="text-sm text-blue-800">{submission.feedback.lecturer}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                        {submission.feedback.ai && (
-                                            <div
-                                                className="p-3 bg-purple-50 border-l-4 border-purple-500 rounded">
-                                                <div className="flex items-start gap-2">
-                                                    <Star className="text-purple-600 mt-0.5"
-                                                          size={18}/>
-                                                    <div>
-                                                        <p className="text-xs font-medium text-purple-900 mb-1">AI
-                                                            Feedback:</p>
-                                                        <p className="text-sm text-purple-800">{submission.feedback.ai}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Right Section - Actions */}
-                            <div className="flex flex-col gap-2">
-                                <button
-                                    onClick={() => router.push(`/submissions/student/my-submissions/${submission.id}`)}
-                                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center gap-2 justify-center"
-                                >
-                                    <Eye size={18}/>
-                                    View Details
-                                </button>
-                                <button
-                                    onClick={() => router.push(`/submissions/student/versions/${submission.id}`)}
-                                    className="px-4 py-2 border border-purple-600 text-purple-600 rounded-lg hover:bg-purple-50 transition-colors font-medium flex items-center gap-2 justify-center"
-                                >
-                                    <GitBranch size={18}/>
-                                    Version History
-                                </button>
-                                <button
-                                    onClick={() => router.push(`/submissions/student/plagiarism/${submission.id}`)}
-                                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2 justify-center"
-                                >
-                                    <Shield size={18}/>
-                                    Plagiarism Report
-                                </button>
-                            </div>
-                        </div>
+            {/* Error banner */}
+            {error && (
+                <div className="flex items-start gap-3 p-4 mb-6 bg-amber-50 border border-amber-200 rounded-lg">
+                    <AlertCircle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="font-medium text-amber-800">Could not load live data</p>
+                        <p className="text-sm text-amber-700 mt-0.5">{error}</p>
+                        <p className="text-sm text-amber-600 mt-1">
+                            Showing sample data below. Check that your backend services are running.
+                        </p>
                     </div>
-                ))}
+                </div>
+            )}
 
-                {filteredSubmissions.length === 0 && (
-                    <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-                        <FileText size={48} className="mx-auto text-gray-400 mb-4"/>
-                        <p className="text-gray-500 text-lg">No submissions found</p>
-                        <p className="text-gray-400 text-sm mt-2">Try adjusting your filter</p>
-                    </div>
-                )}
+            {/* Content */}
+            {loading ? (
+                <div className="space-y-4">
+                    {[1, 2, 3].map((i) => <SubmissionCardSkeleton key={i} />)}
+                </div>
+            ) : filtered.length > 0 ? (
+                <div className="space-y-4">
+                    {filtered.map((submission) => (
+                        <SubmissionCard
+                            key={submission.id}
+                            submission={submission}
+                            onView={(id) =>
+                                router.push(`/submissions/student/my-submissions/${id}`)
+                            }
+                            onVersionHistory={(id) =>
+                                router.push(`/submissions/student/version-history/${id}`)
+                            }
+                            onPlagiarismReport={(id) =>
+                                router.push(`/submissions/student/plagiarism/${id}`)
+                            }
+                        />
+                    ))}
+                </div>
+            ) : error ? (
+                /* Fallback sample data when backend is unavailable */
+                <FallbackSubmissions router={router} />
+            ) : (
+                <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+                    <FileText size={52} className="mx-auto text-gray-300 mb-4" />
+                    <p className="text-gray-500 text-lg font-medium">
+                        {filter === 'all' ? 'No submissions yet' : `No ${filter.toLowerCase()} submissions`}
+                    </p>
+                    {filter !== 'all' ? (
+                        <button
+                            onClick={() => setFilter('all')}
+                            className="mt-3 text-purple-600 hover:text-purple-700 text-sm font-medium"
+                        >
+                            Show all submissions
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => router.push('/submissions/student/submit')}
+                            className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                        >
+                            <Plus size={18} />
+                            Make Your First Submission
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ─── Fallback sample data (shown when backend unavailable) ────
+
+function FallbackSubmissions({ router }: { router: ReturnType<typeof useRouter> }) {
+    const SAMPLE: Submission[] = [
+        {
+            id: '1',
+            studentId: 'demo',
+            assignmentId: 'a1',
+            assignmentTitle: 'Python Programming Basics',
+            moduleCode: 'CS1001',
+            moduleName: 'Programming Fundamentals',
+            status: 'GRADED',
+            submittedAt: '2025-01-04T18:30:00',
+            currentVersionNumber: 5,
+            totalVersions: 5,
+            grade: 95,
+            totalMarks: 100,
+            plagiarismScore: 3,
+            aiScore: 92,
+            wordCount: 1250,
+            createdAt: '2025-01-01T10:00:00',
+            files: [],
+            lecturerFeedback: 'Excellent work! Your code is well-structured.',
+        },
+        {
+            id: '2',
+            studentId: 'demo',
+            assignmentId: 'a2',
+            assignmentTitle: 'Data Structures Implementation',
+            moduleCode: 'CS2002',
+            moduleName: 'Data Structures & Algorithms',
+            status: 'SUBMITTED',
+            submittedAt: '2025-01-07T22:45:00',
+            currentVersionNumber: 4,
+            totalVersions: 4,
+            totalMarks: 100,
+            plagiarismScore: 8,
+            aiScore: 88,
+            wordCount: 2100,
+            createdAt: '2025-01-05T14:00:00',
+            files: [],
+        },
+        {
+            id: '3',
+            studentId: 'demo',
+            assignmentId: 'a3',
+            assignmentTitle: 'Software Development Lifecycle Quiz',
+            moduleCode: 'SE2001',
+            moduleName: 'Software Engineering',
+            status: 'PENDING_REVIEW',
+            submittedAt: '2025-01-08T17:15:00',
+            currentVersionNumber: 2,
+            totalVersions: 2,
+            totalMarks: 50,
+            plagiarismScore: 5,
+            aiScore: 85,
+            wordCount: 850,
+            createdAt: '2025-01-07T09:00:00',
+            files: [],
+        },
+    ];
+
+    return (
+        <div className="space-y-4">
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-500 text-center">
+                Showing sample data — connect your backend to see real submissions
             </div>
+            {SAMPLE.map((submission) => (
+                <SubmissionCard
+                    key={submission.id}
+                    submission={submission}
+                    onView={(id) => router.push(`/submissions/student/my-submissions/${id}`)}
+                    onVersionHistory={(id) =>
+                        router.push(`/submissions/student/version-history/${id}`)
+                    }
+                    onPlagiarismReport={(id) =>
+                        router.push(`/submissions/student/plagiarism/${id}`)
+                    }
+                />
+            ))}
         </div>
     );
 }

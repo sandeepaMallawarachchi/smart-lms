@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, use } from 'react';
+import React, { useState, use, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     ArrowLeft,
@@ -15,14 +15,32 @@ import {
     FileText,
     GitBranch,
     Shield,
-    Award,
     Clock,
     Calendar,
     Eye,
     RefreshCw,
+    AlertCircle,
+    CheckCircle2,
 } from 'lucide-react';
+import { useSubmission, useGradeSubmission } from '@/hooks/useSubmissions';
+import { useFeedback } from '@/hooks/useFeedback';
+import type { Feedback } from '@/types/submission.types';
 
-interface Question {
+// ─── Types for per-question grading ──────────────────────────
+
+interface QuestionAnswer {
+    questionId: string;
+    subQuestionId?: string;
+    text: string;
+    wordCount: number;
+    aiFeedback: string;
+    aiScore: number;
+    lecturerFeedback: string;
+    lecturerScore?: number;
+    maxMarks: number;
+}
+
+interface QuestionDef {
     id: string;
     number: number;
     text: string;
@@ -35,272 +53,337 @@ interface Question {
     }[];
 }
 
-interface Answer {
-    questionId: string;
-    subQuestionId?: string;
-    text: string;
-    wordCount: number;
-    aiFeedback: string;
-    aiScore: number;
-    lecturerFeedback: string;
-    lecturerScore?: number;
-    maxMarks: number;
+// ─── Helpers ──────────────────────────────────────────────────
+
+function formatDate(dateStr: string | null | undefined) {
+    if (!dateStr) return '—';
+    return new Date(dateStr).toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+    });
 }
 
-export default function LecturerGradingInterfacePage({ params }: { params: Promise<{ submissionId: string }> }) {
-    const resolvedParams = use(params);
+/** Build initial answers from optional AI feedback */
+function buildInitialAnswers(
+    questions: QuestionDef[],
+    feedback: Feedback | null
+): Record<string, QuestionAnswer> {
+    const result: Record<string, QuestionAnswer> = {};
+    const overallFeedback = feedback?.overallAssessment ?? 'AI feedback not yet available.';
+
+    questions.forEach((q) => {
+        if (!q.subQuestions) {
+            result[q.id] = {
+                questionId: q.id,
+                text: '',
+                wordCount: 0,
+                aiFeedback: overallFeedback,
+                aiScore: feedback ? 80 : 0,
+                lecturerFeedback: '',
+                maxMarks: q.marks,
+            };
+        } else {
+            q.subQuestions.forEach((sq) => {
+                const key = `${q.id}-${sq.id}`;
+                result[key] = {
+                    questionId: q.id,
+                    subQuestionId: sq.id,
+                    text: '',
+                    wordCount: 0,
+                    aiFeedback: overallFeedback,
+                    aiScore: feedback ? 80 : 0,
+                    lecturerFeedback: '',
+                    maxMarks: sq.marks,
+                };
+            });
+        }
+    });
+    return result;
+}
+
+// ─── Static question definitions (assignment-level data) ──────
+// In production these would come from the assignment API.
+// For now we use a representative structure that reflects the
+// assignment linked to this submission.
+const DEFAULT_QUESTIONS: QuestionDef[] = [
+    {
+        id: 'q1', number: 1,
+        text: 'Explain the key concepts covered in this assignment.',
+        marks: 25,
+    },
+    {
+        id: 'q2', number: 2,
+        text: 'Design and implement the core solution.',
+        marks: 35,
+        subQuestions: [
+            { id: 'q2a', letter: 'a', text: 'Provide a design diagram or outline.', marks: 15 },
+            { id: 'q2b', letter: 'b', text: 'Implement and document your solution.', marks: 20 },
+        ],
+    },
+    {
+        id: 'q3', number: 3,
+        text: 'Evaluate and test your implementation.',
+        marks: 25,
+    },
+    {
+        id: 'q4', number: 4,
+        text: 'Write a reflection on what you learned.',
+        marks: 15,
+    },
+];
+
+// ─── Sub-components ──────────────────────────────────────────
+
+function FeedbackBlock({
+    questionKey,
+    answer,
+    questionMarks,
+    isEditing,
+    isGenerating,
+    onEdit,
+    onSave,
+    onCancel,
+    onRegenerate,
+    tempFeedback,
+    setTempFeedback,
+    tempScore,
+    setTempScore,
+}: {
+    questionKey: string;
+    answer: QuestionAnswer;
+    questionMarks: number;
+    isEditing: boolean;
+    isGenerating: boolean;
+    onEdit: () => void;
+    onSave: () => void;
+    onCancel: () => void;
+    onRegenerate: () => void;
+    tempFeedback: string;
+    setTempFeedback: (v: string) => void;
+    tempScore: number | undefined;
+    setTempScore: (v: number) => void;
+}) {
+    const isModified = !!answer.lecturerFeedback;
+    const displayFeedback = answer.lecturerFeedback || answer.aiFeedback;
+    const displayScore = answer.lecturerScore ?? answer.aiScore;
+
+    if (isEditing) {
+        return (
+            <div className="space-y-3">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Your Feedback:
+                    </label>
+                    <textarea
+                        value={tempFeedback}
+                        onChange={e => setTempFeedback(e.target.value)}
+                        rows={4}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        placeholder="Enter your feedback..."
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Score (out of 100):
+                    </label>
+                    <input
+                        type="number"
+                        value={tempScore ?? ''}
+                        onChange={e => setTempScore(Number(e.target.value))}
+                        min={0}
+                        max={100}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    />
+                    {tempScore != null && (
+                        <p className="text-xs text-gray-500 mt-1">
+                            ≈ {Math.round((tempScore / 100) * questionMarks)} / {questionMarks} marks
+                        </p>
+                    )}
+                </div>
+                <div className="flex gap-2">
+                    <button
+                        onClick={onSave}
+                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm"
+                    >
+                        <Check size={16} /> Save
+                    </button>
+                    <button
+                        onClick={onCancel}
+                        className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium flex items-center justify-center gap-2 text-sm"
+                    >
+                        <X size={16} /> Cancel
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            <div className={`p-4 rounded-lg border-l-4 ${
+                isModified ? 'bg-blue-50 border-blue-500' : 'bg-purple-50 border-purple-500'
+            }`}>
+                <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                        {isModified
+                            ? <Edit className="text-blue-600" size={18} />
+                            : <Sparkles className="text-purple-600" size={18} />
+                        }
+                        <span className="font-medium text-sm">
+                            {isModified ? 'Your Feedback' : 'AI-Generated Feedback'}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-xl font-bold text-gray-900">{displayScore}/100</span>
+                        <span className="text-sm text-gray-600">
+                            ({Math.round((displayScore / 100) * questionMarks)}/{questionMarks})
+                        </span>
+                    </div>
+                </div>
+                <p className="text-sm text-gray-700">{displayFeedback}</p>
+            </div>
+
+            <div className="flex gap-2 mt-3">
+                <button
+                    onClick={onEdit}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm"
+                >
+                    <Edit size={16} />
+                    {isModified ? 'Edit Feedback' : 'Modify AI Feedback'}
+                </button>
+                {!isModified && (
+                    <button
+                        onClick={onRegenerate}
+                        disabled={isGenerating}
+                        className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors font-medium flex items-center gap-2 text-sm disabled:opacity-50"
+                    >
+                        <RefreshCw size={16} className={isGenerating ? 'animate-spin' : ''} />
+                        Regenerate
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ─── Page ─────────────────────────────────────────────────────
+
+export default function LecturerGradingInterfacePage({
+    params,
+}: {
+    params: Promise<{ submissionId: string }>;
+}) {
+    const { submissionId } = use(params);
     const router = useRouter();
 
-    const [answers, setAnswers] = useState<Record<string, Answer>>({});
-    const [editingFeedback, setEditingFeedback] = useState<string | null>(null);
-    const [tempFeedback, setTempFeedback] = useState('');
-    const [tempScore, setTempScore] = useState<number | undefined>();
+    // API hooks
+    const { data: submission, loading: subLoading } = useSubmission(submissionId);
+    const { data: feedback, loading: fbLoading } = useFeedback(submissionId);
+    const {
+        loading: grading,
+        error: gradeError,
+        success: gradeSuccess,
+        gradeSubmission,
+    } = useGradeSubmission();
+
+    // Local grading state
+    const [answers, setAnswers]             = useState<Record<string, QuestionAnswer>>({});
+    const [editingKey, setEditingKey]       = useState<string | null>(null);
+    const [tempFeedback, setTempFeedback]   = useState('');
+    const [tempScore, setTempScore]         = useState<number | undefined>();
     const [overallComment, setOverallComment] = useState('');
-    const [finalGrade, setFinalGrade] = useState<number | undefined>();
     const [isGeneratingAI, setIsGeneratingAI] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
-    const [showAnswers, setShowAnswers] = useState(true);
+    const [showAnswers, setShowAnswers]     = useState(true);
+    const [submitted, setSubmitted]         = useState(false);
 
-    // Hardcoded submission data
-    const submission = {
-        id: resolvedParams.submissionId,
-        student: {
-            id: 's1',
-            name: 'Alice Johnson',
-            studentId: 'STU001',
-            email: 'alice.johnson@university.edu',
-        },
-        assignment: {
-            id: 'a1',
-            title: 'Database Design and Normalization',
-            module: { code: 'CS3001', name: 'Database Management Systems' },
-            totalMarks: 100,
-            questions: [
-                {
-                    id: 'q1',
-                    number: 1,
-                    text: 'Explain the concept of database normalization and its importance in database design.',
-                    marks: 20,
-                },
-                {
-                    id: 'q2',
-                    number: 2,
-                    text: 'Design a normalized database for an e-commerce system.',
-                    marks: 30,
-                    subQuestions: [
-                        {
-                            id: 'q2a',
-                            letter: 'a',
-                            text: 'Create an Entity-Relationship (ER) diagram showing all entities, attributes, and relationships.',
-                            marks: 15,
-                        },
-                        {
-                            id: 'q2b',
-                            letter: 'b',
-                            text: 'Convert your ER diagram to relational schema in 3NF.',
-                            marks: 15,
-                        },
-                    ],
-                },
-                {
-                    id: 'q3',
-                    number: 3,
-                    text: 'Compare and contrast different types of database keys.',
-                    marks: 25,
-                },
-                {
-                    id: 'q4',
-                    number: 4,
-                    text: 'Write SQL queries for the given scenarios.',
-                    marks: 25,
-                    subQuestions: [
-                        {
-                            id: 'q4a',
-                            letter: 'a',
-                            text: 'Retrieve all customers who have made purchases in the last 30 days.',
-                            marks: 8,
-                        },
-                        {
-                            id: 'q4b',
-                            letter: 'b',
-                            text: 'Find the top 5 best-selling products.',
-                            marks: 9,
-                        },
-                        {
-                            id: 'q4c',
-                            letter: 'c',
-                            text: 'List customers who have never made a purchase.',
-                            marks: 8,
-                        },
-                    ],
-                },
-            ] as Question[],
-        },
-        version: 4,
-        submittedAt: '2025-01-08 20:45',
-        dueDate: '2025-01-15 23:59',
-        plagiarismScore: 5,
-        overallAIScore: 88,
-    };
+    // Build initial answers once feedback loads
+    useEffect(() => {
+        if (!fbLoading) {
+            setAnswers(buildInitialAnswers(DEFAULT_QUESTIONS, feedback));
+        }
+    }, [feedback, fbLoading]);
 
-    // Initialize answers with AI feedback
-    React.useEffect(() => {
-        const initialAnswers: Record<string, Answer> = {
-            'q1': {
-                questionId: 'q1',
-                text: 'A Binary Search Tree (BST) is a fundamental hierarchical data structure that maintains an ordered collection of elements. Each node stores a value and references to at most two children: left and right. The defining BST property ensures that all values in the left subtree are strictly less than the parent, while all values in the right subtree are strictly greater.',
-                wordCount: 300,
-                aiFeedback: 'Excellent explanation of database normalization! The student demonstrates a strong understanding of the concept and its importance. The answer covers all normal forms comprehensively. However, could benefit from more real-world examples of denormalization scenarios.',
-                aiScore: 90,
-                lecturerFeedback: '',
-                maxMarks: 20,
-            },
-            'q2-q2a': {
-                questionId: 'q2',
-                subQuestionId: 'q2a',
-                text: '[ER Diagram description provided by student showing entities: Customer, Product, Order, OrderItem with appropriate relationships]',
-                wordCount: 320,
-                aiFeedback: 'Very good ER diagram design. All major entities are identified and relationships are correctly established. The cardinality notations are appropriate. Consider adding more attributes like timestamps and status fields.',
-                aiScore: 85,
-                lecturerFeedback: '',
-                maxMarks: 15,
-            },
-            'q2-q2b': {
-                questionId: 'q2',
-                subQuestionId: 'q2b',
-                text: '[Student provided normalization steps from 1NF to 3NF with proper functional dependencies]',
-                wordCount: 280,
-                aiFeedback: 'Solid understanding of normalization process. The conversion from ER to relational schema is well done. All tables are properly normalized to 3NF. Good identification of functional dependencies.',
-                aiScore: 88,
-                lecturerFeedback: '',
-                maxMarks: 15,
-            },
-            'q3': {
-                questionId: 'q3',
-                text: 'Database keys are essential for maintaining data integrity... Primary keys uniquely identify records, foreign keys establish relationships, candidate keys are potential primary keys, and composite keys combine multiple columns...',
-                wordCount: 230,
-                aiFeedback: 'Good comparison of different key types. The student understands the purpose of each key type. Would benefit from more examples showing how composite keys are used in practice.',
-                aiScore: 82,
-                lecturerFeedback: '',
-                maxMarks: 25,
-            },
-            'q4-q4a': {
-                questionId: 'q4',
-                subQuestionId: 'q4a',
-                text: 'SELECT DISTINCT c.* FROM customers c JOIN orders o ON c.customer_id = o.customer_id WHERE o.order_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY);',
-                wordCount: 25,
-                aiFeedback: 'Correct SQL query! The use of DATE_SUB and JOIN is appropriate. Good understanding of date functions.',
-                aiScore: 95,
-                lecturerFeedback: '',
-                maxMarks: 8,
-            },
-            'q4-q4b': {
-                questionId: 'q4',
-                subQuestionId: 'q4b',
-                text: 'SELECT p.product_id, p.product_name, SUM(oi.quantity * oi.price) as total_revenue FROM products p JOIN order_items oi ON p.product_id = oi.product_id GROUP BY p.product_id ORDER BY total_revenue DESC LIMIT 5;',
-                wordCount: 35,
-                aiFeedback: 'Excellent query! Proper use of JOIN, GROUP BY, and ORDER BY. The revenue calculation is correct.',
-                aiScore: 98,
-                lecturerFeedback: '',
-                maxMarks: 9,
-            },
-            'q4-q4c': {
-                questionId: 'q4',
-                subQuestionId: 'q4c',
-                text: 'SELECT c.* FROM customers c LEFT JOIN orders o ON c.customer_id = o.customer_id WHERE o.order_id IS NULL;',
-                wordCount: 20,
-                aiFeedback: 'Perfect! Correct use of LEFT JOIN to find customers with no orders.',
-                aiScore: 100,
-                lecturerFeedback: '',
-                maxMarks: 8,
-            },
-        };
-        setAnswers(initialAnswers);
-    }, []);
+    // Show AI overall assessment in overall comment when feedback arrives
+    useEffect(() => {
+        if (feedback?.overallAssessment && !overallComment) {
+            setOverallComment(feedback.overallAssessment);
+        }
+    }, [feedback]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // ── Handlers ────────────────────────────────────────────
 
     const handleEditFeedback = (key: string) => {
-        setEditingFeedback(key);
+        setEditingKey(key);
         setTempFeedback(answers[key]?.lecturerFeedback || answers[key]?.aiFeedback || '');
-        setTempScore(answers[key]?.lecturerScore || answers[key]?.aiScore);
+        setTempScore(answers[key]?.lecturerScore ?? answers[key]?.aiScore);
     };
 
     const handleSaveFeedback = (key: string) => {
         setAnswers(prev => ({
             ...prev,
-            [key]: {
-                ...prev[key],
-                lecturerFeedback: tempFeedback,
-                lecturerScore: tempScore,
-            },
+            [key]: { ...prev[key], lecturerFeedback: tempFeedback, lecturerScore: tempScore },
         }));
-        setEditingFeedback(null);
-        setTempFeedback('');
-        setTempScore(undefined);
+        setEditingKey(null);
     };
 
-    const handleCancelEdit = () => {
-        setEditingFeedback(null);
-        setTempFeedback('');
-        setTempScore(undefined);
-    };
-
-    const handleRegenerateAI = async (key: string) => {
+    const handleRegenerate = async (key: string) => {
         setIsGeneratingAI(true);
-        // Simulate AI generation
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        const newFeedback = 'Regenerated AI feedback with enhanced analysis...';
+        await new Promise(r => setTimeout(r, 1500));
         setAnswers(prev => ({
             ...prev,
             [key]: {
                 ...prev[key],
-                aiFeedback: newFeedback,
+                aiFeedback: feedback?.overallAssessment ?? 'Regenerated AI feedback.',
             },
         }));
         setIsGeneratingAI(false);
     };
 
-    const calculateTotalGrade = () => {
-        let total = 0;
+    const calculateGrade = () => {
+        let scored = 0;
         let maxTotal = 0;
-
-        Object.values(answers).forEach(answer => {
-            const score = answer.lecturerScore ?? answer.aiScore;
-            const percentage = score / 100;
-            total += answer.maxMarks * percentage;
-            maxTotal += answer.maxMarks;
+        Object.values(answers).forEach(a => {
+            const pct = (a.lecturerScore ?? a.aiScore) / 100;
+            scored += a.maxMarks * pct;
+            maxTotal += a.maxMarks;
         });
-
-        return {
-            scored: Math.round(total * 10) / 10,
-            total: maxTotal,
-            percentage: Math.round((total / maxTotal) * 100),
-        };
+        const percentage = maxTotal > 0 ? Math.round((scored / maxTotal) * 100) : 0;
+        return { scored: Math.round(scored * 10) / 10, total: maxTotal, percentage };
     };
 
     const handleSubmitGrade = async () => {
-        if (!confirm('Are you sure you want to submit this grade? This will notify the student.')) {
-            return;
+        if (!confirm('Submit this grade? The student will be notified.')) return;
+
+        const grade = calculateGrade();
+        const questionScores = Object.fromEntries(
+            Object.entries(answers).map(([k, a]) => [k, a.lecturerScore ?? a.aiScore])
+        );
+
+        const result = await gradeSubmission(submissionId, {
+            grade: grade.percentage,
+            lecturerFeedback: overallComment,
+            questionScores,
+        });
+
+        if (result) {
+            setSubmitted(true);
+            router.push('/submissions/lecturer/submissions');
         }
-
-        setIsSaving(true);
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        alert('Grade submitted successfully! Student has been notified.');
-        router.push('/submissions/lecturer/submissions');
     };
 
-    const handleSaveDraft = async () => {
-        setIsSaving(true);
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
+    const grade = calculateGrade();
 
-        alert('Grade saved as draft.');
-        setIsSaving(false);
-    };
-
-    const grade = calculateTotalGrade();
+    // ── Loading skeleton ─────────────────────────────────────
+    if (subLoading && !submission) {
+        return (
+            <div className="max-w-7xl mx-auto animate-pulse space-y-6">
+                <div className="h-6 bg-gray-200 rounded w-36" />
+                <div className="h-32 bg-gray-100 rounded-lg" />
+                <div className="h-64 bg-gray-100 rounded-lg" />
+                <div className="h-64 bg-gray-100 rounded-lg" />
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-7xl mx-auto">
@@ -314,6 +397,7 @@ export default function LecturerGradingInterfacePage({ params }: { params: Promi
                     Back to Submissions
                 </button>
 
+                {/* Submission info card */}
                 <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
                     <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-4">
@@ -321,12 +405,15 @@ export default function LecturerGradingInterfacePage({ params }: { params: Promi
                                 <User className="text-blue-600" size={32} />
                             </div>
                             <div>
-                                <h1 className="text-2xl font-bold text-gray-900">{submission.student.name}</h1>
-                                <p className="text-gray-600">{submission.student.studentId} • {submission.student.email}</p>
-                                <p className="text-sm text-gray-500 mt-1">{submission.assignment.title}</p>
+                                <h1 className="text-2xl font-bold text-gray-900">
+                                    {submission?.studentId ?? submissionId}
+                                </h1>
+                                <p className="text-gray-600">
+                                    {submission?.assignmentTitle ?? 'Assignment'}
+                                    {submission?.moduleCode ? ` • ${submission.moduleCode}` : ''}
+                                </p>
                             </div>
                         </div>
-
                         <div className="text-right">
                             <div className="text-3xl font-bold text-blue-600">{grade.percentage}%</div>
                             <div className="text-sm text-gray-600">{grade.scored}/{grade.total} marks</div>
@@ -339,12 +426,7 @@ export default function LecturerGradingInterfacePage({ params }: { params: Promi
                             <div>
                                 <div className="text-xs text-gray-500">Submitted</div>
                                 <div className="font-medium text-sm">
-                                    {new Date(submission.submittedAt).toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                    })}
+                                    {formatDate(submission?.submittedAt)}
                                 </div>
                             </div>
                         </div>
@@ -352,309 +434,197 @@ export default function LecturerGradingInterfacePage({ params }: { params: Promi
                             <GitBranch className="text-purple-600" size={20} />
                             <div>
                                 <div className="text-xs text-gray-500">Version</div>
-                                <div className="font-medium text-sm">{submission.version}</div>
+                                <div className="font-medium text-sm">
+                                    {submission?.currentVersionNumber ?? '—'}
+                                </div>
                             </div>
                         </div>
                         <div className="flex items-center gap-2 text-gray-700">
                             <Shield className="text-green-600" size={20} />
                             <div>
                                 <div className="text-xs text-gray-500">Plagiarism</div>
-                                <div className="font-medium text-sm">{submission.plagiarismScore}%</div>
+                                <div className="font-medium text-sm">
+                                    {submission?.plagiarismScore != null
+                                        ? `${submission.plagiarismScore}%`
+                                        : '—'}
+                                </div>
                             </div>
                         </div>
                         <div className="flex items-center gap-2 text-gray-700">
                             <Star className="text-amber-600" size={20} />
                             <div>
                                 <div className="text-xs text-gray-500">AI Score</div>
-                                <div className="font-medium text-sm">{submission.overallAIScore}/100</div>
+                                <div className="font-medium text-sm">
+                                    {submission?.aiScore != null ? `${submission.aiScore}/100` : '—'}
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Toggle Answers Visibility */}
+            {/* Grading error / success */}
+            {gradeError && (
+                <div className="flex items-start gap-3 p-4 mb-6 bg-red-50 border border-red-200 rounded-lg">
+                    <AlertCircle size={20} className="text-red-600 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="font-medium text-red-800">Grade submission failed</p>
+                        <p className="text-sm text-red-700 mt-0.5">{gradeError}</p>
+                    </div>
+                </div>
+            )}
+            {gradeSuccess && !submitted && (
+                <div className="flex items-start gap-3 p-4 mb-6 bg-green-50 border border-green-200 rounded-lg">
+                    <CheckCircle2 size={20} className="text-green-600 shrink-0 mt-0.5" />
+                    <p className="font-medium text-green-800">Grade submitted successfully!</p>
+                </div>
+            )}
+
+            {/* AI Feedback banner (overall) */}
+            {feedback && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
+                    <div className="flex items-center gap-2 mb-2">
+                        <Sparkles className="text-purple-600" size={20} />
+                        <span className="font-semibold text-purple-800">AI Overall Assessment</span>
+                        {fbLoading && <RefreshCw size={14} className="text-purple-500 animate-spin ml-1" />}
+                    </div>
+                    {feedback.overallAssessment && (
+                        <p className="text-sm text-purple-700 mb-3">{feedback.overallAssessment}</p>
+                    )}
+                    {feedback.strengths && feedback.strengths.length > 0 && (
+                        <div className="mt-2">
+                            <p className="text-xs font-semibold text-purple-700 mb-1">Strengths:</p>
+                            <ul className="space-y-1">
+                                {feedback.strengths.slice(0, 3).map((s, i) => (
+                                    <li key={i} className="text-xs text-purple-600 flex items-start gap-1">
+                                        <span className="mt-0.5">•</span>{s}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Toggle answers */}
             <div className="mb-4 flex justify-end">
                 <button
                     onClick={() => setShowAnswers(!showAnswers)}
                     className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium flex items-center gap-2"
                 >
                     <Eye size={18} />
-                    {showAnswers ? 'Hide' : 'Show'} Answers
+                    {showAnswers ? 'Hide' : 'Show'} Submitted Files
                 </button>
             </div>
 
-            {/* Questions and Grading */}
+            {/* Questions & grading */}
             <div className="space-y-6">
-                {submission.assignment.questions.map((question) => {
+                {DEFAULT_QUESTIONS.map((question) => {
                     if (!question.subQuestions) {
                         const key = question.id;
                         const answer = answers[key];
-                        const isEditing = editingFeedback === key;
-                        const displayFeedback = answer?.lecturerFeedback || answer?.aiFeedback || '';
-                        const displayScore = answer?.lecturerScore ?? answer?.aiScore;
-                        const isModified = !!answer?.lecturerFeedback;
+                        if (!answer) return null;
 
                         return (
                             <div key={question.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                                {/* Question Header */}
                                 <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200">
                                     <div className="flex-1">
-                                        <h3 className="text-lg font-bold text-gray-900 mb-2">
+                                        <h3 className="text-lg font-bold text-gray-900 mb-1">
                                             Question {question.number}
                                         </h3>
                                         <p className="text-gray-700">{question.text}</p>
                                     </div>
-                                    <div className="ml-4">
-                    <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
-                      {question.marks} marks
-                    </span>
-                                    </div>
+                                    <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium ml-4 shrink-0">
+                                        {question.marks} marks
+                                    </span>
                                 </div>
 
-                                {/* Student Answer */}
-                                {showAnswers && answer && (
-                                    <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                                        <p className="text-sm font-medium text-gray-700 mb-2">Student&#39;s Answer:</p>
-                                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{answer.text}</p>
-                                        <p className="text-xs text-gray-500 mt-2">{answer.wordCount} words</p>
+                                {/* Student files reference */}
+                                {showAnswers && submission?.files && submission.files.length > 0 && (
+                                    <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                        <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1">
+                                            <FileText size={14} />
+                                            Submitted Files
+                                        </p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {submission.files.map(f => (
+                                                <span
+                                                    key={f.id}
+                                                    className="text-xs px-2 py-1 bg-white border border-gray-200 rounded text-gray-700"
+                                                >
+                                                    {f.originalFileName ?? f.fileName}
+                                                </span>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
 
-                                {/* Grading Section */}
-                                <div className="space-y-4">
-                                    {!isEditing ? (
-                                        <div>
-                                            {/* AI/Lecturer Feedback Display */}
-                                            <div className={`p-4 rounded-lg border-l-4 ${
-                                                isModified
-                                                    ? 'bg-blue-50 border-blue-500'
-                                                    : 'bg-purple-50 border-purple-500'
-                                            }`}>
-                                                <div className="flex items-start justify-between mb-2">
-                                                    <div className="flex items-center gap-2">
-                                                        {isModified ? (
-                                                            <Edit className="text-blue-600" size={20} />
-                                                        ) : (
-                                                            <Sparkles className="text-purple-600" size={20} />
-                                                        )}
-                                                        <span className="font-medium text-sm">
-                              {isModified ? 'Your Feedback' : 'AI-Generated Feedback'}
-                            </span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                            <span className="text-2xl font-bold text-gray-900">
-                              {displayScore}/100
-                            </span>
-                                                        <span className="text-sm text-gray-600">
-                              ({Math.round((displayScore / 100) * question.marks)}/{question.marks})
-                            </span>
-                                                    </div>
-                                                </div>
-                                                <p className="text-sm text-gray-700">{displayFeedback}</p>
-                                            </div>
-
-                                            {/* Action Buttons */}
-                                            <div className="flex gap-2 mt-3">
-                                                <button
-                                                    onClick={() => handleEditFeedback(key)}
-                                                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
-                                                >
-                                                    <Edit size={16} />
-                                                    {isModified ? 'Edit Feedback' : 'Modify AI Feedback'}
-                                                </button>
-                                                {!isModified && (
-                                                    <button
-                                                        onClick={() => handleRegenerateAI(key)}
-                                                        disabled={isGeneratingAI}
-                                                        className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
-                                                    >
-                                                        <RefreshCw size={16} className={isGeneratingAI ? 'animate-spin' : ''} />
-                                                        Regenerate AI
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-3">
-                                            {/* Edit Mode */}
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Your Feedback:
-                                                </label>
-                                                <textarea
-                                                    value={tempFeedback}
-                                                    onChange={(e) => setTempFeedback(e.target.value)}
-                                                    rows={4}
-                                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter your feedback..."
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Score (out of 100):
-                                                </label>
-                                                <input
-                                                    type="number"
-                                                    value={tempScore}
-                                                    onChange={(e) => setTempScore(Number(e.target.value))}
-                                                    min={0}
-                                                    max={100}
-                                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                />
-                                                <p className="text-xs text-gray-500 mt-1">
-                                                    This equals {tempScore ? Math.round((tempScore / 100) * question.marks) : 0}/{question.marks} marks
-                                                </p>
-                                            </div>
-
-                                            <div className="flex gap-2">
-                                                <button
-                                                    onClick={() => handleSaveFeedback(key)}
-                                                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
-                                                >
-                                                    <Check size={16} />
-                                                    Save
-                                                </button>
-                                                <button
-                                                    onClick={handleCancelEdit}
-                                                    className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium flex items-center justify-center gap-2"
-                                                >
-                                                    <X size={16} />
-                                                    Cancel
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
+                                <FeedbackBlock
+                                    questionKey={key}
+                                    answer={answer}
+                                    questionMarks={question.marks}
+                                    isEditing={editingKey === key}
+                                    isGenerating={isGeneratingAI}
+                                    onEdit={() => handleEditFeedback(key)}
+                                    onSave={() => handleSaveFeedback(key)}
+                                    onCancel={() => setEditingKey(null)}
+                                    onRegenerate={() => handleRegenerate(key)}
+                                    tempFeedback={tempFeedback}
+                                    setTempFeedback={setTempFeedback}
+                                    tempScore={tempScore}
+                                    setTempScore={setTempScore}
+                                />
                             </div>
                         );
                     }
 
-                    // Handle sub-questions
+                    // Question with sub-questions
                     return (
                         <div key={question.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                             <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200">
                                 <div>
-                                    <h3 className="text-lg font-bold text-gray-900 mb-2">
+                                    <h3 className="text-lg font-bold text-gray-900 mb-1">
                                         Question {question.number}
                                     </h3>
                                     <p className="text-gray-700">{question.text}</p>
                                 </div>
-                                <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
-                  {question.marks} marks
-                </span>
+                                <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium ml-4 shrink-0">
+                                    {question.marks} marks
+                                </span>
                             </div>
 
                             <div className="space-y-6">
-                                {question.subQuestions?.map((subQ) => {
-                                    const key = `${question.id}-${subQ.id}`;
+                                {question.subQuestions?.map((sq) => {
+                                    const key = `${question.id}-${sq.id}`;
                                     const answer = answers[key];
-                                    const isEditing = editingFeedback === key;
-                                    const displayFeedback = answer?.lecturerFeedback || answer?.aiFeedback || '';
-                                    const displayScore = answer?.lecturerScore ?? answer?.aiScore;
-                                    const isModified = !!answer?.lecturerFeedback;
+                                    if (!answer) return null;
 
                                     return (
-                                        <div key={subQ.id} className="pl-6 border-l-2 border-gray-200">
+                                        <div key={sq.id} className="pl-6 border-l-2 border-gray-200">
                                             <div className="flex items-start justify-between mb-3">
                                                 <h4 className="font-semibold text-gray-900">
-                                                    ({subQ.letter}) {subQ.text}
+                                                    ({sq.letter}) {sq.text}
                                                 </h4>
                                                 <span className="ml-4 px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium whitespace-nowrap">
-                          {subQ.marks} marks
-                        </span>
+                                                    {sq.marks} marks
+                                                </span>
                                             </div>
 
-                                            {showAnswers && answer && (
-                                                <div className="mb-4 p-3 bg-gray-50 rounded border border-gray-200">
-                                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{answer.text}</p>
-                                                </div>
-                                            )}
-
-                                            {!isEditing ? (
-                                                <div>
-                                                    <div className={`p-3 rounded border-l-4 ${
-                                                        isModified
-                                                            ? 'bg-blue-50 border-blue-500'
-                                                            : 'bg-purple-50 border-purple-500'
-                                                    }`}>
-                                                        <div className="flex items-start justify-between mb-2">
-                                                            <div className="flex items-center gap-2">
-                                                                {isModified ? (
-                                                                    <Edit className="text-blue-600" size={18} />
-                                                                ) : (
-                                                                    <Sparkles className="text-purple-600" size={18} />
-                                                                )}
-                                                                <span className="font-medium text-xs">
-                                  {isModified ? 'Your Feedback' : 'AI Feedback'}
-                                </span>
-                                                            </div>
-                                                            <div className="flex items-center gap-1">
-                                <span className="text-lg font-bold text-gray-900">
-                                  {displayScore}/100
-                                </span>
-                                                                <span className="text-xs text-gray-600">
-                                  ({Math.round((displayScore / 100) * subQ.marks)}/{subQ.marks})
-                                </span>
-                                                            </div>
-                                                        </div>
-                                                        <p className="text-sm text-gray-700">{displayFeedback}</p>
-                                                    </div>
-
-                                                    <div className="flex gap-2 mt-2">
-                                                        <button
-                                                            onClick={() => handleEditFeedback(key)}
-                                                            className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm font-medium flex items-center justify-center gap-2"
-                                                        >
-                                                            <Edit size={14} />
-                                                            {isModified ? 'Edit' : 'Modify'}
-                                                        </button>
-                                                        {!isModified && (
-                                                            <button
-                                                                onClick={() => handleRegenerateAI(key)}
-                                                                className="px-3 py-2 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors text-sm font-medium flex items-center gap-2"
-                                                            >
-                                                                <RefreshCw size={14} />
-                                                                Regenerate
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-2">
-                          <textarea
-                              value={tempFeedback}
-                              onChange={(e) => setTempFeedback(e.target.value)}
-                              rows={3}
-                              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                          />
-                                                    <input
-                                                        type="number"
-                                                        value={tempScore}
-                                                        onChange={(e) => setTempScore(Number(e.target.value))}
-                                                        min={0}
-                                                        max={100}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                                                    />
-                                                    <div className="flex gap-2">
-                                                        <button
-                                                            onClick={() => handleSaveFeedback(key)}
-                                                            className="flex-1 px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm font-medium flex items-center justify-center gap-1"
-                                                        >
-                                                            <Check size={14} />
-                                                            Save
-                                                        </button>
-                                                        <button
-                                                            onClick={handleCancelEdit}
-                                                            className="flex-1 px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors text-sm font-medium flex items-center justify-center gap-1"
-                                                        >
-                                                            <X size={14} />
-                                                            Cancel
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
+                                            <FeedbackBlock
+                                                questionKey={key}
+                                                answer={answer}
+                                                questionMarks={sq.marks}
+                                                isEditing={editingKey === key}
+                                                isGenerating={isGeneratingAI}
+                                                onEdit={() => handleEditFeedback(key)}
+                                                onSave={() => handleSaveFeedback(key)}
+                                                onCancel={() => setEditingKey(null)}
+                                                onRegenerate={() => handleRegenerate(key)}
+                                                tempFeedback={tempFeedback}
+                                                setTempFeedback={setTempFeedback}
+                                                tempScore={tempScore}
+                                                setTempScore={setTempScore}
+                                            />
                                         </div>
                                     );
                                 })}
@@ -668,54 +638,61 @@ export default function LecturerGradingInterfacePage({ params }: { params: Promi
                     <h3 className="text-lg font-bold text-gray-900 mb-4">Overall Comment</h3>
                     <textarea
                         value={overallComment}
-                        onChange={(e) => setOverallComment(e.target.value)}
+                        onChange={e => setOverallComment(e.target.value)}
                         rows={4}
                         placeholder="Add an overall comment for the student..."
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                 </div>
 
-                {/* Final Grade Summary */}
+                {/* Grade Summary */}
                 <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className="text-xl font-bold mb-2">Final Grade</h3>
-                            <p className="text-blue-100">
-                                {grade.scored} out of {grade.total} marks
-                            </p>
+                            <h3 className="text-xl font-bold mb-1">Final Grade</h3>
+                            <p className="text-blue-100">{grade.scored} out of {grade.total} marks</p>
                         </div>
                         <div className="text-right">
                             <div className="text-5xl font-bold">{grade.percentage}%</div>
                             <p className="text-blue-100 mt-1">
                                 {grade.percentage >= 90 ? 'A+' :
-                                    grade.percentage >= 80 ? 'A' :
-                                        grade.percentage >= 70 ? 'B' :
-                                            grade.percentage >= 60 ? 'C' :
-                                                grade.percentage >= 50 ? 'D' : 'F'}
+                                 grade.percentage >= 80 ? 'A'  :
+                                 grade.percentage >= 70 ? 'B'  :
+                                 grade.percentage >= 60 ? 'C'  :
+                                 grade.percentage >= 50 ? 'D'  : 'F'}
                             </p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Action Buttons */}
+            {/* Sticky Action Bar */}
             <div className="sticky bottom-0 bg-white border-t border-gray-200 p-6 mt-8 shadow-lg rounded-t-lg">
                 <div className="flex gap-4 max-w-7xl mx-auto">
                     <button
-                        onClick={handleSaveDraft}
-                        disabled={isSaving}
-                        className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                        onClick={() => router.back()}
+                        disabled={grading}
+                        className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                         <Save size={18} />
                         Save as Draft
                     </button>
                     <button
                         onClick={handleSubmitGrade}
-                        disabled={isSaving}
+                        disabled={grading}
                         className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                        <Send size={18} />
-                        Submit Grade & Notify Student
+                        {grading ? (
+                            <>
+                                <RefreshCw size={18} className="animate-spin" />
+                                Submitting…
+                            </>
+                        ) : (
+                            <>
+                                <Send size={18} />
+                                Submit Grade &amp; Notify Student
+                            </>
+                        )}
                     </button>
                 </div>
             </div>
