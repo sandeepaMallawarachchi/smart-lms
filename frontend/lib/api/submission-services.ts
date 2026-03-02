@@ -17,6 +17,10 @@ import type {
     UpdatePlagiarismReviewPayload,
     Assignment,
     PagedResponse,
+    TextAnswer,
+    SaveAnswerPayload,
+    LiveFeedback,
+    LivePlagiarismResult,
 } from '@/types/submission.types';
 
 // ─── Base URLs ────────────────────────────────────────────────
@@ -189,6 +193,66 @@ export const submissionService = {
             body: JSON.stringify(payload),
         });
     },
+
+    // ─── Text-Answer endpoints (text-based Q&A system) ────────
+
+    /**
+     * Find an existing DRAFT submission for this student + assignment, or create one.
+     * Used by the answer page to get (or create) the draft before the student starts typing.
+     */
+    async getOrCreateDraftSubmission(
+        assignmentId: string,
+        studentId: string,
+        studentName: string = 'Student',
+    ): Promise<Submission> {
+        // Try to find an existing DRAFT
+        const existing = await apiRequest<Submission[] | { content: Submission[] }>(
+            `${SUBMISSION_API}/api/submissions?studentId=${encodeURIComponent(studentId)}&assignmentId=${encodeURIComponent(assignmentId)}`
+        );
+        const list: Submission[] = Array.isArray(existing)
+            ? existing
+            : (existing as { content: Submission[] }).content ?? [];
+
+        const draft = list.find((s) => s.status === 'DRAFT');
+        if (draft) return draft;
+
+        // Create new draft
+        return apiRequest<Submission>(`${SUBMISSION_API}/api/submissions`, {
+            method: 'POST',
+            body: JSON.stringify({
+                studentId,
+                studentName,
+                assignmentId,
+                title: 'Text Submission',
+                submissionType: 'ASSIGNMENT',
+            }),
+        });
+    },
+
+    /**
+     * Save (upsert) a student's typed answer for one question.
+     * PUT /api/submissions/{submissionId}/answers/{questionId}
+     */
+    saveAnswer(
+        submissionId: string,
+        questionId: string,
+        payload: SaveAnswerPayload,
+    ): Promise<void> {
+        return apiRequest<void>(
+            `${SUBMISSION_API}/api/submissions/${submissionId}/answers/${questionId}`,
+            { method: 'PUT', body: JSON.stringify(payload) }
+        );
+    },
+
+    /**
+     * Get all saved answers for a submission.
+     * GET /api/submissions/{submissionId}/answers
+     */
+    getAnswers(submissionId: string): Promise<TextAnswer[]> {
+        return apiRequest<TextAnswer[]>(
+            `${SUBMISSION_API}/api/submissions/${submissionId}/answers`
+        );
+    },
 };
 
 // ─── Version Control Service (port 8082) ─────────────────────
@@ -287,6 +351,23 @@ export const feedbackService = {
             `${FEEDBACK_API}/api/feedback/${feedbackId}/status`
         );
     },
+
+    /**
+     * Generate real-time lightweight feedback while the student types.
+     * Called ~3 seconds after typing stops. Not persisted to DB.
+     * POST /api/feedback/live
+     */
+    generateLiveFeedback(payload: {
+        questionId: string;
+        answerText: string;
+        questionPrompt?: string;
+        expectedWordCount?: number;
+    }): Promise<LiveFeedback> {
+        return apiRequest<LiveFeedback>(`${FEEDBACK_API}/api/feedback/live`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
 };
 
 // ─── Plagiarism Service (port 8084) ──────────────────────────
@@ -339,5 +420,55 @@ export const plagiarismService = {
             `${PLAGIARISM_API}/api/plagiarism/${reportId}/review`,
             { method: 'PUT', body: JSON.stringify(payload) }
         );
+    },
+
+    /**
+     * Real-time similarity check using the existing
+     * POST /api/integrity/realtime/check endpoint.
+     *
+     * Maps the backend's RealtimeCheckResponse into LivePlagiarismResult:
+     *   similarity ≥ 0.70 → HIGH, ≥ 0.40 → MEDIUM, else LOW
+     */
+    async checkLiveSimilarity(payload: {
+        sessionId: string;
+        studentId: string;
+        questionId: string;
+        textContent: string;
+        questionText?: string;
+    }): Promise<LivePlagiarismResult> {
+        // The backend questionId field is a Long — parse string to number
+        const backendPayload = {
+            sessionId: payload.sessionId,
+            studentId: payload.studentId,
+            questionId: parseInt(payload.questionId, 10) || 0,
+            textContent: payload.textContent,
+            questionText: payload.questionText ?? '',
+            questionType: 'TEXT',
+        };
+
+        const raw = await apiRequest<{
+            similarityScore?: number;
+            flagged?: boolean;
+            matchedText?: string;
+            sessionId?: string;
+        }>(`${PLAGIARISM_API}/api/integrity/realtime/check`, {
+            method: 'POST',
+            body: JSON.stringify(backendPayload),
+        });
+
+        // Normalise similarity from [0.0-1.0] or [0-100] to [0-100]
+        const rawScore = raw.similarityScore ?? 0;
+        const normalised = rawScore <= 1.0 ? rawScore * 100 : rawScore;
+        const severity: LivePlagiarismResult['severity'] =
+            normalised >= 70 ? 'HIGH' : normalised >= 40 ? 'MEDIUM' : 'LOW';
+
+        return {
+            questionId: payload.questionId,
+            similarityScore: Math.round(normalised * 10) / 10,
+            severity,
+            flagged: raw.flagged ?? normalised >= 70,
+            matchedText: raw.matchedText,
+            checkedAt: new Date().toISOString(),
+        };
     },
 };

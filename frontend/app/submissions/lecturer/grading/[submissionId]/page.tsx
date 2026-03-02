@@ -17,20 +17,19 @@ import {
     Shield,
     Clock,
     Calendar,
-    Eye,
     RefreshCw,
     AlertCircle,
     CheckCircle2,
 } from 'lucide-react';
 import { useSubmission, useGradeSubmission } from '@/hooks/useSubmissions';
 import { useFeedback } from '@/hooks/useFeedback';
-import type { Feedback } from '@/types/submission.types';
+import { submissionService } from '@/lib/api/submission-services';
+import type { AssignmentWithQuestions, Feedback, Question, TextAnswer } from '@/types/submission.types';
 
 // ─── Types for per-question grading ──────────────────────────
 
 interface QuestionAnswer {
     questionId: string;
-    subQuestionId?: string;
     text: string;
     wordCount: number;
     aiFeedback: string;
@@ -38,19 +37,6 @@ interface QuestionAnswer {
     lecturerFeedback: string;
     lecturerScore?: number;
     maxMarks: number;
-}
-
-interface QuestionDef {
-    id: string;
-    number: number;
-    text: string;
-    marks: number;
-    subQuestions?: {
-        id: string;
-        letter: string;
-        text: string;
-        marks: number;
-    }[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -62,75 +48,6 @@ function formatDate(dateStr: string | null | undefined) {
         hour: '2-digit', minute: '2-digit',
     });
 }
-
-/** Build initial answers from optional AI feedback */
-function buildInitialAnswers(
-    questions: QuestionDef[],
-    feedback: Feedback | null
-): Record<string, QuestionAnswer> {
-    const result: Record<string, QuestionAnswer> = {};
-    const overallFeedback = feedback?.overallAssessment ?? 'AI feedback not yet available.';
-
-    questions.forEach((q) => {
-        if (!q.subQuestions) {
-            result[q.id] = {
-                questionId: q.id,
-                text: '',
-                wordCount: 0,
-                aiFeedback: overallFeedback,
-                aiScore: feedback ? 80 : 0,
-                lecturerFeedback: '',
-                maxMarks: q.marks,
-            };
-        } else {
-            q.subQuestions.forEach((sq) => {
-                const key = `${q.id}-${sq.id}`;
-                result[key] = {
-                    questionId: q.id,
-                    subQuestionId: sq.id,
-                    text: '',
-                    wordCount: 0,
-                    aiFeedback: overallFeedback,
-                    aiScore: feedback ? 80 : 0,
-                    lecturerFeedback: '',
-                    maxMarks: sq.marks,
-                };
-            });
-        }
-    });
-    return result;
-}
-
-// ─── Static question definitions (assignment-level data) ──────
-// In production these would come from the assignment API.
-// For now we use a representative structure that reflects the
-// assignment linked to this submission.
-const DEFAULT_QUESTIONS: QuestionDef[] = [
-    {
-        id: 'q1', number: 1,
-        text: 'Explain the key concepts covered in this assignment.',
-        marks: 25,
-    },
-    {
-        id: 'q2', number: 2,
-        text: 'Design and implement the core solution.',
-        marks: 35,
-        subQuestions: [
-            { id: 'q2a', letter: 'a', text: 'Provide a design diagram or outline.', marks: 15 },
-            { id: 'q2b', letter: 'b', text: 'Implement and document your solution.', marks: 20 },
-        ],
-    },
-    {
-        id: 'q3', number: 3,
-        text: 'Evaluate and test your implementation.',
-        marks: 25,
-    },
-    {
-        id: 'q4', number: 4,
-        text: 'Write a reflection on what you learned.',
-        marks: 15,
-    },
-];
 
 // ─── Sub-components ──────────────────────────────────────────
 
@@ -148,6 +65,7 @@ function FeedbackBlock({
     setTempFeedback,
     tempScore,
     setTempScore,
+    studentAnswerText,
 }: {
     questionKey: string;
     answer: QuestionAnswer;
@@ -162,14 +80,41 @@ function FeedbackBlock({
     setTempFeedback: (v: string) => void;
     tempScore: number | undefined;
     setTempScore: (v: number) => void;
+    /** Student's typed text answer for this question (from submission-management-service). */
+    studentAnswerText?: string;
 }) {
     const isModified = !!answer.lecturerFeedback;
     const displayFeedback = answer.lecturerFeedback || answer.aiFeedback;
     const displayScore = answer.lecturerScore ?? answer.aiScore;
 
+    // ── Student's typed answer box ─────────────────────────
+    const studentAnswerBox = (
+        <div className="mb-4">
+            <p className="text-xs font-semibold text-gray-600 mb-1.5 flex items-center gap-1">
+                <FileText size={13} className="text-gray-400" />
+                Student&apos;s Answer
+            </p>
+            {studentAnswerText && studentAnswerText.trim() ? (
+                <>
+                    <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+                        {studentAnswerText}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-400">
+                        {studentAnswerText.trim().split(/\s+/).length} words
+                    </p>
+                </>
+            ) : (
+                <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-400 italic">
+                    No answer provided
+                </div>
+            )}
+        </div>
+    );
+
     if (isEditing) {
         return (
             <div className="space-y-3">
+                {studentAnswerBox}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                         Your Feedback:
@@ -220,6 +165,7 @@ function FeedbackBlock({
 
     return (
         <div>
+            {studentAnswerBox}
             <div className={`p-4 rounded-lg border-l-4 ${
                 isModified ? 'bg-blue-50 border-blue-500' : 'bg-purple-50 border-purple-500'
             }`}>
@@ -293,15 +239,65 @@ export default function LecturerGradingInterfacePage({
     const [tempScore, setTempScore]         = useState<number | undefined>();
     const [overallComment, setOverallComment] = useState('');
     const [isGeneratingAI, setIsGeneratingAI] = useState(false);
-    const [showAnswers, setShowAnswers]     = useState(true);
     const [submitted, setSubmitted]         = useState(false);
 
-    // Build initial answers once feedback loads
+    // Text answers and assignment questions
+    const [textAnswers, setTextAnswers]     = useState<TextAnswer[]>([]);
+    const [apiQuestions, setApiQuestions]   = useState<Question[] | null>(null);
+
+    // Fetch text answers + assignment questions once the submission loads.
     useEffect(() => {
-        if (!fbLoading) {
-            setAnswers(buildInitialAnswers(DEFAULT_QUESTIONS, feedback));
+        if (!submission?.id) return;
+
+        // Text answers from submission-management-service
+        submissionService.getAnswers(submission.id).then((ans) => {
+            setTextAnswers(ans);
+        }).catch(() => {
+            // No text answers — that's fine for file-upload submissions
+        });
+
+        // Real questions from the assignment API
+        if (submission.assignmentId) {
+            submissionService.getAssignment(submission.assignmentId)
+                .then((asg) => {
+                    const withQ = asg as AssignmentWithQuestions;
+                    if (withQ.questions && withQ.questions.length > 0) {
+                        setApiQuestions(withQ.questions);
+                    }
+                })
+                .catch(() => {
+                    // No questions available — UI shows empty state
+                });
         }
-    }, [feedback, fbLoading]);
+    }, [submission?.id, submission?.assignmentId]);
+
+    /** Lookup helper: find a student's typed answer for a given questionId. */
+    const getTextAnswer = (questionId: string): string | undefined =>
+        textAnswers.find((a) => a.questionId === questionId)?.answerText;
+
+    // Initialise per-question answer entries when API questions arrive.
+    useEffect(() => {
+        if (!apiQuestions) return;
+        const overallFeedback = feedback?.overallAssessment ?? 'AI feedback not yet available.';
+        setAnswers((prev) => {
+            const next = { ...prev };
+            for (const q of apiQuestions) {
+                if (!next[q.id]) {
+                    next[q.id] = {
+                        questionId: q.id,
+                        text: '',
+                        wordCount: 0,
+                        aiFeedback: overallFeedback,
+                        aiScore: feedback ? 80 : 0,
+                        lecturerFeedback: '',
+                        maxMarks: 100,
+                    };
+                }
+            }
+            return next;
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [apiQuestions]);
 
     // Show AI overall assessment in overall comment when feedback arrives
     useEffect(() => {
@@ -506,132 +502,62 @@ export default function LecturerGradingInterfacePage({
                 </div>
             )}
 
-            {/* Toggle answers */}
-            <div className="mb-4 flex justify-end">
-                <button
-                    onClick={() => setShowAnswers(!showAnswers)}
-                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium flex items-center gap-2"
-                >
-                    <Eye size={18} />
-                    {showAnswers ? 'Hide' : 'Show'} Submitted Files
-                </button>
-            </div>
-
             {/* Questions & grading */}
             <div className="space-y-6">
-                {DEFAULT_QUESTIONS.map((question) => {
-                    if (!question.subQuestions) {
-                        const key = question.id;
-                        const answer = answers[key];
-                        if (!answer) return null;
+                {apiQuestions && apiQuestions.length > 0
+                    ? apiQuestions
+                        .slice()
+                        .sort((a, b) => a.order - b.order)
+                        .map((question, idx) => {
+                            const key = question.id;
+                            const answer = answers[key] ?? {
+                                questionId: key,
+                                text: '',
+                                wordCount: 0,
+                                aiFeedback: feedback?.overallAssessment ?? 'AI feedback not yet available.',
+                                aiScore: feedback ? 80 : 0,
+                                lecturerFeedback: '',
+                                maxMarks: 100,
+                            };
 
-                        return (
-                            <div key={question.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                                <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200">
-                                    <div className="flex-1">
-                                        <h3 className="text-lg font-bold text-gray-900 mb-1">
-                                            Question {question.number}
-                                        </h3>
-                                        <p className="text-gray-700">{question.text}</p>
-                                    </div>
-                                    <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium ml-4 shrink-0">
-                                        {question.marks} marks
-                                    </span>
-                                </div>
-
-                                {/* Student files reference */}
-                                {showAnswers && submission?.files && submission.files.length > 0 && (
-                                    <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                        <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1">
-                                            <FileText size={14} />
-                                            Submitted Files
-                                        </p>
-                                        <div className="flex flex-wrap gap-2">
-                                            {submission.files.map(f => (
-                                                <span
-                                                    key={f.id}
-                                                    className="text-xs px-2 py-1 bg-white border border-gray-200 rounded text-gray-700"
-                                                >
-                                                    {f.originalFileName ?? f.fileName}
-                                                </span>
-                                            ))}
+                            return (
+                                <div key={key} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                                    <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200">
+                                        <div className="flex-1">
+                                            <h3 className="text-lg font-bold text-gray-900 mb-1">
+                                                Question {idx + 1}
+                                            </h3>
+                                            <p className="text-gray-700">{question.text}</p>
                                         </div>
                                     </div>
-                                )}
 
-                                <FeedbackBlock
-                                    questionKey={key}
-                                    answer={answer}
-                                    questionMarks={question.marks}
-                                    isEditing={editingKey === key}
-                                    isGenerating={isGeneratingAI}
-                                    onEdit={() => handleEditFeedback(key)}
-                                    onSave={() => handleSaveFeedback(key)}
-                                    onCancel={() => setEditingKey(null)}
-                                    onRegenerate={() => handleRegenerate(key)}
-                                    tempFeedback={tempFeedback}
-                                    setTempFeedback={setTempFeedback}
-                                    tempScore={tempScore}
-                                    setTempScore={setTempScore}
-                                />
-                            </div>
-                        );
-                    }
-
-                    // Question with sub-questions
-                    return (
-                        <div key={question.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                            <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200">
-                                <div>
-                                    <h3 className="text-lg font-bold text-gray-900 mb-1">
-                                        Question {question.number}
-                                    </h3>
-                                    <p className="text-gray-700">{question.text}</p>
+                                    <FeedbackBlock
+                                        questionKey={key}
+                                        answer={answer}
+                                        questionMarks={100}
+                                        isEditing={editingKey === key}
+                                        isGenerating={isGeneratingAI}
+                                        onEdit={() => handleEditFeedback(key)}
+                                        onSave={() => handleSaveFeedback(key)}
+                                        onCancel={() => setEditingKey(null)}
+                                        onRegenerate={() => handleRegenerate(key)}
+                                        tempFeedback={tempFeedback}
+                                        setTempFeedback={setTempFeedback}
+                                        tempScore={tempScore}
+                                        setTempScore={setTempScore}
+                                        studentAnswerText={getTextAnswer(question.id)}
+                                    />
                                 </div>
-                                <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium ml-4 shrink-0">
-                                    {question.marks} marks
-                                </span>
-                            </div>
-
-                            <div className="space-y-6">
-                                {question.subQuestions?.map((sq) => {
-                                    const key = `${question.id}-${sq.id}`;
-                                    const answer = answers[key];
-                                    if (!answer) return null;
-
-                                    return (
-                                        <div key={sq.id} className="pl-6 border-l-2 border-gray-200">
-                                            <div className="flex items-start justify-between mb-3">
-                                                <h4 className="font-semibold text-gray-900">
-                                                    ({sq.letter}) {sq.text}
-                                                </h4>
-                                                <span className="ml-4 px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium whitespace-nowrap">
-                                                    {sq.marks} marks
-                                                </span>
-                                            </div>
-
-                                            <FeedbackBlock
-                                                questionKey={key}
-                                                answer={answer}
-                                                questionMarks={sq.marks}
-                                                isEditing={editingKey === key}
-                                                isGenerating={isGeneratingAI}
-                                                onEdit={() => handleEditFeedback(key)}
-                                                onSave={() => handleSaveFeedback(key)}
-                                                onCancel={() => setEditingKey(null)}
-                                                onRegenerate={() => handleRegenerate(key)}
-                                                tempFeedback={tempFeedback}
-                                                setTempFeedback={setTempFeedback}
-                                                tempScore={tempScore}
-                                                setTempScore={setTempScore}
-                                            />
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                            );
+                        })
+                    : (
+                        <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
+                            <FileText size={36} className="mx-auto mb-3 text-gray-300" />
+                            <p className="font-medium">No questions loaded</p>
+                            <p className="text-sm mt-1">Questions will appear here once the assignment data is available.</p>
                         </div>
-                    );
-                })}
+                    )
+                }
 
                 {/* Overall Comment */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

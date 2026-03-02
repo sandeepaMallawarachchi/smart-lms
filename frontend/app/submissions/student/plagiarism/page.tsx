@@ -1,264 +1,131 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Shield,
     AlertTriangle,
     CheckCircle2,
-    Search,
     FileText,
-    ExternalLink,
     Info,
-    TrendingDown,
     Award,
+    AlertCircle,
     Eye,
+    RefreshCw,
 } from 'lucide-react';
+import { useSubmissions } from '@/hooks/useSubmissions';
 
-interface PlagiarismReport {
-    id: string;
-    assignmentTitle: string;
-    module: string;
-    submittedAt: string;
-    version: number;
-    overallScore: number;
-    status: 'safe' | 'moderate' | 'high';
-    sources: {
-        url: string;
-        title: string;
-        similarity: number;
-        matchedPhrases: number;
-    }[];
-    breakdown: {
-        internetSources: number;
-        publications: number;
-        studentPapers: number;
-    };
+// ─── Helpers ─────────────────────────────────────────────────
+
+type SeverityStatus = 'safe' | 'moderate' | 'high';
+
+function getSeverity(score: number): SeverityStatus {
+    if (score < 10) return 'safe';
+    if (score < 20) return 'moderate';
+    return 'high';
 }
+
+// ─── Sub-components ───────────────────────────────────────────
+
+function StatusBadge({ score }: { score: number }) {
+    const status = getSeverity(score);
+    if (status === 'safe') {
+        return (
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                <CheckCircle2 size={14} />
+                Safe ({score}%)
+            </span>
+        );
+    }
+    if (status === 'moderate') {
+        return (
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                <AlertTriangle size={14} />
+                Moderate ({score}%)
+            </span>
+        );
+    }
+    return (
+        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+            <AlertTriangle size={14} />
+            High Risk ({score}%)
+        </span>
+    );
+}
+
+function SkeletonCard() {
+    return (
+        <div className="bg-white rounded-lg border border-gray-200 p-6 animate-pulse">
+            <div className="flex gap-4">
+                <div className="w-12 h-12 bg-gray-200 rounded-lg shrink-0" />
+                <div className="flex-1 space-y-3">
+                    <div className="h-5 bg-gray-200 rounded w-2/3" />
+                    <div className="h-4 bg-gray-100 rounded w-1/3" />
+                    <div className="h-3 bg-gray-100 rounded w-full" />
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Page ─────────────────────────────────────────────────────
 
 export default function PlagiarismReportsPage() {
     const router = useRouter();
-    const [filterStatus, setFilterStatus] = useState<'all' | 'safe' | 'moderate' | 'high'>('all');
+    const [filterStatus, setFilterStatus] = useState<'all' | SeverityStatus>('all');
+    const [studentId, setStudentId] = useState<string | null>(null);
 
-    // Hardcoded plagiarism reports
-    const reports: PlagiarismReport[] = [
-        {
-            id: '1',
-            assignmentTitle: 'Python Programming Basics',
-            module: 'CS1001',
-            submittedAt: '2025-01-04 18:30',
-            version: 5,
-            overallScore: 3,
-            status: 'safe',
-            sources: [
-                {
-                    url: 'https://docs.python.org/3/tutorial/',
-                    title: 'Python Official Documentation',
-                    similarity: 2,
-                    matchedPhrases: 3,
-                },
-                {
-                    url: 'https://www.w3schools.com/python/',
-                    title: 'W3Schools Python Tutorial',
-                    similarity: 1,
-                    matchedPhrases: 2,
-                },
-            ],
-            breakdown: {
-                internetSources: 3,
-                publications: 0,
-                studentPapers: 0,
-            },
-        },
-        {
-            id: '2',
-            assignmentTitle: 'Data Structures Implementation',
-            module: 'CS2002',
-            submittedAt: '2025-01-07 22:45',
-            version: 4,
-            overallScore: 8,
-            status: 'safe',
-            sources: [
-                {
-                    url: 'https://en.wikipedia.org/wiki/Binary_search_tree',
-                    title: 'Binary Search Tree - Wikipedia',
-                    similarity: 4,
-                    matchedPhrases: 5,
-                },
-                {
-                    url: 'https://www.geeksforgeeks.org/avl-tree-set-1-insertion/',
-                    title: 'AVL Tree Implementation - GeeksforGeeks',
-                    similarity: 3,
-                    matchedPhrases: 4,
-                },
-                {
-                    url: 'https://stackoverflow.com/questions/3955680/',
-                    title: 'Hash Table Collision Resolution',
-                    similarity: 1,
-                    matchedPhrases: 2,
-                },
-            ],
-            breakdown: {
-                internetSources: 8,
-                publications: 0,
-                studentPapers: 0,
-            },
-        },
-        {
-            id: '3',
-            assignmentTitle: 'Object-Oriented Design Patterns',
-            module: 'CS3003',
-            submittedAt: '2024-12-15 20:30',
-            version: 6,
-            overallScore: 12,
-            status: 'moderate',
-            sources: [
-                {
-                    url: 'https://refactoring.guru/design-patterns',
-                    title: 'Design Patterns - Refactoring Guru',
-                    similarity: 7,
-                    matchedPhrases: 8,
-                },
-                {
-                    url: 'https://www.oodesign.com/',
-                    title: 'Object-Oriented Design',
-                    similarity: 3,
-                    matchedPhrases: 4,
-                },
-                {
-                    url: 'https://sourcemaking.com/design_patterns',
-                    title: 'Design Patterns Tutorial',
-                    similarity: 2,
-                    matchedPhrases: 3,
-                },
-            ],
-            breakdown: {
-                internetSources: 10,
-                publications: 2,
-                studentPapers: 0,
-            },
-        },
-        {
-            id: '4',
-            assignmentTitle: 'Database Normalization Essay',
-            module: 'CS3001',
-            submittedAt: '2024-12-10 23:59',
-            version: 3,
-            overallScore: 18,
-            status: 'moderate',
-            sources: [
-                {
-                    url: 'https://www.tutorialspoint.com/dbms/database_normalization.htm',
-                    title: 'Database Normalization - TutorialsPoint',
-                    similarity: 9,
-                    matchedPhrases: 12,
-                },
-                {
-                    url: 'https://www.studytonight.com/dbms/database-normalization.php',
-                    title: 'Database Normalization Guide',
-                    similarity: 5,
-                    matchedPhrases: 7,
-                },
-                {
-                    url: 'https://www.guru99.com/database-normalization.html',
-                    title: 'What is Normalization? - Guru99',
-                    similarity: 4,
-                    matchedPhrases: 5,
-                },
-            ],
-            breakdown: {
-                internetSources: 15,
-                publications: 3,
-                studentPapers: 0,
-            },
-        },
-        {
-            id: '5',
-            assignmentTitle: 'Web Development Project',
-            module: 'WT2001',
-            submittedAt: '2024-12-20 23:59',
-            version: 8,
-            overallScore: 6,
-            status: 'safe',
-            sources: [
-                {
-                    url: 'https://react.dev/learn',
-                    title: 'React Documentation',
-                    similarity: 3,
-                    matchedPhrases: 4,
-                },
-                {
-                    url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript',
-                    title: 'MDN Web Docs - JavaScript',
-                    similarity: 2,
-                    matchedPhrases: 3,
-                },
-                {
-                    url: 'https://tailwindcss.com/docs',
-                    title: 'Tailwind CSS Documentation',
-                    similarity: 1,
-                    matchedPhrases: 2,
-                },
-            ],
-            breakdown: {
-                internetSources: 6,
-                publications: 0,
-                studentPapers: 0,
-            },
-        },
-    ];
+    // Decode student ID from JWT
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                setStudentId(payload.userId ?? payload.sub ?? null);
+            }
+        } catch {
+            setStudentId(null);
+        }
+    }, []);
 
-    const filteredReports = reports.filter(report => {
+    const { data: submissions, loading, error, refetch } = useSubmissions(studentId);
+
+    // Only show submissions that have a plagiarism score
+    const reports = (submissions ?? []).filter((s) => s.plagiarismScore != null);
+
+    const filtered = reports.filter((s) => {
         if (filterStatus === 'all') return true;
-        return report.status === filterStatus;
+        return getSeverity(s.plagiarismScore!) === filterStatus;
     });
 
     const stats = {
         total: reports.length,
-        safe: reports.filter(r => r.status === 'safe').length,
-        moderate: reports.filter(r => r.status === 'moderate').length,
-        high: reports.filter(r => r.status === 'high').length,
-        averageScore: Math.round(reports.reduce((sum, r) => sum + r.overallScore, 0) / reports.length),
-    };
-
-    const getStatusBadge = (status: string, score: number) => {
-        switch (status) {
-            case 'safe':
-                return (
-                    <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-              <CheckCircle2 size={14} />
-              Safe ({score}%)
-            </span>
-                    </div>
-                );
-            case 'moderate':
-                return (
-                    <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-              <AlertTriangle size={14} />
-              Moderate ({score}%)
-            </span>
-                    </div>
-                );
-            case 'high':
-                return (
-                    <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
-              <AlertTriangle size={14} />
-              High Risk ({score}%)
-            </span>
-                    </div>
-                );
-        }
+        safe: reports.filter((s) => getSeverity(s.plagiarismScore!) === 'safe').length,
+        moderate: reports.filter((s) => getSeverity(s.plagiarismScore!) === 'moderate').length,
+        high: reports.filter((s) => getSeverity(s.plagiarismScore!) === 'high').length,
+        averageScore:
+            reports.length > 0
+                ? Math.round(reports.reduce((sum, s) => sum + (s.plagiarismScore ?? 0), 0) / reports.length)
+                : 0,
     };
 
     return (
         <div>
             {/* Header */}
-            <div className="mb-8">
-                <h1 className="text-4xl font-bold text-gray-900 mb-2">Plagiarism Reports</h1>
-                <p className="text-gray-600">Academic integrity analysis for all your submissions</p>
+            <div className="flex items-start justify-between mb-8">
+                <div>
+                    <h1 className="text-4xl font-bold text-gray-900 mb-2">Plagiarism Reports</h1>
+                    <p className="text-gray-600">Academic integrity analysis for all your submissions</p>
+                </div>
+                <button
+                    onClick={() => refetch()}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50"
+                >
+                    <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                    Refresh
+                </button>
             </div>
 
             {/* Stats Grid */}
@@ -304,206 +171,180 @@ export default function PlagiarismReportsPage() {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
                 <div className="flex items-center gap-4">
                     <span className="text-sm font-medium text-gray-700">Filter by status:</span>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => setFilterStatus('all')}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                filterStatus === 'all'
-                                    ? 'bg-purple-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            All ({reports.length})
-                        </button>
-                        <button
-                            onClick={() => setFilterStatus('safe')}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                filterStatus === 'safe'
-                                    ? 'bg-green-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            Safe ({stats.safe})
-                        </button>
-                        <button
-                            onClick={() => setFilterStatus('moderate')}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                filterStatus === 'moderate'
-                                    ? 'bg-amber-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            Moderate ({stats.moderate})
-                        </button>
-                        <button
-                            onClick={() => setFilterStatus('high')}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                filterStatus === 'high'
-                                    ? 'bg-red-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            High Risk ({stats.high})
-                        </button>
+                    <div className="flex flex-wrap gap-2">
+                        {(['all', 'safe', 'moderate', 'high'] as const).map((key) => (
+                            <button
+                                key={key}
+                                onClick={() => setFilterStatus(key)}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                    filterStatus === key
+                                        ? key === 'all' ? 'bg-purple-600 text-white'
+                                            : key === 'safe' ? 'bg-green-600 text-white'
+                                            : key === 'moderate' ? 'bg-amber-600 text-white'
+                                            : 'bg-red-600 text-white'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                            >
+                                {key === 'all' ? `All (${reports.length})`
+                                    : key === 'safe' ? `Safe (${stats.safe})`
+                                    : key === 'moderate' ? `Moderate (${stats.moderate})`
+                                    : `High Risk (${stats.high})`}
+                            </button>
+                        ))}
                     </div>
                 </div>
             </div>
 
+            {/* Error */}
+            {error && (
+                <div className="flex items-start gap-3 p-4 mb-6 bg-amber-50 border border-amber-200 rounded-lg">
+                    <AlertCircle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-sm text-amber-800">{error}</p>
+                </div>
+            )}
+
             {/* Reports List */}
-            <div className="space-y-4">
-                {filteredReports.map((report) => (
-                    <div key={report.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                        <div className="flex flex-col lg:flex-row lg:items-start gap-6">
-                            {/* Left Section */}
-                            <div className="flex-1">
-                                <div className="flex items-start gap-4 mb-4">
-                                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                                        report.status === 'safe' ? 'bg-green-100' :
-                                            report.status === 'moderate' ? 'bg-amber-100' :
-                                                'bg-red-100'
-                                    }`}>
-                                        <Shield size={24} className={
-                                            report.status === 'safe' ? 'text-green-600' :
-                                                report.status === 'moderate' ? 'text-amber-600' :
-                                                    'text-red-600'
-                                        } />
+            {loading ? (
+                <div className="space-y-4">
+                    {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
+                </div>
+            ) : filtered.length > 0 ? (
+                <div className="space-y-4">
+                    {filtered.map((submission) => {
+                        const score = submission.plagiarismScore!;
+                        const status = getSeverity(score);
+                        return (
+                            <div
+                                key={submission.id}
+                                className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+                            >
+                                <div className="flex flex-col lg:flex-row lg:items-start gap-6">
+                                    {/* Left */}
+                                    <div className="flex-1">
+                                        <div className="flex items-start gap-4 mb-4">
+                                            <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                                                status === 'safe' ? 'bg-green-100'
+                                                    : status === 'moderate' ? 'bg-amber-100'
+                                                    : 'bg-red-100'
+                                            }`}>
+                                                <Shield size={24} className={
+                                                    status === 'safe' ? 'text-green-600'
+                                                        : status === 'moderate' ? 'text-amber-600'
+                                                        : 'text-red-600'
+                                                } />
+                                            </div>
+
+                                            <div className="flex-1">
+                                                <div className="flex flex-wrap items-center gap-3 mb-2">
+                                                    <h3 className="text-lg font-semibold text-gray-900">
+                                                        {submission.assignmentTitle ?? submission.title ?? 'Untitled Submission'}
+                                                    </h3>
+                                                    <StatusBadge score={score} />
+                                                </div>
+                                                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                                                    {submission.moduleCode && (
+                                                        <span className="font-medium">{submission.moduleCode}</span>
+                                                    )}
+                                                    {submission.moduleCode && <span>•</span>}
+                                                    <span>Version {submission.currentVersionNumber}</span>
+                                                    {submission.submittedAt && (
+                                                        <>
+                                                            <span>•</span>
+                                                            <span>{new Date(submission.submittedAt).toLocaleDateString()}</span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Score bar */}
+                                        <div className="mb-4">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-xs text-gray-600">Plagiarism Score</span>
+                                                <span className={`text-sm font-bold ${
+                                                    status === 'safe' ? 'text-green-600'
+                                                        : status === 'moderate' ? 'text-amber-600'
+                                                        : 'text-red-600'
+                                                }`}>{score}%</span>
+                                            </div>
+                                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                                <div
+                                                    className={`h-2 rounded-full ${
+                                                        status === 'safe' ? 'bg-green-500'
+                                                            : status === 'moderate' ? 'bg-amber-500'
+                                                            : 'bg-red-500'
+                                                    }`}
+                                                    style={{ width: `${Math.min(score, 100)}%` }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Recommendations for moderate/high */}
+                                        {status !== 'safe' && (
+                                            <div className={`p-4 border-l-4 rounded ${
+                                                status === 'moderate'
+                                                    ? 'bg-amber-50 border-amber-500'
+                                                    : 'bg-red-50 border-red-500'
+                                            }`}>
+                                                <div className="flex items-start gap-3">
+                                                    <AlertTriangle className={
+                                                        status === 'moderate' ? 'text-amber-600' : 'text-red-600'
+                                                    } size={20} />
+                                                    <div>
+                                                        <p className={`font-medium mb-1 ${
+                                                            status === 'moderate' ? 'text-amber-900' : 'text-red-900'
+                                                        }`}>Recommendations:</p>
+                                                        <ul className={`text-sm list-disc list-inside space-y-1 ${
+                                                            status === 'moderate' ? 'text-amber-800' : 'text-red-800'
+                                                        }`}>
+                                                            <li>Review and paraphrase similar sections in your own words</li>
+                                                            <li>Add proper citations for referenced material</li>
+                                                            <li>Ensure technical terms are necessary and properly used</li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <h3 className="text-lg font-semibold text-gray-900">{report.assignmentTitle}</h3>
-                                            {getStatusBadge(report.status, report.overallScore)}
-                                        </div>
-
-                                        <div className="flex items-center gap-2 text-sm text-gray-600 mb-3">
-                                            <span className="font-medium">{report.module}</span>
-                                            <span>•</span>
-                                            <span>Version {report.version}</span>
-                                            <span>•</span>
-                                            <span>{new Date(report.submittedAt).toLocaleDateString()}</span>
-                                        </div>
-
-                                        {/* Score Breakdown */}
-                                        <div className="grid grid-cols-3 gap-3 mb-4">
-                                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                                                <div className="text-xs text-gray-600 mb-1">Internet Sources</div>
-                                                <div className="text-lg font-bold text-blue-600">{report.breakdown.internetSources}%</div>
-                                            </div>
-                                            <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                                                <div className="text-xs text-gray-600 mb-1">Publications</div>
-                                                <div className="text-lg font-bold text-purple-600">{report.breakdown.publications}%</div>
-                                            </div>
-                                            <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
-                                                <div className="text-xs text-gray-600 mb-1">Student Papers</div>
-                                                <div className="text-lg font-bold text-indigo-600">{report.breakdown.studentPapers}%</div>
-                                            </div>
-                                        </div>
-
-                                        {/* Matched Sources */}
-                                        <div>
-                                            <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                                                Matched Sources ({report.sources.length})
-                                            </h4>
-                                            <div className="space-y-2">
-                                                {report.sources.slice(0, 2).map((source, index) => (
-                                                    <div key={index} className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                                                        <div className="flex items-start justify-between gap-4">
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="flex items-center gap-2 mb-1">
-                                                                    <ExternalLink size={14} className="text-gray-400 flex-shrink-0" />
-                                                                    <a
-                                                                        href={source.url}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="text-sm font-medium text-blue-600 hover:text-blue-700 truncate"
-                                                                    >
-                                                                        {source.title}
-                                                                    </a>
-                                                                </div>
-                                                                <p className="text-xs text-gray-500 truncate">{source.url}</p>
-                                                            </div>
-                                                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                                <span className={`text-sm font-bold ${
-                                    source.similarity < 5 ? 'text-green-600' :
-                                        source.similarity < 10 ? 'text-amber-600' :
-                                            'text-red-600'
-                                }`}>
-                                  {source.similarity}%
-                                </span>
-                                                                <span className="text-xs text-gray-500">{source.matchedPhrases} phrases</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                                {report.sources.length > 2 && (
-                                                    <p className="text-sm text-gray-600 pl-3">
-                                                        +{report.sources.length - 2} more source(s)
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
+                                    {/* Right — Actions */}
+                                    <div className="flex flex-col gap-2">
+                                        <button
+                                            onClick={() => router.push(`/submissions/student/my-submissions/${submission.id}`)}
+                                            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center gap-2 justify-center whitespace-nowrap"
+                                        >
+                                            <Eye size={18} />
+                                            View Report
+                                        </button>
+                                        <button
+                                            onClick={() => router.push('/submissions/student/guidelines')}
+                                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2 justify-center whitespace-nowrap"
+                                        >
+                                            <Info size={18} />
+                                            Guidelines
+                                        </button>
                                     </div>
                                 </div>
-
-                                {/* Recommendations */}
-                                {report.status !== 'safe' && (
-                                    <div className={`mt-4 p-4 border-l-4 rounded ${
-                                        report.status === 'moderate'
-                                            ? 'bg-amber-50 border-amber-500'
-                                            : 'bg-red-50 border-red-500'
-                                    }`}>
-                                        <div className="flex items-start gap-3">
-                                            <AlertTriangle className={
-                                                report.status === 'moderate' ? 'text-amber-600' : 'text-red-600'
-                                            } size={20} />
-                                            <div>
-                                                <p className={`font-medium mb-1 ${
-                                                    report.status === 'moderate' ? 'text-amber-900' : 'text-red-900'
-                                                }`}>
-                                                    Recommendations:
-                                                </p>
-                                                <ul className={`text-sm list-disc list-inside space-y-1 ${
-                                                    report.status === 'moderate' ? 'text-amber-800' : 'text-red-800'
-                                                }`}>
-                                                    <li>Review and paraphrase similar sections in your own words</li>
-                                                    <li>Add proper citations for referenced material</li>
-                                                    <li>Ensure technical terms are necessary and properly used</li>
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
-
-                            {/* Right Section - Actions */}
-                            <div className="flex flex-col gap-2">
-                                <button
-                                    onClick={() => router.push(`/submissions/student/my-submissions/${report.id}`)}
-                                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center gap-2 justify-center whitespace-nowrap"
-                                >
-                                    <Eye size={18} />
-                                    View Report
-                                </button>
-                                <button
-                                    onClick={() => router.push(`/submissions/student/guidelines`)}
-                                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2 justify-center whitespace-nowrap"
-                                >
-                                    <Info size={18} />
-                                    Guidelines
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                ))}
-
-                {filteredReports.length === 0 && (
-                    <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-                        <Shield size={48} className="mx-auto text-gray-400 mb-4" />
-                        <p className="text-gray-500 text-lg">No reports found</p>
-                        <p className="text-gray-400 text-sm mt-2">Try adjusting your filter</p>
-                    </div>
-                )}
-            </div>
+                        );
+                    })}
+                </div>
+            ) : (
+                <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+                    <Shield size={48} className="mx-auto text-gray-400 mb-4" />
+                    <p className="text-gray-500 text-lg">
+                        {reports.length === 0 ? 'No plagiarism reports yet' : 'No reports match the filter'}
+                    </p>
+                    {filterStatus !== 'all' && reports.length > 0 && (
+                        <button
+                            onClick={() => setFilterStatus('all')}
+                            className="mt-3 text-purple-600 hover:text-purple-700 text-sm font-medium"
+                        >
+                            Show all reports
+                        </button>
+                    )}
+                </div>
+            )}
 
             {/* Tips Section */}
             <div className="mt-8 bg-green-50 border border-green-200 rounded-lg p-6">
@@ -516,7 +357,7 @@ export default function PlagiarismReportsPage() {
                         <ul className="space-y-2 text-sm text-green-800">
                             <li className="flex items-start gap-2">
                                 <CheckCircle2 className="flex-shrink-0 mt-0.5" size={16} />
-                                <span>Always write in your own words - even when summarizing sources</span>
+                                <span>Always write in your own words — even when summarizing sources</span>
                             </li>
                             <li className="flex items-start gap-2">
                                 <CheckCircle2 className="flex-shrink-0 mt-0.5" size={16} />
@@ -528,7 +369,7 @@ export default function PlagiarismReportsPage() {
                             </li>
                             <li className="flex items-start gap-2">
                                 <CheckCircle2 className="flex-shrink-0 mt-0.5" size={16} />
-                                <span>When in doubt, paraphrase and cite - it's better to over-cite than under-cite</span>
+                                <span>When in doubt, paraphrase and cite — it is better to over-cite than under-cite</span>
                             </li>
                         </ul>
                     </div>

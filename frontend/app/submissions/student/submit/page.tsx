@@ -180,15 +180,7 @@ export default function SubmitAssignmentPage() {
             return <option disabled>Loading assignments…</option>;
         }
         if (assignmentsError || !assignments?.length) {
-            // Fallback to hardcoded options so the page isn't empty
-            return (
-                <>
-                    <option value="">Choose an assignment…</option>
-                    <option value="demo-1">Database Design Assignment – Database Management Systems (Due: 2026-03-15)</option>
-                    <option value="demo-2">Software Engineering Essay – Software Engineering (Due: 2026-03-08)</option>
-                    <option value="demo-3">Web Development Project – Web Technologies (Due: 2026-03-20)</option>
-                </>
-            );
+            return <option value="">No open assignments available</option>;
         }
         return (
             <>

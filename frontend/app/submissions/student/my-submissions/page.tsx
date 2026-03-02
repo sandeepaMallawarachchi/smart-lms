@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Award,
+    Calendar,
     FileText,
     GitBranch,
     Loader,
@@ -12,10 +13,11 @@ import {
     Shield,
     Star,
     AlertCircle,
+    ArrowRight,
 } from 'lucide-react';
 import SubmissionCard from '@/components/submissions/SubmissionCard';
-import { useSubmissions } from '@/hooks/useSubmissions';
-import type { Submission, SubmissionStatus } from '@/types/submission.types';
+import { useSubmissions, useAssignments } from '@/hooks/useSubmissions';
+import type { Assignment, SubmissionStatus } from '@/types/submission.types';
 
 // ─── Skeleton loading ─────────────────────────────────────────
 
@@ -61,6 +63,103 @@ function StatCard({
     );
 }
 
+// ─── Available Assignments section ────────────────────────────
+
+/**
+ * Shows open assignments the student can start/continue answering.
+ * Hidden entirely when there are no open assignments.
+ */
+function AvailableAssignments({
+    assignments,
+    loading,
+    submissionIds,   // set of assignmentIds that already have a DRAFT
+    router,
+}: {
+    assignments: Assignment[];
+    loading: boolean;
+    submissionIds: Set<string>;
+    router: ReturnType<typeof useRouter>;
+}) {
+    if (!loading && assignments.length === 0) return null;
+
+    return (
+        <div className="mb-8">
+            <div className="flex items-center gap-3 mb-4">
+                <h2 className="text-lg font-bold text-gray-900">Assignments to Answer</h2>
+                {!loading && (
+                    <span className="inline-flex items-center justify-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-700">
+                        {assignments.length}
+                    </span>
+                )}
+            </div>
+
+            {loading ? (
+                /* 2 skeleton cards while loading */
+                <div className="space-y-3">
+                    {[1, 2].map((i) => (
+                        <div key={i} className="animate-pulse bg-white rounded-lg border border-gray-200 p-4 flex items-center gap-4">
+                            <div className="h-10 w-10 bg-gray-200 rounded-lg flex-shrink-0" />
+                            <div className="flex-1 space-y-2">
+                                <div className="h-4 bg-gray-200 rounded w-1/2" />
+                                <div className="h-3 bg-gray-100 rounded w-1/3" />
+                            </div>
+                            <div className="h-8 w-28 bg-gray-200 rounded-lg" />
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    {assignments.map((asg) => {
+                        const hasDraft = submissionIds.has(asg.id);
+                        const dueDate = asg.dueDate ? new Date(asg.dueDate) : null;
+                        const now = Date.now();
+                        const isOverdue = dueDate ? dueDate.getTime() < now : false;
+
+                        return (
+                            <div
+                                key={asg.id}
+                                className="bg-white rounded-lg border border-gray-200 p-4 flex flex-wrap items-center gap-4 hover:shadow-sm transition-shadow"
+                            >
+                                {/* Calendar icon */}
+                                <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-purple-100 flex items-center justify-center">
+                                    <Calendar size={20} className="text-purple-600" />
+                                </div>
+
+                                {/* Assignment info */}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-gray-900 truncate">{asg.title}</p>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                        {asg.moduleCode}{asg.moduleName ? ` — ${asg.moduleName}` : ''}
+                                    </p>
+                                    {dueDate && (
+                                        <p className={`text-xs font-medium mt-1 ${isOverdue ? 'text-red-600' : 'text-amber-600'}`}>
+                                            Due: {dueDate.toLocaleDateString()}
+                                            {isOverdue && ' (overdue)'}
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Action button */}
+                                <button
+                                    onClick={() => router.push(`/submissions/student/answer/${asg.id}`)}
+                                    className={`flex-shrink-0 flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                                        hasDraft
+                                            ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                                            : 'bg-purple-600 text-white hover:bg-purple-700'
+                                    }`}
+                                >
+                                    {hasDraft ? 'Continue' : 'Start Answering'}
+                                    <ArrowRight size={14} />
+                                </button>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ─── Filter buttons ───────────────────────────────────────────
 
 type Filter = 'all' | SubmissionStatus;
@@ -95,6 +194,22 @@ export default function MySubmissionsPage() {
     }, []);
 
     const { data: submissions, loading, error, refetch } = useSubmissions(studentId);
+
+    // Fetch open assignments for the "Assignments to Answer" section.
+    const {
+        data: openAssignments,
+        loading: assignmentsLoading,
+    } = useAssignments({ status: 'OPEN' });
+
+    // Build a set of assignmentIds that already have a DRAFT submission,
+    // so the "Start Answering" button shows "Continue" for in-progress work.
+    const draftAssignmentIds = React.useMemo<Set<string>>(() => {
+        const set = new Set<string>();
+        (submissions ?? []).forEach((s) => {
+            if (s.status === 'DRAFT') set.add(s.assignmentId);
+        });
+        return set;
+    }, [submissions]);
 
     // ── Filtered list
     const filtered = useMemo(() => {
@@ -159,6 +274,14 @@ export default function MySubmissionsPage() {
                 </div>
             </div>
 
+            {/* Available Assignments — "Start Answering" section */}
+            <AvailableAssignments
+                assignments={openAssignments ?? []}
+                loading={assignmentsLoading}
+                submissionIds={draftAssignmentIds}
+                router={router}
+            />
+
             {/* Stats Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
                 <StatCard value={stats.total}    label="Total"         colorClass="text-gray-900"   bgClass="bg-white"        borderClass="border-gray-200" />
@@ -209,11 +332,8 @@ export default function MySubmissionsPage() {
                 <div className="flex items-start gap-3 p-4 mb-6 bg-amber-50 border border-amber-200 rounded-lg">
                     <AlertCircle size={20} className="text-amber-600 shrink-0 mt-0.5" />
                     <div>
-                        <p className="font-medium text-amber-800">Could not load live data</p>
+                        <p className="font-medium text-amber-800">Could not load submissions</p>
                         <p className="text-sm text-amber-700 mt-0.5">{error}</p>
-                        <p className="text-sm text-amber-600 mt-1">
-                            Showing sample data below. Check that your backend services are running.
-                        </p>
                     </div>
                 </div>
             )}
@@ -241,9 +361,6 @@ export default function MySubmissionsPage() {
                         />
                     ))}
                 </div>
-            ) : error ? (
-                /* Fallback sample data when backend is unavailable */
-                <FallbackSubmissions router={router} />
             ) : (
                 <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
                     <FileText size={52} className="mx-auto text-gray-300 mb-4" />
@@ -272,86 +389,3 @@ export default function MySubmissionsPage() {
     );
 }
 
-// ─── Fallback sample data (shown when backend unavailable) ────
-
-function FallbackSubmissions({ router }: { router: ReturnType<typeof useRouter> }) {
-    const SAMPLE: Submission[] = [
-        {
-            id: '1',
-            studentId: 'demo',
-            assignmentId: 'a1',
-            assignmentTitle: 'Python Programming Basics',
-            moduleCode: 'CS1001',
-            moduleName: 'Programming Fundamentals',
-            status: 'GRADED',
-            submittedAt: '2025-01-04T18:30:00',
-            currentVersionNumber: 5,
-            totalVersions: 5,
-            grade: 95,
-            totalMarks: 100,
-            plagiarismScore: 3,
-            aiScore: 92,
-            wordCount: 1250,
-            createdAt: '2025-01-01T10:00:00',
-            files: [],
-            lecturerFeedback: 'Excellent work! Your code is well-structured.',
-        },
-        {
-            id: '2',
-            studentId: 'demo',
-            assignmentId: 'a2',
-            assignmentTitle: 'Data Structures Implementation',
-            moduleCode: 'CS2002',
-            moduleName: 'Data Structures & Algorithms',
-            status: 'SUBMITTED',
-            submittedAt: '2025-01-07T22:45:00',
-            currentVersionNumber: 4,
-            totalVersions: 4,
-            totalMarks: 100,
-            plagiarismScore: 8,
-            aiScore: 88,
-            wordCount: 2100,
-            createdAt: '2025-01-05T14:00:00',
-            files: [],
-        },
-        {
-            id: '3',
-            studentId: 'demo',
-            assignmentId: 'a3',
-            assignmentTitle: 'Software Development Lifecycle Quiz',
-            moduleCode: 'SE2001',
-            moduleName: 'Software Engineering',
-            status: 'PENDING_REVIEW',
-            submittedAt: '2025-01-08T17:15:00',
-            currentVersionNumber: 2,
-            totalVersions: 2,
-            totalMarks: 50,
-            plagiarismScore: 5,
-            aiScore: 85,
-            wordCount: 850,
-            createdAt: '2025-01-07T09:00:00',
-            files: [],
-        },
-    ];
-
-    return (
-        <div className="space-y-4">
-            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-500 text-center">
-                Showing sample data — connect your backend to see real submissions
-            </div>
-            {SAMPLE.map((submission) => (
-                <SubmissionCard
-                    key={submission.id}
-                    submission={submission}
-                    onView={(id) => router.push(`/submissions/student/my-submissions/${id}`)}
-                    onVersionHistory={(id) =>
-                        router.push(`/submissions/student/version-history/${id}`)
-                    }
-                    onPlagiarismReport={(id) =>
-                        router.push(`/submissions/student/plagiarism/${id}`)
-                    }
-                />
-            ))}
-        </div>
-    );
-}

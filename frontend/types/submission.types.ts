@@ -243,6 +243,92 @@ export interface PagedResponse<T> {
     number: number;    // current page (0-indexed)
 }
 
+// ─── Text-Based Q&A System (IT22586766) ──────────────────────────
+//
+// These interfaces support the text-based assignment answer system
+// where students type answers to questions in the browser.
+// They are distinct from the existing file-upload interfaces above.
+
+/**
+ * A single question within an assignment.
+ * Questions are created by the lecturer's component and fetched
+ * via GET /api/assignments/{id} as part of the Assignment object.
+ */
+export interface Question {
+    id: string;
+    assignmentId: string;
+    text: string;             // The question prompt shown to students
+    description?: string;     // Optional additional context / hints
+    order: number;            // Display order (1-based)
+    expectedWordCount?: number;
+    maxWordCount?: number;
+    isRequired?: boolean;     // If true, submission blocked until answered
+}
+
+// Extend the existing Assignment interface to carry its questions.
+// questions is optional so existing code using Assignment without questions stays valid.
+// The field is appended here as a module augmentation via declaration merging is not
+// supported in .ts type files — instead, consume as (assignment as AssignmentWithQuestions).
+export interface AssignmentWithQuestions extends Assignment {
+    questions: Question[];
+}
+
+/**
+ * A student's typed text answer for one question.
+ * Stored in submission-management-service via PUT /api/submissions/{id}/answers/{questionId}.
+ */
+export interface TextAnswer {
+    id?: string;
+    submissionId: string;
+    questionId: string;
+    questionText?: string;    // Snapshot stored at save time
+    answerText: string;
+    wordCount: number;
+    characterCount: number;
+    lastModified: string;     // ISO-8601
+    createdAt?: string;       // ISO-8601
+}
+
+/** Payload for PUT /api/submissions/{id}/answers/{questionId} */
+export interface SaveAnswerPayload {
+    questionText?: string;
+    answerText: string;
+    wordCount: number;
+    characterCount: number;
+}
+
+/**
+ * Real-time AI feedback returned by POST /api/feedback/live.
+ * Lightweight — scores 0-10, not persisted to DB.
+ */
+export interface LiveFeedback {
+    questionId: string;
+    grammarScore: number;       // 0-10
+    clarityScore: number;       // 0-10
+    completenessScore: number;  // 0-10
+    relevanceScore: number;     // 0-10
+    suggestions: string[];
+    strengths: string[];
+    improvements: string[];
+    generatedAt: string;        // ISO-8601
+}
+
+/**
+ * Real-time plagiarism result from POST /api/integrity/realtime/check.
+ * Severity mapped from the numeric similarity score:
+ *   < 0.40  → LOW
+ *   0.40-0.70 → MEDIUM
+ *   ≥ 0.70  → HIGH
+ */
+export interface LivePlagiarismResult {
+    questionId: string;
+    similarityScore: number;    // 0-100 (converted from 0.0-1.0 backend value)
+    severity: 'LOW' | 'MEDIUM' | 'HIGH';
+    flagged: boolean;
+    matchedText?: string;       // excerpt of matched content
+    checkedAt: string;          // ISO-8601
+}
+
 // ─── Hook state shapes ─────────────────────────────────────────
 
 export interface AsyncState<T> {
