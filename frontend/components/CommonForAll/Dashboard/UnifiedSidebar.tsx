@@ -180,16 +180,12 @@ export default function UnifiedSidebar({ userRole }: UnifiedSidebarProps) {
     setActiveSection(id);
     if (hasSubsections && !sidebarCollapsed) {
       toggleSection(id);
-    } else if (href) {
+    }
+    // Always navigate when the section has a route, even if it also has subsections.
+    if (href) {
       router.push(href);
     }
   };
-
-  useEffect(() => {
-    if (userRole === 'superadmin') {
-      fetchPendingCount();
-    }
-  }, [userRole]);
 
   const fetchPendingCount = async () => {
     try {
@@ -208,6 +204,12 @@ export default function UnifiedSidebar({ userRole }: UnifiedSidebarProps) {
       console.error('Error fetching pending count:', error);
     }
   };
+
+  useEffect(() => {
+    if (userRole === 'superadmin') {
+      fetchPendingCount();
+    }
+  }, [userRole]);
 
   // Update the config to use dynamic badge count for superadmin
   const updatedNavItems = config.navItems.map(item => {
@@ -330,6 +332,7 @@ export default function UnifiedSidebar({ userRole }: UnifiedSidebarProps) {
                     <button
                       key={subsection.id}
                       onClick={() => {
+                        setActiveSection(item.id);
                         if (subsection.href) {
                           router.push(subsection.href);
                         }
