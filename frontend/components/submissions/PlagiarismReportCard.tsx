@@ -165,7 +165,7 @@ export default function PlagiarismReportCard({
                             onCheck();
                         }}
                         disabled={checking}
-                        className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors text-sm font-medium"
+                        className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors text-sm font-medium cursor-pointer"
                     >
                         {checking ? 'Checking…' : 'Run Check'}
                     </button>
@@ -197,7 +197,7 @@ export default function PlagiarismReportCard({
                                 onCheck();
                             }}
                             disabled={checking}
-                            className="mt-4 px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors text-sm font-medium flex items-center gap-2"
+                            className="mt-4 px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors text-sm font-medium flex items-center gap-2 cursor-pointer"
                         >
                             {checking ? (
                                 <Loader size={16} className="animate-spin" />
@@ -259,7 +259,7 @@ export default function PlagiarismReportCard({
                             onCheck();
                         }}
                         disabled={checking}
-                        className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors font-medium"
+                        className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors font-medium cursor-pointer"
                     >
                         {checking ? 'Checking…' : 'Re-check'}
                     </button>

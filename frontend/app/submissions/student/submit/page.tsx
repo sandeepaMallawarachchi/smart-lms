@@ -209,7 +209,7 @@ export default function SubmitAssignmentPage() {
             <div className="mb-8">
                 <button
                     onClick={() => router.back()}
-                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors cursor-pointer"
                 >
                     <ArrowLeft size={20} />
                     Back to Submissions
@@ -302,7 +302,7 @@ export default function SubmitAssignmentPage() {
                         <button
                             onClick={handleSaveDraft}
                             disabled={!isFormReady || isBusy}
-                            className="w-full px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold flex items-center justify-center gap-2 text-lg shadow-lg"
+                            className="w-full px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors font-semibold flex items-center justify-center gap-2 text-lg shadow-lg"
                         >
                             {(creating || uploading) ? (
                                 <>
@@ -340,7 +340,7 @@ export default function SubmitAssignmentPage() {
                                         {!plagChecking && !plagDone && (
                                             <button
                                                 onClick={handleRunPlagiarism}
-                                                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                                                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium cursor-pointer"
                                             >
                                                 Run Check
                                             </button>
@@ -399,7 +399,7 @@ export default function SubmitAssignmentPage() {
                                         {!feedbackLoading && !feedbackDone && (
                                             <button
                                                 onClick={handleRunAI}
-                                                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                                                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium cursor-pointer"
                                             >
                                                 Analyze
                                             </button>
@@ -438,7 +438,7 @@ export default function SubmitAssignmentPage() {
                         <button
                             onClick={() => router.back()}
                             disabled={isBusy}
-                            className="flex-1 px-6 py-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
+                            className="flex-1 px-6 py-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 cursor-pointer"
                         >
                             Cancel
                         </button>
@@ -446,7 +446,7 @@ export default function SubmitAssignmentPage() {
                             <button
                                 onClick={handleFinalSubmit}
                                 disabled={submitting}
-                                className="flex-1 px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
+                                className="flex-1 px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 cursor-pointer"
                             >
                                 {submitting ? (
                                     <>

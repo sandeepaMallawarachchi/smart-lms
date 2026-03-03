@@ -106,7 +106,7 @@ export default function FeedbackPage({ params }: { params: Promise<{ id: string 
             <div className="mb-8">
                 <button
                     onClick={() => router.back()}
-                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors cursor-pointer"
                 >
                     <ArrowLeft size={20} />
                     Back to Submissions
@@ -166,7 +166,7 @@ export default function FeedbackPage({ params }: { params: Promise<{ id: string 
                         </div>
                         <button
                             onClick={() => router.push(`/submissions/student/version-history/${id}`)}
-                            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-white transition-colors"
+                            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-white transition-colors cursor-pointer"
                         >
                             <GitBranch size={18} />
                             View Versions
@@ -319,19 +319,19 @@ export default function FeedbackPage({ params }: { params: Promise<{ id: string 
                         <div className="space-y-3">
                             <button
                                 onClick={() => router.push(`/submissions/student/version-history/${id}`)}
-                                className="w-full px-4 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-white transition-colors text-sm font-medium"
+                                className="w-full px-4 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-white transition-colors text-sm font-medium cursor-pointer"
                             >
                                 View All Versions
                             </button>
                             <button
                                 onClick={() => router.push('/submissions/student/submit')}
-                                className="w-full px-4 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-white transition-colors text-sm font-medium"
+                                className="w-full px-4 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-white transition-colors text-sm font-medium cursor-pointer"
                             >
                                 Submit New Version
                             </button>
                             <button
                                 onClick={() => router.push('/submissions/student/my-submissions')}
-                                className="w-full px-4 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-white transition-colors text-sm font-medium"
+                                className="w-full px-4 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-white transition-colors text-sm font-medium cursor-pointer"
                             >
                                 All My Submissions
                             </button>

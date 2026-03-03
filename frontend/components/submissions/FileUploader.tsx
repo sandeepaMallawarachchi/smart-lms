@@ -324,7 +324,7 @@ export default function FileUploader({
                         inputRef.current?.click();
                     }}
                     disabled={disabled}
-                    className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                    className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors text-sm font-medium"
                 >
                     <Upload size={16} />
                     Choose Files
@@ -393,7 +393,7 @@ export default function FileUploader({
                                             type="button"
                                             onClick={() => removeFile(index)}
                                             disabled={disabled}
-                                            className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                                            className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50 cursor-pointer"
                                             aria-label={`Remove ${file.name}`}
                                         >
                                             <X size={20} />

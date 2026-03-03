@@ -233,7 +233,7 @@ function ReportCard({
                 <div className="ml-4 flex flex-col items-end gap-3 shrink-0">
                     <button
                         onClick={() => router.push(`/submissions/lecturer/submissions/${report.submissionId}`)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 text-sm"
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 text-sm cursor-pointer"
                     >
                         <Eye size={18} />
                         View Details
@@ -241,7 +241,7 @@ function ReportCard({
 
                     <button
                         onClick={() => alert(`Export report for ${report.id}`)}
-                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium flex items-center gap-2 text-sm"
+                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium flex items-center gap-2 text-sm cursor-pointer"
                     >
                         <Download size={16} />
                         Export
@@ -252,7 +252,7 @@ function ReportCard({
                             {!showNoteInput ? (
                                 <button
                                     onClick={() => setShowNoteInput(true)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium cursor-pointer"
                                 >
                                     Add Note &amp; Review
                                 </button>
@@ -261,7 +261,7 @@ function ReportCard({
                                     <button
                                         onClick={() => handleAction('CONFIRMED')}
                                         disabled={updating && pendingStatus === 'CONFIRMED'}
-                                        className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+                                        className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm disabled:opacity-50 cursor-pointer"
                                     >
                                         {updating && pendingStatus === 'CONFIRMED'
                                             ? <RefreshCw size={16} className="animate-spin" />
@@ -272,7 +272,7 @@ function ReportCard({
                                     <button
                                         onClick={() => handleAction('FALSE_POSITIVE')}
                                         disabled={updating && pendingStatus === 'FALSE_POSITIVE'}
-                                        className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+                                        className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm disabled:opacity-50 cursor-pointer"
                                     >
                                         {updating && pendingStatus === 'FALSE_POSITIVE'
                                             ? <RefreshCw size={16} className="animate-spin" />
@@ -282,7 +282,7 @@ function ReportCard({
                                     </button>
                                     <button
                                         onClick={() => { setShowNoteInput(false); setNoteText(''); }}
-                                        className="text-xs text-gray-500 hover:text-gray-700"
+                                        className="text-xs text-gray-500 hover:text-gray-700 cursor-pointer"
                                     >
                                         Cancel
                                     </button>
@@ -373,7 +373,7 @@ export default function LecturerPlagiarismDetectionPage() {
                 <button
                     onClick={() => refetch()}
                     disabled={loading}
-                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50 cursor-pointer"
                 >
                     <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                     Refresh

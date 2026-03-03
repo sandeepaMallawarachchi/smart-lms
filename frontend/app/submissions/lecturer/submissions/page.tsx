@@ -183,7 +183,7 @@ function SubmissionRow({
                     <div className="flex gap-2">
                         <button
                             onClick={() => onView(submission.id)}
-                            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium flex items-center gap-2 text-sm"
+                            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium flex items-center gap-2 text-sm cursor-pointer"
                         >
                             <Eye size={16} />
                             View
@@ -191,7 +191,7 @@ function SubmissionRow({
                         {submission.status !== 'GRADED' && (
                             <button
                                 onClick={() => onGrade(submission.id)}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 text-sm"
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 text-sm cursor-pointer"
                             >
                                 <Edit size={16} />
                                 Grade
@@ -276,7 +276,7 @@ export default function LecturerAllSubmissionsPage() {
                 <button
                     onClick={() => refetch()}
                     disabled={loading}
-                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50 cursor-pointer"
                 >
                     <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                     Refresh
@@ -367,7 +367,7 @@ export default function LecturerAllSubmissionsPage() {
                             </select>
                         </div>
 
-                        <button className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium flex items-center gap-2">
+                        <button className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium flex items-center gap-2 cursor-pointer">
                             <Download size={18} />
                             Export
                         </button>
@@ -397,7 +397,7 @@ export default function LecturerAllSubmissionsPage() {
                         {(searchQuery || filterStatus !== 'all') && (
                             <button
                                 onClick={() => { setSearchQuery(''); setFilterStatus('all'); }}
-                                className="mt-3 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                                className="mt-3 text-blue-600 hover:text-blue-700 text-sm font-medium cursor-pointer"
                             >
                                 Clear filters
                             </button>

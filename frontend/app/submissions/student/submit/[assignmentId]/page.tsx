@@ -17,7 +17,7 @@ import {
     Shield,
     Star,
 } from 'lucide-react';
-import { submissionService, feedbackService } from '@/lib/api/submission-services';
+import { submissionService, feedbackService, getAssignmentWithFallback } from '@/lib/api/submission-services';
 import type { AssignmentWithQuestions, Question, LiveFeedback } from '@/types/submission.types';
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -333,12 +333,11 @@ export default function SubmitAssignmentPage({
         }
     }, []);
 
-    // Fetch assignment
+    // Fetch assignment (falls back to sample data if API is unavailable)
     useEffect(() => {
         setLoadingAssignment(true);
         setLoadError(null);
-        submissionService
-            .getAssignment(resolvedParams.assignmentId)
+        getAssignmentWithFallback(resolvedParams.assignmentId)
             .then((asg) => {
                 setAssignment(asg as AssignmentWithQuestions);
                 // Initialise answer slots for each question

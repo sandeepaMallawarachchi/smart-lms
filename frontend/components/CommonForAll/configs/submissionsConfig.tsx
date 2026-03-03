@@ -127,8 +127,8 @@ export const submissionsConfig: Record<'student' | 'lecture', ModuleConfig> = {
             roleLabel: 'Student',
             showStats: true,
             stats: {
-                total: 8,
-                dueSoon: 3,
+                total: 0,
+                dueSoon: 0,
             },
             navItems: [
                 {
@@ -143,7 +143,6 @@ export const submissionsConfig: Record<'student' | 'lecture', ModuleConfig> = {
                     label: 'My Assignments',
                     icon: <FileText size={20} />,
                     description: 'All assigned tasks',
-                    badge: 8,
                     href: '/submissions/student/assignments',
                 },
                 {
@@ -258,7 +257,6 @@ export const submissionsConfig: Record<'student' | 'lecture', ModuleConfig> = {
                     label: 'All Submissions',
                     icon: <FileText size={22} />,
                     description: 'Student submissions',
-                    badge: 23,
                     href: '/submissions/lecturer/submissions',
                 },
                 {
@@ -266,7 +264,6 @@ export const submissionsConfig: Record<'student' | 'lecture', ModuleConfig> = {
                     label: 'Grading Interface',
                     icon: <Edit size={22} />,
                     description: 'Grade submissions',
-                    badge: 23,
                     href: '/submissions/lecturer/grading',
                 },
                 {
@@ -274,7 +271,6 @@ export const submissionsConfig: Record<'student' | 'lecture', ModuleConfig> = {
                     label: 'Plagiarism Detection',
                     icon: <Shield size={22} />,
                     description: 'Academic integrity',
-                    badge: 8,
                     href: '/submissions/lecturer/plagiarism',
                 },
                 {

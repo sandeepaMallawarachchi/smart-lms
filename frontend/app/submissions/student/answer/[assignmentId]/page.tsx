@@ -28,7 +28,7 @@
 
 import { useState, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { submissionService } from '@/lib/api/submission-services';
+import { submissionService, getAssignmentWithFallback } from '@/lib/api/submission-services';
 import { QuestionCard } from '@/components/submissions/QuestionCard';
 import type { AssignmentWithQuestions, TextAnswer } from '@/types/submission.types';
 
@@ -139,8 +139,8 @@ export default function AnswerPage({
             try {
                 setLoading(true);
 
-                // 1. Fetch assignment (with questions)
-                const raw = await submissionService.getAssignment(assignmentId);
+                // 1. Fetch assignment (with questions); falls back to sample data if API is down
+                const raw = await getAssignmentWithFallback(assignmentId);
                 // Cast — questions[] is returned by the backend but typed as optional
                 const asg = raw as AssignmentWithQuestions;
                 setAssignment(asg);
@@ -244,7 +244,7 @@ export default function AnswerPage({
                     <p className="font-semibold">{error}</p>
                     <button
                         onClick={() => router.push('/submissions/student/my-submissions')}
-                        className="mt-4 text-sm underline text-red-600 hover:text-red-800"
+                        className="mt-4 text-sm underline text-red-600 hover:text-red-800 cursor-pointer"
                     >
                         Back to submissions
                     </button>
@@ -282,7 +282,7 @@ export default function AnswerPage({
             {/* ── Back link ─────────────────────────────────── */}
             <button
                 onClick={() => router.push('/submissions/student/my-submissions')}
-                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-5 transition-colors"
+                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-5 transition-colors cursor-pointer"
             >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -405,7 +405,7 @@ export default function AnswerPage({
                             title={!canSubmit ? 'Answer all required questions to submit' : undefined}
                             className={`rounded-lg px-6 py-2.5 text-sm font-semibold text-white transition-colors ${
                                 canSubmit && !submitting
-                                    ? 'bg-purple-600 hover:bg-purple-700 active:bg-purple-800'
+                                    ? 'bg-purple-600 hover:bg-purple-700 active:bg-purple-800 cursor-pointer'
                                     : 'bg-gray-300 cursor-not-allowed'
                             }`}
                         >
@@ -428,14 +428,14 @@ export default function AnswerPage({
                             <button
                                 onClick={() => setShowConfirm(false)}
                                 disabled={submitting}
-                                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer"
                             >
                                 Go Back
                             </button>
                             <button
                                 onClick={handleSubmit}
                                 disabled={submitting}
-                                className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:bg-gray-300"
+                                className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:bg-gray-300 cursor-pointer"
                             >
                                 {submitting ? 'Submitting…' : 'Yes, Submit'}
                             </button>

@@ -142,7 +142,7 @@ function AvailableAssignments({
                                 {/* Action button */}
                                 <button
                                     onClick={() => router.push(`/submissions/student/answer/${asg.id}`)}
-                                    className={`flex-shrink-0 flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                                    className={`flex-shrink-0 flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition-colors cursor-pointer ${
                                         hasDraft
                                             ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
                                             : 'bg-purple-600 text-white hover:bg-purple-700'
@@ -258,7 +258,7 @@ export default function MySubmissionsPage() {
                     <button
                         onClick={() => refetch()}
                         disabled={loading}
-                        className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50"
+                        className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50 cursor-pointer"
                         title="Refresh"
                     >
                         <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -266,7 +266,7 @@ export default function MySubmissionsPage() {
                     </button>
                     <button
                         onClick={() => router.push('/submissions/student/submit')}
-                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-semibold shadow-md"
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-semibold shadow-md cursor-pointer"
                     >
                         <Plus size={16} />
                         New Submission
@@ -314,7 +314,7 @@ export default function MySubmissionsPage() {
                             <button
                                 key={key}
                                 onClick={() => setFilter(key)}
-                                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
                                     filter === key
                                         ? activeClass
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -370,14 +370,14 @@ export default function MySubmissionsPage() {
                     {filter !== 'all' ? (
                         <button
                             onClick={() => setFilter('all')}
-                            className="mt-3 text-purple-600 hover:text-purple-700 text-sm font-medium"
+                            className="mt-3 text-purple-600 hover:text-purple-700 text-sm font-medium cursor-pointer"
                         >
                             Show all submissions
                         </button>
                     ) : (
                         <button
                             onClick={() => router.push('/submissions/student/submit')}
-                            className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                            className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium cursor-pointer"
                         >
                             <Plus size={18} />
                             Make Your First Submission

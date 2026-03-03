@@ -65,8 +65,8 @@ export default function StudentDashboardPage() {
         }
     }, []);
 
-    const { data: submissions, loading: subsLoading, refetch: refetchSubs } = useSubmissions(studentId);
-    const { data: assignments, loading: assgsLoading, refetch: refetchAssgs } = useAssignments();
+    const { data: submissions, loading: subsLoading, error: subsError, refetch: refetchSubs } = useSubmissions(studentId);
+    const { data: assignments, loading: assgsLoading, error: assgsError, refetch: refetchAssgs } = useAssignments();
 
     const loading = subsLoading || assgsLoading;
 
@@ -152,12 +152,26 @@ export default function StudentDashboardPage() {
                 <button
                     onClick={handleRefresh}
                     disabled={loading}
-                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50 cursor-pointer"
                 >
                     <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                     Refresh
                 </button>
             </div>
+
+            {/* Error Banner — own API failure (ports 8081-8084) */}
+            {(subsError || assgsError) && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+                    <AlertTriangle className="text-red-600 mt-0.5 shrink-0" size={20} />
+                    <div>
+                        <p className="font-semibold text-red-800">Failed to load dashboard data</p>
+                        <p className="text-sm text-red-600 mt-1">{subsError ?? assgsError}</p>
+                        <button onClick={handleRefresh} className="text-sm text-red-700 underline mt-1 hover:text-red-800 cursor-pointer">
+                            Try again
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Main Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -288,7 +302,7 @@ export default function StudentDashboardPage() {
                                                 </div>
                                                 <button
                                                     onClick={() => router.push(`/submissions/student/answer/${assignment.id}`)}
-                                                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium flex items-center gap-2"
+                                                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium flex items-center gap-2 cursor-pointer"
                                                 >
                                                     <Edit size={16} />
                                                     Start
@@ -302,7 +316,7 @@ export default function StudentDashboardPage() {
                         <div className="p-4 bg-gray-50 border-t border-gray-200">
                             <button
                                 onClick={() => router.push('/submissions/student/assignments')}
-                                className="text-purple-600 hover:text-purple-700 font-medium text-sm flex items-center gap-2"
+                                className="text-purple-600 hover:text-purple-700 font-medium text-sm flex items-center gap-2 cursor-pointer"
                             >
                                 View All Assignments <span>→</span>
                             </button>
@@ -382,7 +396,7 @@ export default function StudentDashboardPage() {
                                             </div>
                                             <button
                                                 onClick={() => router.push(`/submissions/student/my-submissions/${submission.id}`)}
-                                                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium flex items-center gap-2"
+                                                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium flex items-center gap-2 cursor-pointer"
                                             >
                                                 <Eye size={16} /> View
                                             </button>
@@ -394,7 +408,7 @@ export default function StudentDashboardPage() {
                         <div className="p-4 bg-gray-50 border-t border-gray-200">
                             <button
                                 onClick={() => router.push('/submissions/student/my-submissions')}
-                                className="text-purple-600 hover:text-purple-700 font-medium text-sm flex items-center gap-2"
+                                className="text-purple-600 hover:text-purple-700 font-medium text-sm flex items-center gap-2 cursor-pointer"
                             >
                                 View All Submissions <span>→</span>
                             </button>

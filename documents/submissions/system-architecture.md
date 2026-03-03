@@ -282,8 +282,53 @@ ModuleLayout (wraps all /submissions/* pages)
 | 3-second debounce for live feedback | Avoids API spam while still feeling responsive |
 | 5-second debounce for auto-save | Frequent enough to not lose work; infrequent enough to not overload the backend |
 | Client-side analytics computation | No dedicated analytics endpoints needed — all stats computed from raw submission arrays via `useMemo` |
-| Graceful fallback everywhere | Pages never crash even if all 4 microservices are offline — shows sample data or empty state |
 | Flat array + paged response duality | Frontend handles both shapes from `GET /api/submissions` — enables gradual migration to pagination |
+
+---
+
+## API Integration Strategy
+
+### Rule: Own APIs vs External APIs
+
+| API Type | Example | On Failure |
+|----------|---------|------------|
+| **Own APIs** (ports 8081–8084) | Submissions, Versions, Feedback, Plagiarism | Show red error banner — **no fallback data** |
+| **External APIs** (teammates' services) | Assignment API from another team, Course API, Student/User profiles | Try real API first → fall back to hardcoded sample data if unavailable |
+
+**Rationale:**
+- Own services are under our control and should always be running. Silent fallback to fake data would mask real backend problems.
+- External teammates' services may not be ready during development. Fallback data keeps development flowing without being blocked by others.
+
+### Implementation Pattern
+
+**Own API (show error, no fallback):**
+```tsx
+const { data, loading, error } = useSubmissions(studentId);
+
+{error && (
+    <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+        <AlertTriangle className="text-red-600" size={20} />
+        <div>
+            <p className="font-semibold text-red-800">Failed to load data</p>
+            <p className="text-sm text-red-600">{error}</p>
+        </div>
+    </div>
+)}
+```
+
+**External API (try real, fall back to sample data):**
+```tsx
+let assignments = [];
+try {
+    assignments = await externalTeamService.getAssignments();
+} catch {
+    assignments = SAMPLE_ASSIGNMENTS;  // hardcoded fallback
+}
+```
+
+### Background / Real-Time Operations (Exception)
+
+Live feedback (`POST /api/feedback/live`) and live plagiarism (`POST /api/integrity/realtime/check`) are called every 3 seconds while typing. For these, **silent failure is acceptable** — showing an error every few seconds would be disruptive. The panel simply stays in its previous state if the call fails.
 
 ---
 

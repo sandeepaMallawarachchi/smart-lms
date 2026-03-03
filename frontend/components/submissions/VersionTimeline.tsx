@@ -320,7 +320,7 @@ function VersionNode({
                                     console.debug('[VersionNode] "View Files" clicked — versionId:', version.id);
                                     onViewFiles(version.id);
                                 }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium cursor-pointer"
                             >
                                 <Eye size={13} />
                                 Files ({version.files.length})
@@ -333,7 +333,7 @@ function VersionNode({
                                     console.debug('[VersionNode] "Download" clicked — versionId:', version.id);
                                     onDownload(version.id);
                                 }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium cursor-pointer"
                             >
                                 <Download size={13} />
                                 Download
@@ -552,7 +552,7 @@ export default function VersionTimeline({
                                     setCompareA(null);
                                     setCompareB(null);
                                 }}
-                                className="text-xs text-gray-400 hover:text-gray-600 underline"
+                                className="text-xs text-gray-400 hover:text-gray-600 underline cursor-pointer"
                             >
                                 Clear
                             </button>

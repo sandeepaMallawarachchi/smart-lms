@@ -85,7 +85,7 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
             <div className="mb-8">
                 <button
                     onClick={() => router.back()}
-                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors cursor-pointer"
                 >
                     <ArrowLeft size={20} />
                     Back to Submissions

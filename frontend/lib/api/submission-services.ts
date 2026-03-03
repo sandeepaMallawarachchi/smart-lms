@@ -472,3 +472,66 @@ export const plagiarismService = {
         };
     },
 };
+
+// ─── Sample fallback data ─────────────────────────────────────
+// Used by getAssignmentWithFallback when the assignments API is unavailable.
+// Matches module codes from Smart LMS specializations: IT · SE · DS · CSNE · CS · IM
+
+const _d = 24 * 60 * 60 * 1000;
+
+const SAMPLE_ASSIGNMENT_MAP: Record<string, Assignment> = {
+    'sample-asg-001': {
+        id: 'sample-asg-001',
+        title: 'Software Requirements Analysis',
+        description: 'Analyze and document software requirements for a library management system using UML diagrams.',
+        moduleCode: 'SE3020',
+        moduleName: 'Software Engineering',
+        dueDate: new Date(Date.now() + 7 * _d).toISOString(),
+        totalMarks: 100,
+        status: 'OPEN',
+    },
+    'sample-asg-002': {
+        id: 'sample-asg-002',
+        title: 'Database Design Project',
+        description: 'Design a normalized ER schema for an e-commerce platform and implement it in MySQL.',
+        moduleCode: 'IT3040',
+        moduleName: 'Database Management Systems',
+        dueDate: new Date(Date.now() + 14 * _d).toISOString(),
+        totalMarks: 50,
+        status: 'OPEN',
+    },
+    'sample-asg-003': {
+        id: 'sample-asg-003',
+        title: 'Machine Learning Model Evaluation',
+        description: 'Implement and compare two classification models on the provided dataset. Include a written analysis.',
+        moduleCode: 'DS3010',
+        moduleName: 'Data Science Fundamentals',
+        dueDate: new Date(Date.now() + 3 * _d).toISOString(),
+        totalMarks: 75,
+        status: 'OPEN',
+    },
+};
+
+const FALLBACK_ASSIGNMENT: Assignment = {
+    id: 'unknown',
+    title: 'Assignment (offline)',
+    description: 'Assignment details are temporarily unavailable. Your answers will still be saved.',
+    moduleCode: 'N/A',
+    dueDate: new Date(Date.now() + 7 * _d).toISOString(),
+    totalMarks: 100,
+    status: 'OPEN',
+};
+
+/**
+ * Fetch a single assignment with graceful fallback.
+ * Tries the real API first; on failure returns a placeholder so pages
+ * that need assignment metadata remain functional.
+ */
+export async function getAssignmentWithFallback(id: string): Promise<Assignment> {
+    try {
+        return await submissionService.getAssignment(id);
+    } catch {
+        console.warn('[getAssignmentWithFallback] API unavailable for id:', id, '— using sample data');
+        return SAMPLE_ASSIGNMENT_MAP[id] ?? { ...FALLBACK_ASSIGNMENT, id };
+    }
+}

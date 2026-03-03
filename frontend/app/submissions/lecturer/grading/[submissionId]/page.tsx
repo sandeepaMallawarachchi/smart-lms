@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useSubmission, useGradeSubmission } from '@/hooks/useSubmissions';
 import { useFeedback } from '@/hooks/useFeedback';
-import { submissionService } from '@/lib/api/submission-services';
+import { submissionService, getAssignmentWithFallback } from '@/lib/api/submission-services';
 import type { AssignmentWithQuestions, Feedback, Question, TextAnswer } from '@/types/submission.types';
 
 // ─── Types for per-question grading ──────────────────────────
@@ -148,13 +148,13 @@ function FeedbackBlock({
                 <div className="flex gap-2">
                     <button
                         onClick={onSave}
-                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm"
+                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm cursor-pointer"
                     >
                         <Check size={16} /> Save
                     </button>
                     <button
                         onClick={onCancel}
-                        className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium flex items-center justify-center gap-2 text-sm"
+                        className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium flex items-center justify-center gap-2 text-sm cursor-pointer"
                     >
                         <X size={16} /> Cancel
                     </button>
@@ -192,7 +192,7 @@ function FeedbackBlock({
             <div className="flex gap-2 mt-3">
                 <button
                     onClick={onEdit}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm"
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm cursor-pointer"
                 >
                     <Edit size={16} />
                     {isModified ? 'Edit Feedback' : 'Modify AI Feedback'}
@@ -201,7 +201,7 @@ function FeedbackBlock({
                     <button
                         onClick={onRegenerate}
                         disabled={isGenerating}
-                        className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors font-medium flex items-center gap-2 text-sm disabled:opacity-50"
+                        className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors font-medium flex items-center gap-2 text-sm disabled:opacity-50 cursor-pointer"
                     >
                         <RefreshCw size={16} className={isGenerating ? 'animate-spin' : ''} />
                         Regenerate
@@ -256,9 +256,9 @@ export default function LecturerGradingInterfacePage({
             // No text answers — that's fine for file-upload submissions
         });
 
-        // Real questions from the assignment API
+        // Real questions from the assignment API (falls back to sample data if unavailable)
         if (submission.assignmentId) {
-            submissionService.getAssignment(submission.assignmentId)
+            getAssignmentWithFallback(submission.assignmentId)
                 .then((asg) => {
                     const withQ = asg as AssignmentWithQuestions;
                     if (withQ.questions && withQ.questions.length > 0) {
@@ -387,7 +387,7 @@ export default function LecturerGradingInterfacePage({
             <div className="mb-6">
                 <button
                     onClick={() => router.back()}
-                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors cursor-pointer"
                 >
                     <ArrowLeft size={20} />
                     Back to Submissions
@@ -598,7 +598,7 @@ export default function LecturerGradingInterfacePage({
                     <button
                         onClick={() => router.back()}
                         disabled={grading}
-                        className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                     >
                         <Save size={18} />
                         Save as Draft
@@ -606,7 +606,7 @@ export default function LecturerGradingInterfacePage({
                     <button
                         onClick={handleSubmitGrade}
                         disabled={grading}
-                        className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                     >
                         {grading ? (
                             <>

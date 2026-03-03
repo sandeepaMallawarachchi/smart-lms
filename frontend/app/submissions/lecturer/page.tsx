@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import React, {useMemo} from 'react';
+import {useRouter} from 'next/navigation';
 import {
     AlertTriangle,
     Award,
@@ -17,8 +17,8 @@ import {
     TrendingUp,
     Users,
 } from 'lucide-react';
-import { useAllSubmissions, useAssignments } from '@/hooks/useSubmissions';
-import type { Submission } from '@/types/submission.types';
+import {useAllSubmissions, useAssignments} from '@/hooks/useSubmissions';
+import type {Submission} from '@/types/submission.types';
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -50,8 +50,8 @@ function timeAgo(iso?: string): string {
 
 // ─── Skeleton ─────────────────────────────────────────────────
 
-function Skeleton({ className = '' }: { className?: string }) {
-    return <div className={`bg-gray-200 rounded animate-pulse ${className}`} />;
+function Skeleton({className = ''}: { className?: string }) {
+    return <div className={`bg-gray-200 rounded animate-pulse ${className}`}/>;
 }
 
 // ─── Page ─────────────────────────────────────────────────────
@@ -59,8 +59,18 @@ function Skeleton({ className = '' }: { className?: string }) {
 export default function LecturerDashboardPage() {
     const router = useRouter();
 
-    const { data: submissions, loading: subsLoading, refetch: refetchSubs } = useAllSubmissions();
-    const { data: assignments, loading: assgsLoading, refetch: refetchAssgs } = useAssignments();
+    const {
+        data: submissions,
+        loading: subsLoading,
+        error: subsError,
+        refetch: refetchSubs
+    } = useAllSubmissions();
+    const {
+        data: assignments,
+        loading: assgsLoading,
+        error: assgsError,
+        refetch: refetchAssgs
+    } = useAssignments();
 
     const loading = subsLoading || assgsLoading;
 
@@ -149,86 +159,115 @@ export default function LecturerDashboardPage() {
             <div className="flex items-start justify-between mb-8">
                 <div>
                     <h1 className="text-4xl font-bold text-gray-900 mb-2">Lecturer Dashboard</h1>
-                    <p className="text-gray-600">Overview of your assignments and student submissions</p>
+                    <p className="text-gray-600">Overview of your assignments and student
+                        submissions</p>
                 </div>
                 <button
                     onClick={handleRefresh}
                     disabled={loading}
-                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50 cursor-pointer"
                 >
-                    <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                    <RefreshCw size={16} className={loading ? 'animate-spin' : ''}/>
                     Refresh
                 </button>
             </div>
 
+            {/* Error Banner — own API failure (ports 8081-8084) */}
+            {(subsError || assgsError) && (
+                <div
+                    className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+                    <AlertTriangle className="text-red-600 mt-0.5 shrink-0" size={20}/>
+                    <div>
+                        <p className="font-semibold text-red-800">Failed to load dashboard data</p>
+                        <p className="text-sm text-red-600 mt-1">{subsError ?? assgsError}</p>
+                        <button onClick={handleRefresh}
+                                className="text-sm text-red-700 underline mt-1 hover:text-red-800 cursor-pointer">
+                            Try again
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Main Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 {loading ? (
-                    [1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-32" />)
+                    [1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-32"/>)
                 ) : (
                     <>
-                        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+                        <div
+                            className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
-                                    <p className="text-blue-100 text-sm font-medium">Pending Review</p>
+                                    <p className="text-blue-100 text-sm font-medium">Pending
+                                        Review</p>
                                     <p className="text-4xl font-bold mt-1">{stats.pendingReview}</p>
                                 </div>
-                                <div className="w-14 h-14 bg-blue-400 bg-opacity-30 rounded-full flex items-center justify-center">
-                                    <Clock size={28} />
+                                <div
+                                    className="w-14 h-14 bg-blue-400 bg-opacity-30 rounded-full flex items-center justify-center">
+                                    <Clock size={28}/>
                                 </div>
                             </div>
                             <div className="flex items-center text-blue-100 text-sm">
-                                <AlertTriangle size={16} className="mr-1" />
+                                <AlertTriangle size={16} className="mr-1"/>
                                 Requires attention
                             </div>
                         </div>
 
-                        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
+                        <div
+                            className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
-                                    <p className="text-green-100 text-sm font-medium">Graded Today</p>
+                                    <p className="text-green-100 text-sm font-medium">Graded
+                                        Today</p>
                                     <p className="text-4xl font-bold mt-1">{stats.gradedToday}</p>
                                 </div>
-                                <div className="w-14 h-14 bg-green-400 bg-opacity-30 rounded-full flex items-center justify-center">
-                                    <CheckCircle2 size={28} />
+                                <div
+                                    className="w-14 h-14 bg-green-400 bg-opacity-30 rounded-full flex items-center justify-center">
+                                    <CheckCircle2 size={28}/>
                                 </div>
                             </div>
                             <div className="flex items-center text-green-100 text-sm">
-                                <Award size={16} className="mr-1" />
+                                <Award size={16} className="mr-1"/>
                                 Great progress!
                             </div>
                         </div>
 
-                        <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-lg p-6 text-white">
+                        <div
+                            className="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-lg p-6 text-white">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
-                                    <p className="text-red-100 text-sm font-medium">Plagiarism Flags</p>
+                                    <p className="text-red-100 text-sm font-medium">Plagiarism
+                                        Flags</p>
                                     <p className="text-4xl font-bold mt-1">{stats.flaggedPlagiarism}</p>
                                 </div>
-                                <div className="w-14 h-14 bg-red-400 bg-opacity-30 rounded-full flex items-center justify-center">
-                                    <Shield size={28} />
+                                <div
+                                    className="w-14 h-14 bg-red-400 bg-opacity-30 rounded-full flex items-center justify-center">
+                                    <Shield size={28}/>
                                 </div>
                             </div>
                             <div className="flex items-center text-red-100 text-sm">
-                                <AlertTriangle size={16} className="mr-1" />
+                                <AlertTriangle size={16} className="mr-1"/>
                                 {stats.flaggedPlagiarism > 0 ? 'Needs review' : 'All clear'}
                             </div>
                         </div>
 
-                        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+                        <div
+                            className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
-                                    <p className="text-purple-100 text-sm font-medium">Class Average</p>
+                                    <p className="text-purple-100 text-sm font-medium">Class
+                                        Average</p>
                                     <p className="text-4xl font-bold mt-1">
                                         {stats.averageGrade != null ? `${stats.averageGrade}%` : '–'}
                                     </p>
                                 </div>
-                                <div className="w-14 h-14 bg-purple-400 bg-opacity-30 rounded-full flex items-center justify-center">
-                                    <TrendingUp size={28} />
+                                <div
+                                    className="w-14 h-14 bg-purple-400 bg-opacity-30 rounded-full flex items-center justify-center">
+                                    <TrendingUp size={28}/>
                                 </div>
                             </div>
                             <div className="flex items-center text-purple-100 text-sm">
-                                <BarChart3 size={16} className="mr-1" />
+                                <BarChart3 size={16} className="mr-1"/>
                                 {stats.totalStudents} student{stats.totalStudents !== 1 ? 's' : ''}
                             </div>
                         </div>
@@ -245,12 +284,12 @@ export default function LecturerDashboardPage() {
                         <div className="p-6 border-b border-gray-200">
                             <div className="flex items-center justify-between">
                                 <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                                    <Clock className="text-blue-600" size={24} />
+                                    <Clock className="text-blue-600" size={24}/>
                                     Pending Review ({stats.pendingReview})
                                 </h2>
                                 <button
                                     onClick={() => router.push('/submissions/lecturer/submissions')}
-                                    className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                                    className="text-blue-600 hover:text-blue-700 font-medium text-sm cursor-pointer"
                                 >
                                     View All →
                                 </button>
@@ -259,16 +298,18 @@ export default function LecturerDashboardPage() {
                         <div className="divide-y divide-gray-200">
                             {loading ? (
                                 <div className="p-6 space-y-3 animate-pulse">
-                                    {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20" />)}
+                                    {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20"/>)}
                                 </div>
                             ) : pendingSubmissions.length === 0 ? (
                                 <div className="p-8 text-center text-gray-500">
-                                    <CheckCircle2 size={36} className="mx-auto mb-2 text-green-400" />
+                                    <CheckCircle2 size={36}
+                                                  className="mx-auto mb-2 text-green-400"/>
                                     No submissions pending review
                                 </div>
                             ) : (
                                 pendingSubmissions.map((sub) => (
-                                    <div key={sub.id} className="p-6 hover:bg-gray-50 transition-colors">
+                                    <div key={sub.id}
+                                         className="p-6 hover:bg-gray-50 transition-colors">
                                         <div className="flex items-start justify-between gap-4">
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-3 mb-2">
@@ -276,52 +317,73 @@ export default function LecturerDashboardPage() {
                                                         {sub.studentName ?? sub.studentId}
                                                     </h3>
                                                     {sub.studentRegistrationId && (
-                                                        <span className="text-sm text-gray-500">({sub.studentRegistrationId})</span>
+                                                        <span
+                                                            className="text-sm text-gray-500">({sub.studentRegistrationId})</span>
                                                     )}
                                                     {(sub.plagiarismScore ?? 0) >= 20 && (
-                                                        <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium flex items-center gap-1">
-                                                            <AlertTriangle size={12} /> High Plagiarism
+                                                        <span
+                                                            className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium flex items-center gap-1">
+                                                            <AlertTriangle size={12}/> High Plagiarism
                                                         </span>
                                                     )}
                                                 </div>
                                                 <p className="text-sm text-gray-700 mb-2">
                                                     {sub.assignmentTitle ?? 'Untitled'}
                                                 </p>
-                                                <div className="flex items-center gap-4 text-xs text-gray-600 mb-3">
-                                                    {sub.moduleCode && <span>{sub.moduleCode}</span>}
+                                                <div
+                                                    className="flex items-center gap-4 text-xs text-gray-600 mb-3">
+                                                    {sub.moduleCode &&
+                                                        <span>{sub.moduleCode}</span>}
                                                     <span>Version {sub.currentVersionNumber}</span>
                                                     {sub.submittedAt && (
-                                                        <span>{new Date(sub.submittedAt).toLocaleDateString()} at {new Date(sub.submittedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                        <span>{new Date(sub.submittedAt).toLocaleDateString()} at {new Date(sub.submittedAt).toLocaleTimeString('en-US', {
+                                                            hour: '2-digit',
+                                                            minute: '2-digit'
+                                                        })}</span>
                                                     )}
                                                 </div>
                                                 <div className="flex flex-wrap gap-2">
                                                     {sub.wordCount != null && (
-                                                        <div className="p-2 bg-gray-50 rounded border border-gray-200">
-                                                            <div className="text-xs text-gray-500">Words</div>
-                                                            <div className="text-sm font-bold text-gray-900">{sub.wordCount}</div>
+                                                        <div
+                                                            className="p-2 bg-gray-50 rounded border border-gray-200">
+                                                            <div
+                                                                className="text-xs text-gray-500">Words
+                                                            </div>
+                                                            <div
+                                                                className="text-sm font-bold text-gray-900">{sub.wordCount}</div>
                                                         </div>
                                                     )}
                                                     {sub.plagiarismScore != null && (
-                                                        <div className={`p-2 rounded border ${sub.plagiarismScore < 10 ? 'bg-green-50 border-green-200' : sub.plagiarismScore < 20 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
-                                                            <div className="text-xs text-gray-500">Plagiarism</div>
-                                                            <div className={`text-sm font-bold ${sub.plagiarismScore < 10 ? 'text-green-600' : sub.plagiarismScore < 20 ? 'text-amber-600' : 'text-red-600'}`}>
+                                                        <div
+                                                            className={`p-2 rounded border ${sub.plagiarismScore < 10 ? 'bg-green-50 border-green-200' : sub.plagiarismScore < 20 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
+                                                            <div
+                                                                className="text-xs text-gray-500">Plagiarism
+                                                            </div>
+                                                            <div
+                                                                className={`text-sm font-bold ${sub.plagiarismScore < 10 ? 'text-green-600' : sub.plagiarismScore < 20 ? 'text-amber-600' : 'text-red-600'}`}>
                                                                 {sub.plagiarismScore}%
                                                             </div>
                                                         </div>
                                                     )}
                                                     {sub.aiScore != null && (
-                                                        <div className="p-2 bg-purple-50 rounded border border-purple-200">
-                                                            <div className="text-xs text-gray-500">AI Score</div>
-                                                            <div className="text-sm font-bold text-purple-600">{sub.aiScore}/100</div>
+                                                        <div
+                                                            className="p-2 bg-purple-50 rounded border border-purple-200">
+                                                            <div
+                                                                className="text-xs text-gray-500">AI
+                                                                Score
+                                                            </div>
+                                                            <div
+                                                                className="text-sm font-bold text-purple-600">{sub.aiScore}/100
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>
                                             </div>
                                             <button
                                                 onClick={() => router.push(`/submissions/lecturer/grading/${sub.id}`)}
-                                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 shrink-0"
+                                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 shrink-0 cursor-pointer"
                                             >
-                                                <Edit size={16} /> Grade
+                                                <Edit size={16}/> Grade
                                             </button>
                                         </div>
                                     </div>
@@ -334,42 +396,57 @@ export default function LecturerDashboardPage() {
                     <div className="bg-white rounded-lg shadow-lg border border-gray-200">
                         <div className="p-6 border-b border-gray-200">
                             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                                <Calendar className="text-purple-600" size={24} />
+                                <Calendar className="text-purple-600" size={24}/>
                                 Upcoming Deadlines
                             </h2>
                         </div>
                         <div className="divide-y divide-gray-200">
                             {loading ? (
                                 <div className="p-6 space-y-3 animate-pulse">
-                                    {[1, 2].map((i) => <Skeleton key={i} className="h-16" />)}
+                                    {[1, 2].map((i) => <Skeleton key={i} className="h-16"/>)}
                                 </div>
                             ) : upcomingDeadlines.length === 0 ? (
-                                <div className="p-8 text-center text-gray-500">No upcoming deadlines</div>
+                                <div className="p-8 text-center text-gray-500">No upcoming
+                                    deadlines</div>
                             ) : (
                                 upcomingDeadlines.map((asg) => {
                                     const submitted = asg.submissionsCount ?? 0;
                                     const total = 0; // totalStudents not on Assignment type
                                     return (
-                                        <div key={asg.id} className="p-6 hover:bg-gray-50 transition-colors">
+                                        <div key={asg.id}
+                                             className="p-6 hover:bg-gray-50 transition-colors">
                                             <div className="flex items-start justify-between gap-4">
                                                 <div className="flex-1">
                                                     <h3 className="font-semibold text-gray-900 mb-1">{asg.title}</h3>
-                                                    <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
-                                                        <span className="font-medium">{asg.moduleCode}</span>
+                                                    <div
+                                                        className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                                                        <span
+                                                            className="font-medium">{asg.moduleCode}</span>
                                                         <span>•</span>
-                                                        <span>{new Date(asg.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                                        <span>{new Date(asg.dueDate).toLocaleDateString('en-US', {
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            year: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit'
+                                                        })}</span>
                                                     </div>
                                                     {submitted > 0 && (
                                                         <div className="flex items-center gap-2">
-                                                            <Users size={14} className="text-gray-400" />
-                                                            <span className="text-sm text-gray-600">{submitted} submitted</span>
+                                                            <Users size={14}
+                                                                   className="text-gray-400"/>
+                                                            <span
+                                                                className="text-sm text-gray-600">{submitted} submitted</span>
                                                         </div>
                                                     )}
                                                 </div>
                                                 {submitted > 0 && (
                                                     <div className="text-right">
-                                                        <div className="text-2xl font-bold text-amber-600">{submitted}</div>
-                                                        <div className="text-xs text-gray-500">submissions</div>
+                                                        <div
+                                                            className="text-2xl font-bold text-amber-600">{submitted}</div>
+                                                        <div
+                                                            className="text-xs text-gray-500">submissions
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>
@@ -387,26 +464,31 @@ export default function LecturerDashboardPage() {
                     <div className="bg-white rounded-lg shadow-lg border border-gray-200">
                         <div className="p-6 border-b border-gray-200">
                             <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                                <Clock className="text-purple-600" size={20} />
+                                <Clock className="text-purple-600" size={20}/>
                                 Recent Activity
                             </h3>
                         </div>
                         <div className="p-4 space-y-4">
                             {loading ? (
                                 <div className="space-y-3 animate-pulse">
-                                    {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12" />)}
+                                    {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12"/>)}
                                 </div>
                             ) : recentActivity.length === 0 ? (
-                                <p className="text-sm text-gray-500 text-center py-4">No activity yet</p>
+                                <p className="text-sm text-gray-500 text-center py-4">No activity
+                                    yet</p>
                             ) : (
                                 recentActivity.map((item) => (
                                     <div key={item.id} className="flex items-start gap-3">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${item.status === 'GRADED' ? 'bg-green-100 text-green-600' : (item.plagiarismScore ?? 0) >= 20 ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
-                                            {item.status === 'GRADED' ? <Award size={18} /> : (item.plagiarismScore ?? 0) >= 20 ? <Shield size={18} /> : <FileText size={18} />}
+                                        <div
+                                            className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${item.status === 'GRADED' ? 'bg-green-100 text-green-600' : (item.plagiarismScore ?? 0) >= 20 ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
+                                            {item.status === 'GRADED' ? <Award
+                                                size={18}/> : (item.plagiarismScore ?? 0) >= 20 ?
+                                                <Shield size={18}/> : <FileText size={18}/>}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm text-gray-900">
-                                                <span className="font-medium">{item.studentName ?? item.studentId}</span>{' '}
+                                                <span
+                                                    className="font-medium">{item.studentName ?? item.studentId}</span>{' '}
                                                 {item.status === 'GRADED' ? 'graded' : 'submitted'}
                                             </p>
                                             <p className="text-sm text-gray-600 truncate">
@@ -427,10 +509,11 @@ export default function LecturerDashboardPage() {
                         <div className="p-6 border-b border-gray-200">
                             <div className="flex items-center justify-between">
                                 <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                                    <Shield className="text-red-600" size={20} />
+                                    <Shield className="text-red-600" size={20}/>
                                     Flagged Students
                                 </h3>
-                                <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                                <span
+                                    className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
                                     {flaggedStudents.length}
                                 </span>
                             </div>
@@ -438,17 +521,20 @@ export default function LecturerDashboardPage() {
                         <div className="divide-y divide-gray-200">
                             {loading ? (
                                 <div className="p-4 space-y-3 animate-pulse">
-                                    {[1, 2].map((i) => <Skeleton key={i} className="h-14" />)}
+                                    {[1, 2].map((i) => <Skeleton key={i} className="h-14"/>)}
                                 </div>
                             ) : flaggedStudents.length === 0 ? (
                                 <div className="p-6 text-center text-gray-500 text-sm">
-                                    <CheckCircle2 size={32} className="mx-auto mb-2 text-green-400" />
+                                    <CheckCircle2 size={32}
+                                                  className="mx-auto mb-2 text-green-400"/>
                                     No plagiarism flags
                                 </div>
                             ) : (
                                 flaggedStudents.map((s) => (
-                                    <div key={s.id} className="p-4 hover:bg-gray-50 transition-colors">
-                                        <div className="flex items-start justify-between gap-2 mb-1">
+                                    <div key={s.id}
+                                         className="p-4 hover:bg-gray-50 transition-colors">
+                                        <div
+                                            className="flex items-start justify-between gap-2 mb-1">
                                             <div>
                                                 <p className="font-semibold text-gray-900 text-sm">
                                                     {s.studentName ?? s.studentId}
@@ -457,14 +543,15 @@ export default function LecturerDashboardPage() {
                                                     <p className="text-xs text-gray-500">{s.studentRegistrationId}</p>
                                                 )}
                                             </div>
-                                            <span className="text-lg font-bold text-red-600">{s.plagiarismScore}%</span>
+                                            <span
+                                                className="text-lg font-bold text-red-600">{s.plagiarismScore}%</span>
                                         </div>
                                         <p className="text-xs text-gray-600 mb-2">{s.assignmentTitle}</p>
                                         <button
                                             onClick={() => router.push('/submissions/lecturer/plagiarism')}
-                                            className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                                            className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 cursor-pointer"
                                         >
-                                            <Eye size={12} /> Review Report
+                                            <Eye size={12}/> Review Report
                                         </button>
                                     </div>
                                 ))
@@ -477,18 +564,27 @@ export default function LecturerDashboardPage() {
                         <h3 className="font-bold text-gray-900 mb-4">Quick Stats</h3>
                         {loading ? (
                             <div className="space-y-2 animate-pulse">
-                                {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-6" />)}
+                                {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-6"/>)}
                             </div>
                         ) : (
                             <div className="space-y-3">
                                 {[
-                                    { label: 'Total Assignments', value: stats.totalAssignments },
-                                    { label: 'Active Assignments', value: stats.activeAssignments, color: 'text-blue-600' },
-                                    { label: 'Total Students', value: stats.totalStudents, color: 'text-purple-600' },
-                                ].map(({ label, value, color }) => (
+                                    {label: 'Total Assignments', value: stats.totalAssignments},
+                                    {
+                                        label: 'Active Assignments',
+                                        value: stats.activeAssignments,
+                                        color: 'text-blue-600'
+                                    },
+                                    {
+                                        label: 'Total Students',
+                                        value: stats.totalStudents,
+                                        color: 'text-purple-600'
+                                    },
+                                ].map(({label, value, color}) => (
                                     <div key={label} className="flex items-center justify-between">
                                         <span className="text-sm text-gray-700">{label}</span>
-                                        <span className={`text-sm font-bold ${color ?? 'text-gray-900'}`}>{value}</span>
+                                        <span
+                                            className={`text-sm font-bold ${color ?? 'text-gray-900'}`}>{value}</span>
                                     </div>
                                 ))}
                             </div>

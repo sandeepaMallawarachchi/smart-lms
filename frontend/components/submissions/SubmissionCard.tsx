@@ -377,7 +377,7 @@ export default function SubmissionCard({
                                 console.debug('[SubmissionCard] "View Details" clicked — id:', submission.id);
                                 onView(submission.id);
                             }}
-                            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center gap-2 justify-center text-sm"
+                            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center gap-2 justify-center text-sm cursor-pointer"
                         >
                             <Eye size={16} />
                             View Details
@@ -389,7 +389,7 @@ export default function SubmissionCard({
                                 console.debug('[SubmissionCard] "Versions" clicked — id:', submission.id);
                                 onVersionHistory(submission.id);
                             }}
-                            className="px-4 py-2 border border-purple-600 text-purple-600 rounded-lg hover:bg-purple-50 transition-colors font-medium flex items-center gap-2 justify-center text-sm"
+                            className="px-4 py-2 border border-purple-600 text-purple-600 rounded-lg hover:bg-purple-50 transition-colors font-medium flex items-center gap-2 justify-center text-sm cursor-pointer"
                         >
                             <GitBranch size={16} />
                             Versions
@@ -401,7 +401,7 @@ export default function SubmissionCard({
                                 console.debug('[SubmissionCard] "Plagiarism" clicked — id:', submission.id);
                                 onPlagiarismReport(submission.id);
                             }}
-                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2 justify-center text-sm"
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2 justify-center text-sm cursor-pointer"
                         >
                             <Shield size={16} />
                             Plagiarism
@@ -418,7 +418,7 @@ export default function SubmissionCard({
                                 console.debug('[SubmissionCard] "Delete" clicked — id:', submission.id);
                                 onDelete(submission.id);
                             }}
-                            className="px-4 py-2 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors font-medium flex items-center gap-2 justify-center text-sm"
+                            className="px-4 py-2 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors font-medium flex items-center gap-2 justify-center text-sm cursor-pointer"
                         >
                             <Trash2 size={16} />
                             Delete
