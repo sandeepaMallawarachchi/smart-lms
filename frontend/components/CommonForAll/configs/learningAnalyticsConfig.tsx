@@ -256,7 +256,6 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
           id: 'student-insights',
           label: 'Student Insights',
           icon: <Users size={22} />,
-          badge: 3,
           href: '/learning-analytics/lecturer/student-insights',
           subsections: [
             { id: 'individual-progress', label: 'Individual Progress', href: '/learning-analytics/lecturer/student-insights?risk=all' },
@@ -268,24 +267,7 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
           id: 'predictive',
           label: 'Predictive Analytics',
           icon: <TrendingUp size={22} />,
-          badge: 2,
           href: '/learning-analytics/lecturer/predictive',
-          subsections: [
-            { id: 'risk-prediction', label: 'Risk Prediction', badge: 2 },
-            { id: 'success-forecasting', label: 'Success Forecasting' },
-            { id: 'intervention-suggestions', label: 'Interventions' },
-          ],
-        },
-        {
-          id: 'learning-paths',
-          label: 'Learning Paths',
-          icon: <BookOpen size={22} />,
-          href: '/learning-analytics/lecturer/learning-paths',
-          subsections: [
-            { id: 'curriculum-effectiveness', label: 'Curriculum Effectiveness' },
-            { id: 'content-gaps', label: 'Content Gaps' },
-            { id: 'optimization', label: 'Path Optimization' },
-          ],
         },
         {
           id: 'reports',
@@ -296,17 +278,6 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
             { id: 'class-summary', label: 'Class Summary', href: '/learning-analytics/lecturer/reports?view=class-summary' },
             { id: 'individual-reports', label: 'Individual Reports', href: '/learning-analytics/lecturer/reports?view=individual' },
             { id: 'export-data', label: 'Export Data', href: '/learning-analytics/lecturer/reports?view=export' },
-          ],
-        },
-        {
-          id: 'settings',
-          label: 'Settings',
-          icon: <Settings size={22} />,
-          href: '/learning-analytics/lecturer/settings',
-          subsections: [
-            { id: 'analytics-preferences', label: 'Analytics Preferences' },
-            { id: 'notification-settings', label: 'Notifications' },
-            { id: 'data-privacy', label: 'Data Privacy' },
           ],
         },
       ],

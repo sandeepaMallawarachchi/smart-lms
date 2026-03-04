@@ -91,6 +91,18 @@ def analytics_student_insights():
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/analytics/predictive-analytics', methods=['POST'])
+def analytics_predictive_analytics():
+    try:
+        data = request.json or {}
+        result = analytics_bot.get_predictive_analytics(data)
+        status_code = 200 if result.get('success', False) else 500
+        return jsonify(result), status_code
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/test', methods=['POST'])
 def test():
     try:
