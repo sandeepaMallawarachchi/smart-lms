@@ -43,6 +43,8 @@ const getIcon = (type: string) => {
       return <AlertCircle className="text-orange-600" size={24} />;
     case 'overdue':
       return <AlertCircle className="text-red-600" size={24} />;
+    case 'lecturer_alert':
+      return <AlertCircle className="text-purple-600" size={24} />;
     case 'progress_update':
       return <CheckCircle2 className="text-green-600" size={24} />;
     default:
@@ -58,6 +60,8 @@ const getColorClass = (type: string, isRead: boolean) => {
       return `${!isRead ? 'bg-orange-50 border-orange-200' : baseClass}`;
     case 'overdue':
       return `${!isRead ? 'bg-red-50 border-red-200' : baseClass}`;
+    case 'lecturer_alert':
+      return `${!isRead ? 'bg-purple-50 border-purple-200' : baseClass}`;
     case 'progress_update':
       return `${!isRead ? 'bg-green-50 border-green-200' : baseClass}`;
     default:
@@ -67,7 +71,7 @@ const getColorClass = (type: string, isRead: boolean) => {
 
 export default function NotificationCard({ notification, onMarkRead }: NotificationCardProps) {
   const sentDate = new Date(notification.sentAt);
-  const timeAgo = getTimeAgo(sentDate);
+  const formattedDate = formatDateDDMMYYYY(sentDate);
 
   const totalTasks = notification.taskProgress?.reduce((sum, task) => sum + (task.totalTasks || 0), 0) || 0;
   const completedTasks = notification.taskProgress?.reduce((sum, task) => sum + (task.completedCount || 0), 0) || 0;
@@ -151,21 +155,17 @@ export default function NotificationCard({ notification, onMarkRead }: Notificat
             </div>
           )}
 
-          <p className="text-xs text-gray-500 mt-3">{timeAgo}</p>
+          <p className="text-xs text-gray-500 mt-3">{formattedDate}</p>
         </div>
       </div>
     </motion.div>
   );
 }
 
-function getTimeAgo(date: Date): string {
-  const now = new Date();
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  if (seconds < 60) return 'Just now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-
-  return date.toLocaleDateString();
+function formatDateDDMMYYYY(date: Date): string {
+  if (Number.isNaN(date.getTime())) return '';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = String(date.getFullYear());
+  return `${day}-${month}-${year}`;
 }

@@ -74,6 +74,7 @@ export interface ModuleConfig {
 export interface Course {
   _id: string
   courseName: string
+  courseCode?: string
   credits: number
   year: number
   semester: number
@@ -84,7 +85,7 @@ export interface CoursesApiResponse {
   success: boolean
   message: string
   data: {
-    student: any
+    student: unknown
     courses: Course[]
     totalCourses: number
   }
@@ -220,9 +221,9 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
         // },
         {
           id: 'notifications',
-          label: 'Project Notifications',
+          label: 'Notifications & Alerts',
           icon: <BellIcon size={20} />,
-          description: 'Your project notifications',
+          description: 'Your notifications & alerts',
           href: '/projects-and-tasks/student/notifications',
         },
         {
@@ -297,39 +298,30 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           ],
         },
         {
-          id: 'analytics',
-          label: 'Analytics',
-          icon: <BarChart3 size={22} />,
-          badge: 3,
-          href: '/projects-and-tasks/lecturer/analytics',
-          subsections: [
-            { id: 'activity-heatmap', label: 'Activity Heatmap' },
-            { id: 'workload-distribution', label: 'Workload' },
-            { id: 'completion-trends', label: 'Trends' },
-            { id: 'deadline-adherence', label: 'Deadlines' },
-          ],
-        },
-        {
           id: 'teams',
           label: 'Teams',
           icon: <Users size={22} />,
           href: '/projects-and-tasks/lecturer/teams',
+        },
+        {
+          id: 'analytics',
+          label: 'Analytics',
+          icon: <BarChart3 size={22} />,
+          href: '/projects-and-tasks/lecturer/analytics/heatmap',
           subsections: [
-            { id: 'all-teams', label: 'All Teams' },
-            { id: 'team-performance', label: 'Performance' },
-            { id: 'collaboration-metrics', label: 'Collaboration' },
+            { id: 'activity-heatmap', label: 'Activity Heatmap', href: '/projects-and-tasks/lecturer/analytics/heatmap' },
+            { id: 'workload-distribution', label: 'Workload', href: '/projects-and-tasks/lecturer/analytics/workload' },
+            { id: 'completion-trends', label: 'Trends', href: '/projects-and-tasks/lecturer/analytics/trends' },
           ],
         },
         {
           id: 'interventions',
           label: 'Alerts',
           icon: <AlertCircle size={22} />,
-          badge: 2,
           href: '/projects-and-tasks/lecturer/interventions',
           subsections: [
-            { id: 'at-risk-projects', label: 'At-Risk' },
-            { id: 'inactivity-alerts', label: 'Inactivity' },
-            { id: 'deadline-warnings', label: 'Warnings' },
+            { id: 'create-alert', label: 'Create Alert', href: '/projects-and-tasks/lecturer/interventions?tab=create' },
+            { id: 'all-alerts', label: 'All Alerts', href: '/projects-and-tasks/lecturer/interventions?tab=all' },
           ],
         },
         {
@@ -337,11 +329,6 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           label: 'Reports',
           icon: <FileText size={22} />,
           href: '/projects-and-tasks/lecturer/reports',
-          subsections: [
-            { id: 'project-summary', label: 'Summary' },
-            { id: 'student-progress', label: 'Progress' },
-            { id: 'export-data', label: 'Export' },
-          ],
         },
         {
           id: 'settings',
@@ -357,33 +344,27 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
       ],
     },
   },
-}
+};
 
-export const updateConfigWithCourses = (
-  baseConfig: typeof projectsTasksConfig,
+export function updateConfigWithCourses(
+  baseConfig: Record<'student' | 'lecture', ModuleConfig>,
   courses: Course[]
-): typeof projectsTasksConfig => {
-  
+): Record<'student' | 'lecture', ModuleConfig> {
+  if (!courses || courses.length === 0) {
+    return baseConfig;
+  }
+
+  const primaryCourse = courses[0];
+
   return {
     ...baseConfig,
     student: {
       ...baseConfig.student,
-      sidebar: {
-        ...baseConfig.student.sidebar,
-        navItems: baseConfig.student.sidebar.navItems.map((item) => {
-          if (item.id === 'code-projects') {
-            return {
-              ...item, 
-              subsections: courses.map((course) => ({
-                id: course._id,
-                label: course.courseName,
-                href: `/projects-and-tasks/student/code-assignments/${course._id}`,
-              })),
-            };
-          }
-          return item
-        }),
+      header: {
+        ...baseConfig.student.header,
+        courseCode: primaryCourse.courseCode || baseConfig.student.header.courseCode,
+        courseName: primaryCourse.courseName || baseConfig.student.header.courseName,
       },
     },
   };
-};
+}

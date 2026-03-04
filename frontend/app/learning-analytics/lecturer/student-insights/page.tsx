@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 type RiskFilter = 'all' | 'high' | 'medium' | 'low' | 'unknown';
@@ -27,7 +27,7 @@ interface LivePredictionStatus {
   error: string | null;
 }
 
-export default function LecturerStudentInsightsPage() {
+function LecturerStudentInsightsPageContent() {
   const searchParams = useSearchParams();
   const queryKey = searchParams.toString();
   const [students, setStudents] = useState<StudentInsight[]>([]);
@@ -210,6 +210,14 @@ export default function LecturerStudentInsightsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LecturerStudentInsightsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+      <LecturerStudentInsightsPageContent />
+    </Suspense>
   );
 }
 

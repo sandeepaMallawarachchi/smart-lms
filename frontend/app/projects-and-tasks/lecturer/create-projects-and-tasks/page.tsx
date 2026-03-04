@@ -3,7 +3,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, AlertCircle, ChevronRight, Sparkles, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,7 +21,7 @@ interface SelectedCourse {
   credits: number;
 }
 
-export default function CreateProjectsAndTasksPage() {
+function CreateProjectsAndTasksPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -357,5 +357,13 @@ export default function CreateProjectsAndTasksPage() {
         </motion.div>
       </div>
     </div>
+  );
+}
+
+export default function CreateProjectsAndTasksPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+      <CreateProjectsAndTasksPageContent />
+    </Suspense>
   );
 }
