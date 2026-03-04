@@ -185,11 +185,18 @@ export default function SubmitAssignmentPage() {
         return (
             <>
                 <option value="">Choose an assignment…</option>
-                {assignments.map((a) => (
-                    <option key={a.id} value={a.id}>
-                        {a.title} – {a.moduleName ?? a.moduleCode} (Due: {new Date(a.dueDate).toLocaleDateString()})
-                    </option>
-                ))}
+                {assignments.map((a) => {
+                    const typePrefix = a.assignmentType === 'project'
+                        ? '[Project] '
+                        : a.assignmentType === 'task'
+                            ? '[Task] '
+                            : '';
+                    return (
+                        <option key={a.id} value={a.id}>
+                            {typePrefix}{a.title} – {a.moduleName ?? a.moduleCode} (Due: {new Date(a.dueDate).toLocaleDateString()})
+                        </option>
+                    );
+                })}
             </>
         );
     };

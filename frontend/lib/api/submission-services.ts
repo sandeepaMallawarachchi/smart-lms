@@ -16,6 +16,8 @@ import type {
     CheckPlagiarismPayload,
     UpdatePlagiarismReviewPayload,
     Assignment,
+    AssignmentWithQuestions,
+    Question,
     PagedResponse,
     TextAnswer,
     SaveAnswerPayload,
@@ -255,6 +257,210 @@ export const submissionService = {
     },
 };
 
+// ─── Projects & Tasks Integration ────────────────────────────
+//
+// Raw response shapes from the Next.js API routes created by the
+// projects-and-tasks teammate component.  These are same-origin
+// routes so no base URL or CORS config is needed.
+
+interface _RawDocument { url: string; name: string; fileSize: number; }
+interface _RawCourse   { _id: string; courseName: string; courseCode: string; }
+
+interface _RawSubtask {
+    id: string;
+    title: string;
+    description?: string;
+    completed?: boolean;
+}
+
+interface _RawMainTask {
+    id: string;
+    title: string;
+    description?: string;
+    subtasks?: _RawSubtask[];
+    completed?: boolean;
+}
+
+interface _RawProject {
+    _id: string;
+    courseId: string;
+    lecturerId: string | { name?: string };
+    projectName: string;
+    description: { html: string; text: string };
+    projectType: 'group' | 'individual';
+    assignedGroupIds?: string[];
+    assignedGroups?: { _id: string; groupName: string }[];
+    deadlineDate: string;
+    deadlineTime?: string;
+    specialNotes?: { html: string; text: string };
+    templateDocuments?: _RawDocument[];
+    otherDocuments?: _RawDocument[];
+    images?: _RawDocument[];
+    mainTasks?: _RawMainTask[];
+    course?: _RawCourse;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+interface _RawTask {
+    _id: string;
+    courseId: string;
+    lecturerId: string | { name?: string };
+    taskName: string;
+    description: { html: string; text: string };
+    deadlineDate?: string;
+    deadlineTime?: string;
+    specialNotes?: { html: string; text: string };
+    templateDocuments?: _RawDocument[];
+    otherDocuments?: _RawDocument[];
+    images?: _RawDocument[];
+    subtasks?: _RawSubtask[];
+    course?: _RawCourse;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+// Combine "YYYY-MM-DD" + "HH:MM" into an ISO string.
+// Falls back to 30 days from now when date is absent (task with no deadline).
+function _toDeadlineISO(date?: string, time?: string): string {
+    if (!date) return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    return new Date(`${date}T${time ?? '23:59'}:00`).toISOString();
+}
+
+// Derive open/closed status from the deadline.
+function _deriveStatus(date?: string, time?: string): 'OPEN' | 'CLOSED' {
+    if (!date) return 'OPEN';
+    return new Date(`${date}T${time ?? '23:59'}:00`) < new Date() ? 'CLOSED' : 'OPEN';
+}
+
+/** Map a project's mainTasks[] to Question[] for the text-answer page. */
+function _mapMainTasksToQuestions(projectId: string, mainTasks: _RawMainTask[]): Question[] {
+    return mainTasks.map((mt, i) => ({
+        id:           mt.id || String(i + 1),
+        assignmentId: projectId,
+        text:         mt.title,
+        description:  mt.description,
+        order:        i + 1,
+        isRequired:   true,
+    }));
+}
+
+/** Map a task's subtasks[] to Question[] for the text-answer page. */
+function _mapSubtasksToQuestions(taskId: string, subtasks: _RawSubtask[]): Question[] {
+    return subtasks.map((st, i) => ({
+        id:           st.id || String(i + 1),
+        assignmentId: taskId,
+        text:         st.title,
+        description:  st.description,
+        order:        i + 1,
+        isRequired:   true,
+    }));
+}
+
+function _mapProject(p: _RawProject): Assignment {
+    return {
+        id:             String(p._id),
+        title:          p.projectName,
+        description:    p.description?.text ?? '',
+        moduleCode:     p.course?.courseCode ?? p.courseId,
+        moduleName:     p.course?.courseName,
+        dueDate:        _toDeadlineISO(p.deadlineDate, p.deadlineTime),
+        totalMarks:     100,
+        status:         _deriveStatus(p.deadlineDate, p.deadlineTime),
+        assignmentType: 'project',
+    };
+}
+
+function _mapTask(t: _RawTask): Assignment {
+    return {
+        id:             String(t._id),
+        title:          t.taskName,
+        description:    t.description?.text ?? '',
+        moduleCode:     t.course?.courseCode ?? t.courseId,
+        moduleName:     t.course?.courseName,
+        dueDate:        _toDeadlineISO(t.deadlineDate, t.deadlineTime),
+        totalMarks:     100,
+        status:         _deriveStatus(t.deadlineDate, t.deadlineTime),
+        assignmentType: 'task',
+    };
+}
+
+/** Full mapping of a project including questions[] — for the answer/grading pages. */
+function _mapProjectFull(p: _RawProject): AssignmentWithQuestions {
+    return {
+        ..._mapProject(p),
+        questions: _mapMainTasksToQuestions(String(p._id), p.mainTasks ?? []),
+    };
+}
+
+/** Full mapping of a task including questions[] — for the answer/grading pages. */
+function _mapTaskFull(t: _RawTask): AssignmentWithQuestions {
+    return {
+        ..._mapTask(t),
+        questions: _mapSubtasksToQuestions(String(t._id), t.subtasks ?? []),
+    };
+}
+
+/**
+ * Fetches projects and tasks from the teammate's projects-and-tasks
+ * Next.js API routes.  Same-origin calls — no extra env var or CORS needed.
+ */
+export const projectsAndTasksService = {
+    /** Student: all projects for enrolled courses (JWT identifies the student). */
+    async getStudentProjects(): Promise<Assignment[]> {
+        const res = await apiRequest<{ data: { projects: _RawProject[] } }>(
+            '/api/projects-and-tasks/student/projects'
+        );
+        return (res.data?.projects ?? []).map(_mapProject);
+    },
+
+    /** Student: all tasks for enrolled courses. */
+    async getStudentTasks(): Promise<Assignment[]> {
+        const res = await apiRequest<{ data: { tasks: _RawTask[] } }>(
+            '/api/projects-and-tasks/student/tasks'
+        );
+        return (res.data?.tasks ?? []).map(_mapTask);
+    },
+
+    /** Lecturer: all projects for a specific course. */
+    async getLecturerProjects(courseId: string, lecturerId: string): Promise<Assignment[]> {
+        const res = await apiRequest<{ data: { projects: _RawProject[] } }>(
+            `/api/projects-and-tasks/lecturer/create-projects-and-tasks/project?courseId=${encodeURIComponent(courseId)}&lecturerId=${encodeURIComponent(lecturerId)}`
+        );
+        return (res.data?.projects ?? []).map(_mapProject);
+    },
+
+    /** Lecturer: all tasks for a specific course. */
+    async getLecturerTasks(courseId: string, lecturerId: string): Promise<Assignment[]> {
+        const res = await apiRequest<{ data: { tasks: _RawTask[] } }>(
+            `/api/projects-and-tasks/lecturer/create-projects-and-tasks/task?courseId=${encodeURIComponent(courseId)}&lecturerId=${encodeURIComponent(lecturerId)}`
+        );
+        return (res.data?.tasks ?? []).map(_mapTask);
+    },
+
+    /**
+     * Fetch a single project by ID with its mainTasks mapped to Question[].
+     * GET /api/projects-and-tasks/lecturer/create-projects-and-tasks/project/{projectId}
+     */
+    async getProjectById(id: string): Promise<AssignmentWithQuestions> {
+        const res = await apiRequest<{ data: _RawProject }>(
+            `/api/projects-and-tasks/lecturer/create-projects-and-tasks/project/${encodeURIComponent(id)}`
+        );
+        return _mapProjectFull(res.data);
+    },
+
+    /**
+     * Fetch a single task by ID with its subtasks mapped to Question[].
+     * GET /api/projects-and-tasks/lecturer/create-projects-and-tasks/task/{taskId}
+     */
+    async getTaskById(id: string): Promise<AssignmentWithQuestions> {
+        const res = await apiRequest<{ data: _RawTask }>(
+            `/api/projects-and-tasks/lecturer/create-projects-and-tasks/task/${encodeURIComponent(id)}`
+        );
+        return _mapTaskFull(res.data);
+    },
+};
+
 // ─── Version Control Service (port 8082) ─────────────────────
 
 export const versionService = {
@@ -473,65 +679,31 @@ export const plagiarismService = {
     },
 };
 
-// ─── Sample fallback data ─────────────────────────────────────
-// Used by getAssignmentWithFallback when the assignments API is unavailable.
-// Matches module codes from Smart LMS specializations: IT · SE · DS · CSNE · CS · IM
-
-const _d = 24 * 60 * 60 * 1000;
-
-const SAMPLE_ASSIGNMENT_MAP: Record<string, Assignment> = {
-    'sample-asg-001': {
-        id: 'sample-asg-001',
-        title: 'Software Requirements Analysis',
-        description: 'Analyze and document software requirements for a library management system using UML diagrams.',
-        moduleCode: 'SE3020',
-        moduleName: 'Software Engineering',
-        dueDate: new Date(Date.now() + 7 * _d).toISOString(),
-        totalMarks: 100,
-        status: 'OPEN',
-    },
-    'sample-asg-002': {
-        id: 'sample-asg-002',
-        title: 'Database Design Project',
-        description: 'Design a normalized ER schema for an e-commerce platform and implement it in MySQL.',
-        moduleCode: 'IT3040',
-        moduleName: 'Database Management Systems',
-        dueDate: new Date(Date.now() + 14 * _d).toISOString(),
-        totalMarks: 50,
-        status: 'OPEN',
-    },
-    'sample-asg-003': {
-        id: 'sample-asg-003',
-        title: 'Machine Learning Model Evaluation',
-        description: 'Implement and compare two classification models on the provided dataset. Include a written analysis.',
-        moduleCode: 'DS3010',
-        moduleName: 'Data Science Fundamentals',
-        dueDate: new Date(Date.now() + 3 * _d).toISOString(),
-        totalMarks: 75,
-        status: 'OPEN',
-    },
-};
-
-const FALLBACK_ASSIGNMENT: Assignment = {
-    id: 'unknown',
-    title: 'Assignment (offline)',
-    description: 'Assignment details are temporarily unavailable. Your answers will still be saved.',
-    moduleCode: 'N/A',
-    dueDate: new Date(Date.now() + 7 * _d).toISOString(),
-    totalMarks: 100,
-    status: 'OPEN',
-};
-
 /**
- * Fetch a single assignment with graceful fallback.
- * Tries the real API first; on failure returns a placeholder so pages
- * that need assignment metadata remain functional.
+ * Fetch a single assignment by ID and return it with questions[].
+ *
+ * Resolution order:
+ *  1. Try the project endpoint (mainTasks → Question[])
+ *  2. Try the task endpoint (subtasks → Question[])
+ *  3. Fall back to the submission-management-service assignments endpoint
+ *     (questions[] will be empty — legacy / non-P&T assignments)
  */
-export async function getAssignmentWithFallback(id: string): Promise<Assignment> {
+export async function getAssignmentWithFallback(id: string): Promise<AssignmentWithQuestions> {
+    // 1. Try as a project
     try {
-        return await submissionService.getAssignment(id);
+        return await projectsAndTasksService.getProjectById(id);
     } catch {
-        console.warn('[getAssignmentWithFallback] API unavailable for id:', id, '— using sample data');
-        return SAMPLE_ASSIGNMENT_MAP[id] ?? { ...FALLBACK_ASSIGNMENT, id };
+        // not a project — try next
     }
+
+    // 2. Try as a task
+    try {
+        return await projectsAndTasksService.getTaskById(id);
+    } catch {
+        // not a task — fall back to legacy
+    }
+
+    // 3. Legacy submission-management-service assignment
+    const assignment = await submissionService.getAssignment(id);
+    return { ...assignment, questions: [] };
 }

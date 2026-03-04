@@ -30,6 +30,8 @@ export interface Assignment {
     allowedFileTypes?: string[];
     submissionsCount?: number;
     gradedCount?: number;
+    /** 'project' | 'task' from the projects-and-tasks service; undefined for legacy assignments */
+    assignmentType?: 'project' | 'task';
 }
 
 // ─── Submission ──────────────────────────────────────────────

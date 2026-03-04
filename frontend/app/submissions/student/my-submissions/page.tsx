@@ -127,7 +127,19 @@ function AvailableAssignments({
 
                                 {/* Assignment info */}
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-gray-900 truncate">{asg.title}</p>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <p className="text-sm font-semibold text-gray-900 truncate">{asg.title}</p>
+                                        {asg.assignmentType === 'project' && (
+                                            <span className="flex-shrink-0 inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                                                Project
+                                            </span>
+                                        )}
+                                        {asg.assignmentType === 'task' && (
+                                            <span className="flex-shrink-0 inline-flex items-center rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-700">
+                                                Task
+                                            </span>
+                                        )}
+                                    </div>
                                     <p className="text-xs text-gray-500 mt-0.5">
                                         {asg.moduleCode}{asg.moduleName ? ` — ${asg.moduleName}` : ''}
                                     </p>
