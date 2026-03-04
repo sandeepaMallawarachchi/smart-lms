@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Loader, Pencil, Trash2, Users } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
@@ -67,7 +67,7 @@ const FILTER_LABEL: Record<FilterType, string> = {
   low_activity: 'Low Activity Students',
 };
 
-export default function LecturerAlertsPage() {
+function LecturerAlertsPageContent() {
   const searchParams = useSearchParams();
   const urlTab = searchParams.get('tab') === 'all' ? 'all' : 'create';
 
@@ -601,5 +601,13 @@ export default function LecturerAlertsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LecturerAlertsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+      <LecturerAlertsPageContent />
+    </Suspense>
   );
 }

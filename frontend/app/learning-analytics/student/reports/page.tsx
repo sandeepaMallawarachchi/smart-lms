@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { ArrowDownToLine, FileSpreadsheet, FileText, RefreshCcw } from 'lucide-react';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
@@ -81,7 +81,7 @@ const riskColor = (risk: string) => {
   return 'text-gray-700 bg-gray-50 border-gray-200';
 };
 
-export default function LearningAnalyticsReportsPage() {
+function LearningAnalyticsReportsPageContent() {
   const searchParams = useSearchParams();
   const [report, setReport] = useState<ReportData | null>(null);
   const [range, setRange] = useState<ReportRange>('monthly');
@@ -496,6 +496,14 @@ export default function LearningAnalyticsReportsPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+export default function LearningAnalyticsReportsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+      <LearningAnalyticsReportsPageContent />
+    </Suspense>
   );
 }
 

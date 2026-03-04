@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 interface CoursePerformance {
@@ -15,7 +15,7 @@ interface CoursePerformance {
 
 type ViewMode = 'overview' | 'distribution' | 'trends';
 
-export default function LecturerClassPerformancePage() {
+function LecturerClassPerformancePageContent() {
   const searchParams = useSearchParams();
   const [courses, setCourses] = useState<CoursePerformance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -123,6 +123,14 @@ export default function LecturerClassPerformancePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LecturerClassPerformancePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+      <LecturerClassPerformancePageContent />
+    </Suspense>
   );
 }
 
