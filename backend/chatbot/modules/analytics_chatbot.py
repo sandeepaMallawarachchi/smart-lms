@@ -449,6 +449,228 @@ What would you like to know about?"""
             return {'prediction': prediction, 'student_context': student_data, 'timestamp': datetime.now().isoformat()}
         except Exception as e:
             return {'error': str(e)}
+
+    def get_students_insights(self, filters=None):
+        """
+        Build lecturer-friendly student insights list.
+        Uses stored predictions first; optionally calls live ML prediction for missing rows.
+        """
+        try:
+            filters = filters or {}
+            lecturer_id = filters.get('lecturerId')
+            course_id = filters.get('courseId')
+            year = filters.get('year')
+            semester = filters.get('semester')
+            specialization = filters.get('specialization')
+            include_live_prediction = bool(filters.get('includeLivePrediction', False))
+            limit = int(filters.get('limit', 200))
+            live_prediction_available = False
+            live_prediction_error = None
+
+            if include_live_prediction:
+                try:
+                    health = requests.get(f"{self.ML_API_URL}/api/health", timeout=5)
+                    live_prediction_available = health.status_code == 200
+                    if not live_prediction_available:
+                        live_prediction_error = f"ML API unhealthy ({health.status_code})"
+                except Exception as e:
+                    live_prediction_available = False
+                    live_prediction_error = str(e)
+
+            course_query = {"isArchived": False}
+            if course_id:
+                course_query["_id"] = ObjectId(course_id)
+            else:
+                if lecturer_id:
+                    course_query["$or"] = [
+                        {"lecturerInCharge": ObjectId(lecturer_id)},
+                        {"lecturers": ObjectId(lecturer_id)}
+                    ]
+                if year is not None:
+                    course_query["year"] = int(year)
+                if semester is not None:
+                    course_query["semester"] = int(semester)
+                if specialization:
+                    course_query["specializations"] = specialization
+
+            courses = list(self.db.courses.find(course_query))
+
+            student_query = {}
+            if courses:
+                scopes = []
+                for course in courses:
+                    for spec in course.get("specializations", []):
+                        scopes.append({
+                            "academicYear": str(course.get("year")),
+                            "semester": str(course.get("semester")),
+                            "specialization": spec
+                        })
+                if scopes:
+                    student_query["$or"] = scopes
+            else:
+                if year is not None:
+                    student_query["academicYear"] = str(year)
+                if semester is not None:
+                    student_query["semester"] = str(semester)
+                if specialization:
+                    student_query["specialization"] = specialization
+
+            students = list(self.db.students.find(student_query).limit(limit))
+
+            unique_students = {}
+            for student in students:
+                unique_students[str(student["_id"])] = student
+            students = list(unique_students.values())
+
+            insights = []
+            for student in students:
+                sid = str(student["_id"])
+                latest_prediction = self.db.predictions.find_one(
+                    {"studentId": sid},
+                    sort=[("createdAt", -1)]
+                )
+
+                risk_level = "unknown"
+                risk_probability = 0.0
+                confidence = 0.0
+                completion_rate = 0.0
+                engagement = 0
+                avg_score = 0.0
+                late_submission_count = 0
+                source = "none"
+                predicted_at = None
+
+                if latest_prediction and latest_prediction.get("prediction"):
+                    pred = latest_prediction.get("prediction", {})
+                    input_data = latest_prediction.get("inputData", {})
+                    risk_level = str(pred.get("risk_level", "unknown")).lower()
+                    risk_probability = float(pred.get("risk_probability", 0) or 0)
+                    confidence = float(pred.get("confidence", 0) or 0)
+                    completion_rate = float(input_data.get("completion_rate", 0) or 0)
+                    engagement = int(input_data.get("total_clicks", 0) or 0)
+                    avg_score = float(input_data.get("avg_score", 0) or 0)
+                    late_submission_count = int(input_data.get("late_submission_count", 0) or 0)
+                    predicted_at = latest_prediction.get("createdAt")
+                    source = "stored_prediction"
+                
+                # Enrich empty/zero metrics from activity-derived payload.
+                # This keeps project/task-based metrics available even when stored prediction is sparse.
+                if completion_rate <= 0 or engagement <= 0 or late_submission_count <= 0:
+                    try:
+                        gender = self._map_gender(student.get("gender", "male"))
+                        age_band = self._compute_age_band(student.get("dateOfBirth"))
+                        activity_payload = self._build_payload_from_activity(
+                            student=student,
+                            student_id=sid,
+                            gender=gender,
+                            age_band=age_band
+                        )
+                        completion_rate = completion_rate if completion_rate > 0 else float(activity_payload.get("completion_rate", 0))
+                        engagement = engagement if engagement > 0 else int(activity_payload.get("total_clicks", 0))
+                        late_submission_count = late_submission_count if late_submission_count > 0 else int(activity_payload.get("late_submission_count", 0))
+                    except Exception:
+                        pass
+
+                if (not latest_prediction) and include_live_prediction and live_prediction_available:
+                    live_prediction = self.get_risk_prediction(sid)
+                    if not live_prediction.get("error"):
+                        risk_level = str(live_prediction.get("risk_category", "unknown")).lower()
+                        risk_probability = float(live_prediction.get("risk_score", 0) or 0)
+                        confidence = float(live_prediction.get("confidence", 0) or 0)
+                        source = "live_prediction"
+                        predicted_at = datetime.utcnow()
+
+                matched_courses = []
+                for course in courses:
+                    if (
+                        str(course.get("year")) == str(student.get("academicYear"))
+                        and str(course.get("semester")) == str(student.get("semester"))
+                        and student.get("specialization") in course.get("specializations", [])
+                    ):
+                        matched_courses.append({
+                            "courseId": str(course.get("_id")),
+                            "courseName": course.get("courseName", "")
+                        })
+
+                insights.append({
+                    "studentId": sid,
+                    "studentIdNumber": student.get("studentIdNumber", ""),
+                    "name": student.get("name", ""),
+                    "email": student.get("email", ""),
+                    "specialization": student.get("specialization", ""),
+                    "academicYear": student.get("academicYear", ""),
+                    "semester": student.get("semester", ""),
+                    "riskLevel": risk_level,
+                    "riskProbability": round(risk_probability * 100, 1) if risk_probability <= 1 else round(risk_probability, 1),
+                    "confidence": round(confidence * 100, 1) if confidence <= 1 else round(confidence, 1),
+                    "completionRate": round(completion_rate * 100, 1) if completion_rate <= 1 else round(completion_rate, 1),
+                    "engagement": engagement,
+                    "avgScore": round(avg_score, 1),
+                    "lateSubmissionCount": late_submission_count,
+                    "courses": matched_courses,
+                    "predictionSource": source,
+                    "predictedAt": predicted_at.isoformat() if isinstance(predicted_at, datetime) else (str(predicted_at) if predicted_at else None),
+                })
+
+            insights.sort(key=lambda x: (x["riskProbability"], x["completionRate"] * -1), reverse=True)
+
+            summary = {
+                "totalStudents": len(insights),
+                "highRisk": len([i for i in insights if i["riskLevel"] == "high"]),
+                "mediumRisk": len([i for i in insights if i["riskLevel"] == "medium"]),
+                "lowRisk": len([i for i in insights if i["riskLevel"] == "low"]),
+                "unknownRisk": len([i for i in insights if i["riskLevel"] not in ["high", "medium", "low"]]),
+            }
+
+            return {
+                "success": True,
+                "summary": summary,
+                "students": insights,
+                "livePrediction": {
+                    "requested": include_live_prediction,
+                    "enabled": bool(include_live_prediction and live_prediction_available),
+                    "error": live_prediction_error
+                },
+                "filters": {
+                    "lecturerId": lecturer_id,
+                    "courseId": course_id,
+                    "year": year,
+                    "semester": semester,
+                    "specialization": specialization,
+                    "includeLivePrediction": include_live_prediction,
+                    "limit": limit
+                },
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return {
+                "success": False,
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+
+    def _map_gender(self, gender):
+        gender_map = {'male': 'M', 'female': 'F', 'other': 'O'}
+        return gender_map.get(str(gender).lower(), 'M')
+
+    def _compute_age_band(self, dob):
+        try:
+            if not dob:
+                return '0-35'
+            if isinstance(dob, str):
+                birth_date = datetime.fromisoformat(dob.replace('Z', '+00:00'))
+            else:
+                birth_date = dob
+            age = (datetime.now() - birth_date).days // 365
+            if age <= 35:
+                return '0-35'
+            if age <= 55:
+                return '35-55'
+            return '55<='
+        except Exception:
+            return '0-35'
     
     def test_connection(self, student_id):
         try:
