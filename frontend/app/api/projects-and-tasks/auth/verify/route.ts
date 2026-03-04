@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/projects-and-tasks/db';
-import Student from '@/model/projects-and-tasks/Student';
-import Lecturer from '@/model/projects-and-tasks/Lecturer';
+import Student from '@/model/auth/Student';
+import Lecturer from '@/model/auth/Lecturer';
 import { verifyToken } from '@/lib/projects-and-tasks/jwt';
 import { successResponse, unauthorizedResponse, serverErrorResponse } from '@/lib/projects-and-tasks/api-response';
 
