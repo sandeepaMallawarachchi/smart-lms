@@ -247,9 +247,9 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
           icon: <BarChart3 size={22} />,
           href: '/learning-analytics/lecturer/class-performance',
           subsections: [
-            { id: 'overview', label: 'Overview' },
-            { id: 'grade-distribution', label: 'Grade Distribution' },
-            { id: 'trends', label: 'Performance Trends' },
+            { id: 'overview', label: 'Overview', href: '/learning-analytics/lecturer/class-performance?view=overview' },
+            { id: 'risk-distribution', label: 'Risk Distribution', href: '/learning-analytics/lecturer/class-performance?view=distribution' },
+            { id: 'trends', label: 'Trend Monitor', href: '/learning-analytics/lecturer/class-performance?view=trends' },
           ],
         },
         {
@@ -259,9 +259,9 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
           badge: 3,
           href: '/learning-analytics/lecturer/student-insights',
           subsections: [
-            { id: 'individual-progress', label: 'Individual Progress' },
-            { id: 'at-risk-students', label: 'At-Risk Students', badge: 3 },
-            { id: 'top-performers', label: 'Top Performers' },
+            { id: 'individual-progress', label: 'Individual Progress', href: '/learning-analytics/lecturer/student-insights?risk=all' },
+            { id: 'at-risk-students', label: 'At-Risk Students', badge: 3, href: '/learning-analytics/lecturer/student-insights?risk=high' },
+            { id: 'top-performers', label: 'Top Performers', href: '/learning-analytics/lecturer/student-insights?sortBy=score&order=desc' },
           ],
         },
         {
@@ -293,9 +293,9 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
           icon: <FileText size={22} />,
           href: '/learning-analytics/lecturer/reports',
           subsections: [
-            { id: 'class-summary', label: 'Class Summary' },
-            { id: 'individual-reports', label: 'Individual Reports' },
-            { id: 'export-data', label: 'Export Data' },
+            { id: 'class-summary', label: 'Class Summary', href: '/learning-analytics/lecturer/reports?view=class-summary' },
+            { id: 'individual-reports', label: 'Individual Reports', href: '/learning-analytics/lecturer/reports?view=individual' },
+            { id: 'export-data', label: 'Export Data', href: '/learning-analytics/lecturer/reports?view=export' },
           ],
         },
         {
