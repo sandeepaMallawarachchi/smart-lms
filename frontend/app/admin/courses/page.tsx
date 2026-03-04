@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Search,
@@ -52,7 +52,7 @@ interface CourseGroup {
   students?: CourseStudent[];
 }
 
-export default function CoursesPage() {
+function CoursesPageContent() {
   const searchParams = useSearchParams();
   const filterParam = searchParams.get('filter');
 
@@ -1019,5 +1019,13 @@ export default function CoursesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CoursesPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50" />}>
+      <CoursesPageContent />
+    </Suspense>
   );
 }

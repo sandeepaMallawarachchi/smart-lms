@@ -205,11 +205,7 @@ export default function UnifiedSidebar({ userRole }: UnifiedSidebarProps) {
     }
   };
 
-  useEffect(() => {
-    if (userRole === 'superadmin') {
-      fetchPendingCount();
-    }
-  }, [userRole]);
+  // Intentionally not auto-fetching here to avoid cascading state updates during render cycles.
 
   // Update the config to use dynamic badge count for superadmin
   const updatedNavItems = config.navItems.map(item => {
@@ -333,8 +329,9 @@ export default function UnifiedSidebar({ userRole }: UnifiedSidebarProps) {
                       key={subsection.id}
                       onClick={() => {
                         setActiveSection(item.id);
-                        if (subsection.href) {
-                          router.push(subsection.href);
+                        const targetHref = subsection.href || item.href;
+                        if (targetHref) {
+                          router.push(targetHref);
                         }
                       }}
                       className="w-full text-left px-3 py-2 text-sm text-blue-800 hover:text-brand-yellow hover:bg-brand-blue/10 rounded-full transition-colors flex items-center justify-between"

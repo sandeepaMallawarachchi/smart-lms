@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 type RiskFilter = 'all' | 'high' | 'medium' | 'low' | 'unknown';
 
@@ -20,14 +21,33 @@ interface StudentInsight {
   lateSubmissionCount: number;
 }
 
-export default function LecturerStudentInsightsPage() {
+interface LivePredictionStatus {
+  requested: boolean;
+  enabled: boolean;
+  error: string | null;
+}
+
+function LecturerStudentInsightsPageContent() {
+  const searchParams = useSearchParams();
+  const queryKey = searchParams.toString();
   const [students, setStudents] = useState<StudentInsight[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [risk, setRisk] = useState<RiskFilter>('all');
+  const [livePrediction, setLivePrediction] = useState<LivePredictionStatus>({
+    requested: true,
+    enabled: true,
+    error: null,
+  });
 
-  const fetchStudents = async (searchQuery: string, nextRisk: RiskFilter) => {
+  const fetchStudents = async (
+    searchQuery: string,
+    nextRisk: RiskFilter,
+    sortBy: 'risk' | 'completion' | 'engagement' | 'score' | 'name' = 'risk',
+    order: 'asc' | 'desc' = 'desc',
+    nextIncludeLivePrediction = true
+  ) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
@@ -39,8 +59,9 @@ export default function LecturerStudentInsightsPage() {
       const params = new URLSearchParams({
         q: searchQuery,
         risk: nextRisk,
-        sortBy: 'risk',
-        order: 'desc',
+        sortBy,
+        order,
+        includeLivePrediction: String(nextIncludeLivePrediction),
       });
       const response = await fetch(`/api/learning-analytics/lecturer/students?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -52,6 +73,13 @@ export default function LecturerStudentInsightsPage() {
 
       const json = await response.json();
       setStudents(json.data?.students || []);
+      setLivePrediction(
+        json.data?.livePrediction || {
+          requested: true,
+          enabled: false,
+          error: 'No live prediction status received',
+        }
+      );
       setError(null);
     } catch (err) {
       console.error('Student insights fetch error:', err);
@@ -62,8 +90,32 @@ export default function LecturerStudentInsightsPage() {
   };
 
   useEffect(() => {
-    fetchStudents('', 'all');
-  }, []);
+    const params = new URLSearchParams(queryKey);
+    const qpRisk = params.get('risk');
+    const qpSortBy = params.get('sortBy');
+    const qpOrder = params.get('order');
+
+    const safeRisk: RiskFilter =
+      qpRisk === 'high' || qpRisk === 'medium' || qpRisk === 'low' || qpRisk === 'unknown' || qpRisk === 'all'
+        ? qpRisk
+        : 'all';
+    const safeSortBy =
+      qpSortBy === 'risk' || qpSortBy === 'completion' || qpSortBy === 'engagement' || qpSortBy === 'score' || qpSortBy === 'name'
+        ? qpSortBy
+        : 'risk';
+    const safeOrder = qpOrder === 'asc' ? 'asc' : 'desc';
+
+    setRisk(safeRisk);
+    fetchStudents('', safeRisk, safeSortBy, safeOrder, true);
+  }, [queryKey]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      fetchStudents(q, risk, 'risk', 'desc', true);
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [q, risk]);
 
   const summary = useMemo(() => {
     return {
@@ -89,7 +141,7 @@ export default function LecturerStudentInsightsPage() {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-4 items-center">
           <input
             value={q}
             onChange={(event) => setQ(event.target.value)}
@@ -107,13 +159,12 @@ export default function LecturerStudentInsightsPage() {
             <option value="low">Low Risk</option>
             <option value="unknown">Unknown</option>
           </select>
-          <button
-            type="button"
-            onClick={() => fetchStudents(q, risk)}
-            className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
-          >
-            Apply
-          </button>
+
+          <p className={`text-sm font-medium ${livePrediction.enabled ? 'text-emerald-700' : 'text-amber-700'}`}>
+            {livePrediction.enabled
+              ? 'Live prediction is ON.'
+              : `Live prediction is OFF (${livePrediction.error || 'ML API not connected'}). Showing stored data.`}
+          </p>
         </div>
       </div>
 
@@ -162,6 +213,14 @@ export default function LecturerStudentInsightsPage() {
   );
 }
 
+export default function LecturerStudentInsightsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+      <LecturerStudentInsightsPageContent />
+    </Suspense>
+  );
+}
+
 function Stat({
   label,
   value,
@@ -175,10 +234,10 @@ function Stat({
     tone === 'red'
       ? 'border-red-200 bg-red-50 text-red-700'
       : tone === 'amber'
-      ? 'border-amber-200 bg-amber-50 text-amber-700'
-      : tone === 'green'
-      ? 'border-green-200 bg-green-50 text-green-700'
-      : 'border-slate-200 bg-white text-slate-700';
+        ? 'border-amber-200 bg-amber-50 text-amber-700'
+        : tone === 'green'
+          ? 'border-green-200 bg-green-50 text-green-700'
+          : 'border-slate-200 bg-white text-slate-700';
   return (
     <div className={`rounded-xl border p-4 ${toneClass}`}>
       <p className="text-xs font-semibold uppercase tracking-wide">{label}</p>

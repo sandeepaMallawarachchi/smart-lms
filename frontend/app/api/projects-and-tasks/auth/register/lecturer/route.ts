@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/projects-and-tasks/db';
-import Lecturer from '@/model/projects-and-tasks/Lecturer';
+import Lecturer from '@/model/auth/Lecturer';
 import { generateToken } from '@/lib/projects-and-tasks/jwt';
 import { successResponse, errorResponse, serverErrorResponse } from '@/lib/projects-and-tasks/api-response';
 
