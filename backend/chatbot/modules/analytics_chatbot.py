@@ -450,6 +450,121 @@ What would you like to know about?"""
         except Exception as e:
             return {'error': str(e)}
 
+    def get_predictive_analytics(self, filters=None):
+        """
+        Lecturer predictive analytics view:
+        - Uses trained ML model scores (risk/confidence)
+        - Uses NLP recommender (Groq + fallback) for personalized actions
+        """
+        try:
+            filters = filters or {}
+            recommendation_limit = int(filters.get("recommendationLimit", 8))
+
+            insights_result = self.get_students_insights({
+                "lecturerId": filters.get("lecturerId"),
+                "courseId": filters.get("courseId"),
+                "year": filters.get("year"),
+                "semester": filters.get("semester"),
+                "specialization": filters.get("specialization"),
+                "includeLivePrediction": True,
+                "limit": int(filters.get("limit", 200)),
+            })
+
+            if not insights_result.get("success"):
+                return insights_result
+
+            students = insights_result.get("students", [])
+            summary = insights_result.get("summary", {})
+            live_prediction = insights_result.get("livePrediction", {})
+
+            # Build risk clusters
+            high_risk = [s for s in students if s.get("riskLevel") == "high"]
+            medium_risk = [s for s in students if s.get("riskLevel") == "medium"]
+            low_risk = [s for s in students if s.get("riskLevel") == "low"]
+
+            # Priority order for recommendations: high -> medium -> top risk
+            ordered = sorted(students, key=lambda s: float(s.get("riskProbability", 0) or 0), reverse=True)
+            target_students = high_risk + medium_risk
+            if len(target_students) < recommendation_limit:
+                seen = set([s.get("studentId") for s in target_students])
+                for s in ordered:
+                    sid = s.get("studentId")
+                    if sid not in seen:
+                        target_students.append(s)
+                        seen.add(sid)
+                    if len(target_students) >= recommendation_limit:
+                        break
+            else:
+                target_students = target_students[:recommendation_limit]
+
+            personalized = []
+            for s in target_students:
+                sid = s.get("studentId")
+                student_ctx = self.get_student_data(sid) or {}
+                prediction_data = {
+                    "risk_category": str(s.get("riskLevel", "UNKNOWN")).upper(),
+                    "risk_score": float(s.get("riskProbability", 0) or 0) / 100.0,
+                    "confidence": float(s.get("confidence", 0) or 0) / 100.0
+                }
+                recommendation_text = self.generate_recommendations(sid, prediction_data, student_ctx)
+                personalized.append({
+                    "studentId": sid,
+                    "studentIdNumber": s.get("studentIdNumber"),
+                    "name": s.get("name"),
+                    "riskLevel": s.get("riskLevel"),
+                    "riskProbability": s.get("riskProbability"),
+                    "completionRate": s.get("completionRate"),
+                    "engagement": s.get("engagement"),
+                    "recommendation": recommendation_text,
+                })
+
+            avg_risk = 0
+            if students:
+                avg_risk = sum([float(s.get("riskProbability", 0) or 0) for s in students]) / len(students)
+
+            class_guidance = []
+            if summary.get("highRisk", 0) > 0:
+                class_guidance.append("Prioritize interventions for high-risk students this week.")
+            if live_prediction.get("enabled"):
+                class_guidance.append("Live ML predictions are active for current cohort scoring.")
+            else:
+                class_guidance.append("Live ML predictions are unavailable; using stored analytics snapshots.")
+            if avg_risk >= 60:
+                class_guidance.append("Overall class risk is elevated. Consider targeted revision sessions.")
+            elif avg_risk >= 35:
+                class_guidance.append("Class risk is moderate. Weekly check-ins can improve outcomes.")
+            else:
+                class_guidance.append("Class risk is currently low. Maintain momentum with regular feedback.")
+
+            return {
+                "success": True,
+                "summary": {
+                    **summary,
+                    "averageRiskProbability": round(avg_risk, 1),
+                    "highRiskRatio": round((summary.get("highRisk", 0) / summary.get("totalStudents", 1)) * 100, 1)
+                    if summary.get("totalStudents", 0) > 0
+                    else 0.0
+                },
+                "riskBands": {
+                    "high": len(high_risk),
+                    "medium": len(medium_risk),
+                    "low": len(low_risk)
+                },
+                "livePrediction": live_prediction,
+                "classGuidance": class_guidance,
+                "topStudentsByRisk": ordered[:10],
+                "personalizedRecommendations": personalized,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return {
+                "success": False,
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+
     def get_students_insights(self, filters=None):
         """
         Build lecturer-friendly student insights list.
