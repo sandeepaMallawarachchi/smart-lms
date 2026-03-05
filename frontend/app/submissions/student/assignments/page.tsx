@@ -14,6 +14,7 @@ import {
     Search,
 } from 'lucide-react';
 import { useAssignments } from '@/hooks/useSubmissions';
+import { useSelectedCourse } from '@/hooks/useSelectedCourse';
 import type { Assignment } from '@/types/submission.types';
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -80,6 +81,7 @@ export default function StudentAssignmentsPage() {
     const [filterType, setFilterType] = useState<'all' | 'project' | 'task'>('all');
 
     const { data: assignments, loading, error, refetch } = useAssignments();
+    const selectedCourse = useSelectedCourse('student');
 
     const filtered = (assignments ?? []).filter((a) => {
         const q = searchQuery.toLowerCase();
@@ -89,7 +91,11 @@ export default function StudentAssignmentsPage() {
             (a.moduleName ?? '').toLowerCase().includes(q);
         const matchesStatus = filterStatus === 'all' || a.status === filterStatus;
         const matchesType   = filterType === 'all' || a.assignmentType === filterType;
-        return matchesSearch && matchesStatus && matchesType;
+        const matchesCourse = !selectedCourse ||
+            a.moduleName === selectedCourse.name ||
+            a.moduleCode === selectedCourse.id ||
+            a.moduleCode === selectedCourse.courseCode;
+        return matchesSearch && matchesStatus && matchesType && matchesCourse;
     });
 
     const stats = {

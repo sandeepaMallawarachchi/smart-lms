@@ -20,7 +20,7 @@ import {
     TrendingUp,
 } from 'lucide-react';
 import { useAllSubmissions } from '@/hooks/useSubmissions';
-import { useLecturerCourses } from '@/hooks/useLecturerCourses';
+import { useSelectedCourse } from '@/hooks/useSelectedCourse';
 import type { Submission } from '@/types/submission.types';
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -55,11 +55,10 @@ export default function LecturerGradingQueuePage() {
     const router = useRouter();
     const [searchQuery, setSearchQuery] = useState('');
     const [filterPriority, setFilterPriority] = useState<'all' | Priority>('all');
-    const [filterModule, setFilterModule] = useState('all');
     const [sortBy, setSortBy] = useState<'date' | 'priority' | 'plagiarism' | 'ai'>('priority');
 
     const { data: allSubmissions, loading, error, refetch } = useAllSubmissions();
-    const { courses } = useLecturerCourses();
+    const selectedCourse = useSelectedCourse('lecture');
 
     // Only queue submissions that need grading
     const queue = useMemo((): (Submission & { priority: Priority })[] => {
@@ -77,9 +76,11 @@ export default function LecturerGradingQueuePage() {
                 (item.studentRegistrationId ?? '').toLowerCase().includes(q) ||
                 (item.assignmentTitle ?? '').toLowerCase().includes(q);
             const matchesPriority = filterPriority === 'all' || item.priority === filterPriority;
-            const matchesModule = filterModule === 'all' ||
-                item.moduleName === filterModule || item.moduleCode === filterModule;
-            return matchesSearch && matchesPriority && matchesModule;
+            const matchesCourse = !selectedCourse ||
+                item.moduleName === selectedCourse.name ||
+                item.moduleCode === selectedCourse.id ||
+                item.moduleCode === selectedCourse.courseCode;
+            return matchesSearch && matchesPriority && matchesCourse;
         });
 
         return [...filtered].sort((a, b) => {
@@ -99,7 +100,7 @@ export default function LecturerGradingQueuePage() {
                     return 0;
             }
         });
-    }, [queue, searchQuery, filterPriority, filterModule, sortBy]);
+    }, [queue, searchQuery, filterPriority, selectedCourse, sortBy]);
 
     const stats = useMemo(() => ({
         total: queue.length,
@@ -254,16 +255,11 @@ export default function LecturerGradingQueuePage() {
                                 <option value="low">Low Priority</option>
                             </select>
                         </div>
-                        <select
-                            value={filterModule}
-                            onChange={(e) => setFilterModule(e.target.value)}
-                            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            <option value="all">All Modules</option>
-                            {courses.map((c) => (
-                                <option key={c.id} value={c.name}>{c.name}</option>
-                            ))}
-                        </select>
+                        {selectedCourse && (
+                            <span className="px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 font-medium">
+                                {selectedCourse.name}
+                            </span>
+                        )}
                     </div>
                 </div>
             </div>

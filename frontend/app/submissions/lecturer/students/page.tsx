@@ -13,7 +13,7 @@ import {
     Users,
 } from 'lucide-react';
 import { useAllSubmissions } from '@/hooks/useSubmissions';
-import { useLecturerCourses } from '@/hooks/useLecturerCourses';
+import { useSelectedCourse } from '@/hooks/useSelectedCourse';
 import type { Submission } from '@/types/submission.types';
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -68,11 +68,10 @@ export default function LecturerStudentInsightsPage() {
     const router = useRouter();
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<'all' | PerformanceStatus>('all');
-    const [filterModule, setFilterModule] = useState('all');
     const [sortBy, setSortBy] = useState<'name' | 'grade' | 'plagiarism' | 'submissions'>('grade');
 
     const { data: submissions, loading, error, refetch } = useAllSubmissions();
-    const { courses } = useLecturerCourses();
+    const selectedCourse = useSelectedCourse('lecture');
 
     // ── Build student summaries
     const students = useMemo((): StudentSummary[] => {
@@ -142,8 +141,9 @@ export default function LecturerStudentInsightsPage() {
                 (s.registrationId ?? '').toLowerCase().includes(q) ||
                 (s.email ?? '').toLowerCase().includes(q);
             const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
-            const matchesModule = filterModule === 'all' || s.modules.includes(filterModule);
-            return matchesSearch && matchesStatus && matchesModule;
+            const matchesCourse = !selectedCourse ||
+                s.modules.some((m) => m === selectedCourse.name || m === selectedCourse.id || m === selectedCourse.courseCode);
+            return matchesSearch && matchesStatus && matchesCourse;
         });
 
         return [...list].sort((a, b) => {
@@ -155,7 +155,7 @@ export default function LecturerStudentInsightsPage() {
                 default: return 0;
             }
         });
-    }, [students, searchQuery, filterStatus, filterModule, sortBy]);
+    }, [students, searchQuery, filterStatus, selectedCourse, sortBy]);
 
     // Overview stats
     const overviewStats = useMemo(() => ({
@@ -247,14 +247,11 @@ export default function LecturerStudentInsightsPage() {
                                 <option value="critical">Critical</option>
                             </select>
                         </div>
-                        <select
-                            value={filterModule}
-                            onChange={(e) => setFilterModule(e.target.value)}
-                            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            <option value="all">All Modules</option>
-                            {courses.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
-                        </select>
+                        {selectedCourse && (
+                            <span className="px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 font-medium">
+                                {selectedCourse.name}
+                            </span>
+                        )}
                         <select
                             value={sortBy}
                             onChange={(e) => setSortBy(e.target.value as never)}

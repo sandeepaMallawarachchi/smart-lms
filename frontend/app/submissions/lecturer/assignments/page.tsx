@@ -17,6 +17,7 @@ import {
     Users,
 } from 'lucide-react';
 import { useAssignments } from '@/hooks/useSubmissions';
+import { useSelectedCourse } from '@/hooks/useSelectedCourse';
 import type { Assignment } from '@/types/submission.types';
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -62,6 +63,7 @@ export default function LecturerManageAssignmentsPage() {
     const [filterType, setFilterType] = useState<TypeFilter>('all');
 
     const { data: assignments, loading, error, refetch } = useAssignments();
+    const selectedCourse = useSelectedCourse('lecture');
 
     // Filter
     const filtered = useMemo(() => {
@@ -73,9 +75,13 @@ export default function LecturerManageAssignmentsPage() {
                 (a.moduleName ?? '').toLowerCase().includes(q);
             const matchesStatus = filterStatus === 'all' || a.status === filterStatus;
             const matchesType   = filterType === 'all' || a.assignmentType === filterType;
-            return matchesSearch && matchesStatus && matchesType;
+            const matchesCourse = !selectedCourse ||
+                a.moduleName === selectedCourse.name ||
+                a.moduleCode === selectedCourse.id ||
+                a.moduleCode === selectedCourse.courseCode;
+            return matchesSearch && matchesStatus && matchesType && matchesCourse;
         });
-    }, [assignments, searchQuery, filterStatus, filterType]);
+    }, [assignments, searchQuery, filterStatus, filterType, selectedCourse]);
 
     const stats = useMemo(() => {
         const all = assignments ?? [];

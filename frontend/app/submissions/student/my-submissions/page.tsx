@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import SubmissionCard from '@/components/submissions/SubmissionCard';
 import { useSubmissions, useAssignments } from '@/hooks/useSubmissions';
+import { useSelectedCourse } from '@/hooks/useSelectedCourse';
 import type { Assignment, SubmissionStatus } from '@/types/submission.types';
 
 // ─── Skeleton loading ─────────────────────────────────────────
@@ -206,6 +207,7 @@ export default function MySubmissionsPage() {
     }, []);
 
     const { data: submissions, loading, error, refetch } = useSubmissions(studentId);
+    const selectedCourse = useSelectedCourse('student');
 
     // Fetch open assignments for the "Assignments to Answer" section.
     const {
@@ -227,9 +229,15 @@ export default function MySubmissionsPage() {
     // ── Filtered list
     const filtered = useMemo(() => {
         const safeSubmissions = Array.isArray(submissions) ? submissions : [];
-        if (filter === 'all') return safeSubmissions;
-        return safeSubmissions.filter((s) => s.status === filter);
-    }, [submissions, filter]);
+        return safeSubmissions.filter((s) => {
+            const matchesFilter = filter === 'all' || s.status === filter;
+            const matchesCourse = !selectedCourse ||
+                s.moduleName === selectedCourse.name ||
+                s.moduleCode === selectedCourse.id ||
+                s.moduleCode === selectedCourse.courseCode;
+            return matchesFilter && matchesCourse;
+        });
+    }, [submissions, filter, selectedCourse]);
 
     // ── Computed stats
     const stats = useMemo(() => {
@@ -289,7 +297,12 @@ export default function MySubmissionsPage() {
 
             {/* Available Assignments — "Start Answering" section */}
             <AvailableAssignments
-                assignments={openAssignments ?? []}
+                assignments={(openAssignments ?? []).filter((a) =>
+                    !selectedCourse ||
+                    a.moduleName === selectedCourse.name ||
+                    a.moduleCode === selectedCourse.id ||
+                    a.moduleCode === selectedCourse.courseCode
+                )}
                 loading={assignmentsLoading}
                 submissionIds={draftAssignmentIds}
                 router={router}
