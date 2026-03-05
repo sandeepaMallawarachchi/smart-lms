@@ -1,24 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import {
-    Award,
-    Calendar,
-    FileText,
-    GitBranch,
-    Loader,
-    Plus,
-    RefreshCw,
-    Shield,
-    Star,
-    AlertCircle,
-    ArrowRight,
-} from 'lucide-react';
+import React, {useEffect, useMemo, useState} from 'react';
+import {useRouter} from 'next/navigation';
+import {AlertCircle, ArrowRight, Calendar, FileText, Plus, RefreshCw,} from 'lucide-react';
 import SubmissionCard from '@/components/submissions/SubmissionCard';
-import { useSubmissions, useAssignments } from '@/hooks/useSubmissions';
-import { useSelectedCourse } from '@/hooks/useSelectedCourse';
-import type { Assignment, SubmissionStatus } from '@/types/submission.types';
+import {useAssignments, useSubmissions} from '@/hooks/useSubmissions';
+import {useSelectedCourse} from '@/hooks/useSelectedCourse';
+import type {Assignment, SubmissionStatus} from '@/types/submission.types';
 
 // ─── Skeleton loading ─────────────────────────────────────────
 
@@ -26,13 +14,13 @@ function SubmissionCardSkeleton() {
     return (
         <div className="bg-white rounded-lg border border-gray-200 p-6 animate-pulse">
             <div className="flex gap-4">
-                <div className="w-12 h-12 bg-gray-200 rounded-lg shrink-0" />
+                <div className="w-12 h-12 bg-gray-200 rounded-lg shrink-0"/>
                 <div className="flex-1 space-y-3">
-                    <div className="h-5 bg-gray-200 rounded w-2/3" />
-                    <div className="h-4 bg-gray-100 rounded w-1/3" />
+                    <div className="h-5 bg-gray-200 rounded w-2/3"/>
+                    <div className="h-4 bg-gray-100 rounded w-1/3"/>
                     <div className="grid grid-cols-4 gap-3 mt-2">
                         {[1, 2, 3, 4].map((i) => (
-                            <div key={i} className="h-16 bg-gray-100 rounded-lg" />
+                            <div key={i} className="h-16 bg-gray-100 rounded-lg"/>
                         ))}
                     </div>
                 </div>
@@ -44,12 +32,12 @@ function SubmissionCardSkeleton() {
 // ─── Stat card ────────────────────────────────────────────────
 
 function StatCard({
-    value,
-    label,
-    colorClass,
-    bgClass,
-    borderClass,
-}: {
+                      value,
+                      label,
+                      colorClass,
+                      bgClass,
+                      borderClass,
+                  }: {
     value: number | string;
     label: string;
     colorClass: string;
@@ -66,16 +54,18 @@ function StatCard({
 
 // ─── Available Assignments section ────────────────────────────
 
+const PAGE_LOAD_TIME = Date.now();
+
 /**
  * Shows open assignments the student can start/continue answering.
  * Hidden entirely when there are no open assignments.
  */
 function AvailableAssignments({
-    assignments,
-    loading,
-    submissionIds,   // set of assignmentIds that already have a DRAFT
-    router,
-}: {
+                                  assignments,
+                                  loading,
+                                  submissionIds,   // set of assignmentIds that already have a DRAFT
+                                  router,
+                              }: {
     assignments: Assignment[];
     loading: boolean;
     submissionIds: Set<string>;
@@ -88,7 +78,8 @@ function AvailableAssignments({
             <div className="flex items-center gap-3 mb-4">
                 <h2 className="text-lg font-bold text-gray-900">Assignments to Answer</h2>
                 {!loading && (
-                    <span className="inline-flex items-center justify-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-700">
+                    <span
+                        className="inline-flex items-center justify-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-700">
                         {assignments.length}
                     </span>
                 )}
@@ -98,13 +89,14 @@ function AvailableAssignments({
                 /* 2 skeleton cards while loading */
                 <div className="space-y-3">
                     {[1, 2].map((i) => (
-                        <div key={i} className="animate-pulse bg-white rounded-lg border border-gray-200 p-4 flex items-center gap-4">
-                            <div className="h-10 w-10 bg-gray-200 rounded-lg flex-shrink-0" />
+                        <div key={i}
+                             className="animate-pulse bg-white rounded-lg border border-gray-200 p-4 flex items-center gap-4">
+                            <div className="h-10 w-10 bg-gray-200 rounded-lg flex-shrink-0"/>
                             <div className="flex-1 space-y-2">
-                                <div className="h-4 bg-gray-200 rounded w-1/2" />
-                                <div className="h-3 bg-gray-100 rounded w-1/3" />
+                                <div className="h-4 bg-gray-200 rounded w-1/2"/>
+                                <div className="h-3 bg-gray-100 rounded w-1/3"/>
                             </div>
-                            <div className="h-8 w-28 bg-gray-200 rounded-lg" />
+                            <div className="h-8 w-28 bg-gray-200 rounded-lg"/>
                         </div>
                     ))}
                 </div>
@@ -113,8 +105,7 @@ function AvailableAssignments({
                     {assignments.map((asg) => {
                         const hasDraft = submissionIds.has(asg.id);
                         const dueDate = asg.dueDate ? new Date(asg.dueDate) : null;
-                        const now = Date.now();
-                        const isOverdue = dueDate ? dueDate.getTime() < now : false;
+                        const isOverdue = dueDate ? dueDate.getTime() < PAGE_LOAD_TIME : false;
 
                         return (
                             <div
@@ -122,8 +113,9 @@ function AvailableAssignments({
                                 className="bg-white rounded-lg border border-gray-200 p-4 flex flex-wrap items-center gap-4 hover:shadow-sm transition-shadow"
                             >
                                 {/* Calendar icon */}
-                                <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-purple-100 flex items-center justify-center">
-                                    <Calendar size={20} className="text-purple-600" />
+                                <div
+                                    className="h-10 w-10 flex-shrink-0 rounded-lg bg-purple-100 flex items-center justify-center">
+                                    <Calendar size={20} className="text-purple-600"/>
                                 </div>
 
                                 {/* Assignment info */}
@@ -131,12 +123,14 @@ function AvailableAssignments({
                                     <div className="flex items-center gap-2 min-w-0">
                                         <p className="text-sm font-semibold text-gray-900 truncate">{asg.title}</p>
                                         {asg.assignmentType === 'project' && (
-                                            <span className="flex-shrink-0 inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                                            <span
+                                                className="flex-shrink-0 inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
                                                 Project
                                             </span>
                                         )}
                                         {asg.assignmentType === 'task' && (
-                                            <span className="flex-shrink-0 inline-flex items-center rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-700">
+                                            <span
+                                                className="flex-shrink-0 inline-flex items-center rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-700">
                                                 Task
                                             </span>
                                         )}
@@ -162,7 +156,7 @@ function AvailableAssignments({
                                     }`}
                                 >
                                     {hasDraft ? 'Continue' : 'Start Answering'}
-                                    <ArrowRight size={14} />
+                                    <ArrowRight size={14}/>
                                 </button>
                             </div>
                         );
@@ -178,11 +172,11 @@ function AvailableAssignments({
 type Filter = 'all' | SubmissionStatus;
 
 const FILTERS: { key: Filter; label: string; activeClass: string }[] = [
-    { key: 'all',          label: 'All',            activeClass: 'bg-gray-800 text-white' },
-    { key: 'GRADED',       label: 'Graded',         activeClass: 'bg-green-600 text-white' },
-    { key: 'SUBMITTED',    label: 'Submitted',      activeClass: 'bg-purple-600 text-white' },
-    { key: 'PENDING_REVIEW', label: 'Pending Review', activeClass: 'bg-amber-500 text-white' },
-    { key: 'DRAFT',        label: 'Draft',          activeClass: 'bg-gray-500 text-white' },
+    {key: 'all', label: 'All', activeClass: 'bg-gray-800 text-white'},
+    {key: 'GRADED', label: 'Graded', activeClass: 'bg-green-600 text-white'},
+    {key: 'SUBMITTED', label: 'Submitted', activeClass: 'bg-purple-600 text-white'},
+    {key: 'PENDING_REVIEW', label: 'Pending Review', activeClass: 'bg-amber-500 text-white'},
+    {key: 'DRAFT', label: 'Draft', activeClass: 'bg-gray-500 text-white'},
 ];
 
 // ─── Page ─────────────────────────────────────────────────────
@@ -190,30 +184,26 @@ const FILTERS: { key: Filter; label: string; activeClass: string }[] = [
 export default function MySubmissionsPage() {
     const router = useRouter();
     const [filter, setFilter] = useState<Filter>('all');
-    const [studentId, setStudentId] = useState<string | null>(null);
-
-    // Decode student ID from JWT
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
+    const [studentId] = useState<string | null>(() => {
+        if (typeof window === 'undefined') return null;
         try {
             const token = localStorage.getItem('authToken');
-            if (token) {
-                const payload = JSON.parse(atob(token.split('.')[1]));
-                setStudentId(payload.userId ?? payload.sub ?? null);
-            }
+            if (!token) return null;
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.userId ?? payload.sub ?? null;
         } catch {
-            setStudentId(null);
+            return null;
         }
-    }, []);
+    });
 
-    const { data: submissions, loading, error, refetch } = useSubmissions(studentId);
+    const {data: submissions, loading, error, refetch} = useSubmissions(studentId);
     const selectedCourse = useSelectedCourse('student');
 
     // Fetch open assignments for the "Assignments to Answer" section.
     const {
         data: openAssignments,
         loading: assignmentsLoading,
-    } = useAssignments({ status: 'OPEN' });
+    } = useAssignments({status: 'OPEN'});
 
     // Build a set of assignmentIds that already have a DRAFT submission,
     // so the "Start Answering" button shows "Continue" for in-progress work.
@@ -252,8 +242,8 @@ export default function MySubmissionsPage() {
             avgGrade:
                 graded.length > 0
                     ? Math.round(
-                          graded.reduce((acc, s) => acc + (s.grade ?? 0), 0) / graded.length
-                      )
+                        graded.reduce((acc, s) => acc + (s.grade ?? 0), 0) / graded.length
+                    )
                     : null,
             totalVersions: list.reduce((acc, s) => acc + s.totalVersions, 0),
         };
@@ -282,14 +272,14 @@ export default function MySubmissionsPage() {
                         className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50 cursor-pointer"
                         title="Refresh"
                     >
-                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''}/>
                         Refresh
                     </button>
                     <button
                         onClick={() => router.push('/submissions/student/submit')}
                         className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-semibold shadow-md cursor-pointer"
                     >
-                        <Plus size={16} />
+                        <Plus size={16}/>
                         New Submission
                     </button>
                 </div>
@@ -310,11 +300,16 @@ export default function MySubmissionsPage() {
 
             {/* Stats Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
-                <StatCard value={stats.total}    label="Total"         colorClass="text-gray-900"   bgClass="bg-white"        borderClass="border-gray-200" />
-                <StatCard value={stats.graded}   label="Graded"        colorClass="text-green-700"  bgClass="bg-green-50"     borderClass="border-green-200" />
-                <StatCard value={stats.submitted} label="Submitted"    colorClass="text-purple-700" bgClass="bg-purple-50"    borderClass="border-purple-200" />
-                <StatCard value={stats.pending}  label="Pending"       colorClass="text-amber-700"  bgClass="bg-amber-50"     borderClass="border-amber-200" />
-                <StatCard value={stats.draft}    label="Drafts"        colorClass="text-gray-600"   bgClass="bg-gray-50"      borderClass="border-gray-200" />
+                <StatCard value={stats.total} label="Total" colorClass="text-gray-900"
+                          bgClass="bg-white" borderClass="border-gray-200"/>
+                <StatCard value={stats.graded} label="Graded" colorClass="text-green-700"
+                          bgClass="bg-green-50" borderClass="border-green-200"/>
+                <StatCard value={stats.submitted} label="Submitted" colorClass="text-purple-700"
+                          bgClass="bg-purple-50" borderClass="border-purple-200"/>
+                <StatCard value={stats.pending} label="Pending" colorClass="text-amber-700"
+                          bgClass="bg-amber-50" borderClass="border-amber-200"/>
+                <StatCard value={stats.draft} label="Drafts" colorClass="text-gray-600"
+                          bgClass="bg-gray-50" borderClass="border-gray-200"/>
                 <StatCard
                     value={stats.avgGrade != null ? `${stats.avgGrade}%` : '–'}
                     label="Avg Grade"
@@ -336,7 +331,7 @@ export default function MySubmissionsPage() {
                 <div className="flex flex-wrap items-center gap-3">
                     <span className="text-sm font-medium text-gray-700">Filter:</span>
                     <div className="flex flex-wrap gap-2">
-                        {FILTERS.map(({ key, label, activeClass }) => (
+                        {FILTERS.map(({key, label, activeClass}) => (
                             <button
                                 key={key}
                                 onClick={() => setFilter(key)}
@@ -355,8 +350,9 @@ export default function MySubmissionsPage() {
 
             {/* Error banner */}
             {error && (
-                <div className="flex items-start gap-3 p-4 mb-6 bg-amber-50 border border-amber-200 rounded-lg">
-                    <AlertCircle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                <div
+                    className="flex items-start gap-3 p-4 mb-6 bg-amber-50 border border-amber-200 rounded-lg">
+                    <AlertCircle size={20} className="text-amber-600 shrink-0 mt-0.5"/>
                     <div>
                         <p className="font-medium text-amber-800">Could not load submissions</p>
                         <p className="text-sm text-amber-700 mt-0.5">{error}</p>
@@ -367,7 +363,7 @@ export default function MySubmissionsPage() {
             {/* Content */}
             {loading ? (
                 <div className="space-y-4">
-                    {[1, 2, 3].map((i) => <SubmissionCardSkeleton key={i} />)}
+                    {[1, 2, 3].map((i) => <SubmissionCardSkeleton key={i}/>)}
                 </div>
             ) : filtered.length > 0 ? (
                 <div className="space-y-4">
@@ -389,7 +385,7 @@ export default function MySubmissionsPage() {
                 </div>
             ) : (
                 <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
-                    <FileText size={52} className="mx-auto text-gray-300 mb-4" />
+                    <FileText size={52} className="mx-auto text-gray-300 mb-4"/>
                     <p className="text-gray-500 text-lg font-medium">
                         {filter === 'all' ? 'No submissions yet' : `No ${filter.toLowerCase()} submissions`}
                     </p>
@@ -405,7 +401,7 @@ export default function MySubmissionsPage() {
                             onClick={() => router.push('/submissions/student/submit')}
                             className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium cursor-pointer"
                         >
-                            <Plus size={18} />
+                            <Plus size={18}/>
                             Make Your First Submission
                         </button>
                     )}
