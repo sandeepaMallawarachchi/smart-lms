@@ -282,12 +282,12 @@ export default function AnswerPage({
             {/* ── Back link ─────────────────────────────────── */}
             <button
                 onClick={() => router.push('/submissions/student/my-submissions')}
-                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-5 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-purple-700 mb-5 transition-colors cursor-pointer group"
             >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
-                My Submissions
+                Back to My Submissions
             </button>
 
             {/* ── Error banner (non-fatal) ───────────────────── */}
@@ -298,19 +298,28 @@ export default function AnswerPage({
             )}
 
             {/* ── Assignment header card ────────────────────── */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div className={`rounded-xl shadow-sm border p-6 mb-6 ${due?.overdue ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                        <h1 className="text-xl font-bold text-gray-900 leading-tight">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            {assignment?.assignmentType === 'project' && (
+                                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">Project</span>
+                            )}
+                            {assignment?.assignmentType === 'task' && (
+                                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-100 text-teal-700">Task</span>
+                            )}
+                            {assignment?.moduleCode && (
+                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">{assignment.moduleCode}</span>
+                            )}
+                        </div>
+                        <h1 className="text-2xl font-bold text-gray-900 leading-tight">
                             {assignment?.title ?? 'Assignment'}
                         </h1>
                         {assignment?.moduleName && (
-                            <p className="mt-1 text-sm text-gray-500">
-                                {assignment.moduleCode} — {assignment.moduleName}
-                            </p>
+                            <p className="mt-1 text-sm text-gray-500">{assignment.moduleName}</p>
                         )}
                         {assignment?.description && (
-                            <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+                            <p className="mt-2 text-sm text-gray-600 leading-relaxed line-clamp-3">
                                 {assignment.description}
                             </p>
                         )}
@@ -318,16 +327,16 @@ export default function AnswerPage({
 
                     {/* Due date */}
                     {due && (
-                        <div className={`flex-shrink-0 rounded-lg border px-4 py-3 text-center ${
+                        <div className={`flex-shrink-0 rounded-xl border px-5 py-4 text-center min-w-[120px] ${
                             due.overdue
-                                ? 'border-red-200 bg-red-50'
+                                ? 'border-red-300 bg-red-100'
                                 : 'border-amber-200 bg-amber-50'
                         }`}>
-                            <p className="text-xs text-gray-500 mb-0.5">Due date</p>
-                            <p className="text-sm font-semibold text-gray-800">
-                                {new Date(assignment!.dueDate).toLocaleDateString()}
+                            <p className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">Due</p>
+                            <p className="text-sm font-bold text-gray-800">
+                                {new Date(assignment!.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                             </p>
-                            <p className={`text-xs font-medium mt-0.5 ${due.overdue ? 'text-red-600' : 'text-amber-600'}`}>
+                            <p className={`text-xs font-semibold mt-1 ${due.overdue ? 'text-red-600' : 'text-amber-600'}`}>
                                 {due.label}
                             </p>
                         </div>
@@ -336,17 +345,25 @@ export default function AnswerPage({
 
                 {/* Progress bar */}
                 {hasQuestions && (
-                    <div className="mt-5">
-                        <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-                            <span>{answeredCount} of {questions.length} question{questions.length !== 1 ? 's' : ''} answered</span>
-                            <span>{totalWords} total words</span>
+                    <div className="mt-5 pt-5 border-t border-gray-100">
+                        <div className="flex justify-between text-xs font-medium text-gray-500 mb-2">
+                            <span>
+                                <span className="text-purple-700 font-bold">{answeredCount}</span>
+                                <span className="text-gray-400"> / {questions.length} questions answered</span>
+                            </span>
+                            <span className="text-gray-500">{totalWords.toLocaleString()} words total</span>
                         </div>
-                        <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
+                        <div className="h-2.5 rounded-full bg-gray-200 overflow-hidden">
                             <div
-                                className="h-full rounded-full bg-purple-500 transition-all duration-500"
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                    answeredCount === questions.length ? 'bg-green-500' : 'bg-purple-500'
+                                }`}
                                 style={{ width: `${questions.length > 0 ? (answeredCount / questions.length) * 100 : 0}%` }}
                             />
                         </div>
+                        {answeredCount === questions.length && questions.length > 0 && (
+                            <p className="text-xs text-green-600 font-medium mt-1.5">All questions answered — ready to submit!</p>
+                        )}
                     </div>
                 )}
             </div>
@@ -387,29 +404,39 @@ export default function AnswerPage({
 
             {/* ── Sticky submit bar ─────────────────────────── */}
             {hasQuestions && (
-                <div className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 shadow-lg px-4 py-3 z-30">
+                <div className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-gray-200 shadow-lg px-4 py-3 z-30">
                     <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
-                        <div className="text-sm text-gray-600">
-                            <span className="font-semibold">{answeredCount}</span>
-                            <span className="text-gray-400"> / </span>
-                            <span>{questions.length}</span>
-                            <span className="ml-1 text-gray-400">answered</span>
-                            <span className="ml-3 text-gray-400">·</span>
-                            <span className="ml-3 font-semibold text-gray-700">{totalWords}</span>
-                            <span className="ml-1 text-gray-400">total words</span>
+                        <div className="flex items-center gap-4">
+                            {/* Mini progress */}
+                            <div className="hidden sm:block">
+                                <div className="w-28 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                                    <div
+                                        className={`h-full rounded-full transition-all duration-500 ${answeredCount === questions.length ? 'bg-green-500' : 'bg-purple-500'}`}
+                                        style={{ width: `${questions.length > 0 ? (answeredCount / questions.length) * 100 : 0}%` }}
+                                    />
+                                </div>
+                            </div>
+                            <div className="text-sm text-gray-600">
+                                <span className="font-bold text-gray-900">{answeredCount}</span>
+                                <span className="text-gray-400">/{questions.length}</span>
+                                <span className="ml-1 text-gray-500">answered</span>
+                                <span className="mx-2 text-gray-300">·</span>
+                                <span className="font-semibold text-gray-700">{totalWords.toLocaleString()}</span>
+                                <span className="ml-1 text-gray-400">words</span>
+                            </div>
                         </div>
 
                         <button
                             onClick={() => setShowConfirm(true)}
                             disabled={!canSubmit || submitting}
                             title={!canSubmit ? 'Answer all required questions to submit' : undefined}
-                            className={`rounded-lg px-6 py-2.5 text-sm font-semibold text-white transition-colors ${
+                            className={`rounded-xl px-7 py-2.5 text-sm font-bold text-white transition-all shadow-md ${
                                 canSubmit && !submitting
-                                    ? 'bg-purple-600 hover:bg-purple-700 active:bg-purple-800 cursor-pointer'
-                                    : 'bg-gray-300 cursor-not-allowed'
+                                    ? 'bg-purple-600 hover:bg-purple-700 active:bg-purple-800 cursor-pointer hover:shadow-lg'
+                                    : 'bg-gray-300 cursor-not-allowed shadow-none'
                             }`}
                         >
-                            {submitting ? 'Submitting…' : 'Submit Assignment'}
+                            {submitting ? 'Submitting…' : canSubmit ? 'Submit Assignment ✓' : 'Submit Assignment'}
                         </button>
                     </div>
                 </div>

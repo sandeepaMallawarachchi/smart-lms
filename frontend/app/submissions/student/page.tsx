@@ -63,6 +63,17 @@ export default function StudentDashboardPage() {
             return null;
         }
     });
+    const [studentName] = useState<string>(() => {
+        if (typeof window === 'undefined') return 'Student';
+        try {
+            const token = localStorage.getItem('authToken');
+            if (!token) return 'Student';
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.name ?? payload.username ?? 'Student';
+        } catch {
+            return 'Student';
+        }
+    });
 
     const {
         data: submissions,
@@ -155,9 +166,11 @@ export default function StudentDashboardPage() {
             {/* Header */}
             <div className="flex items-start justify-between mb-8">
                 <div>
-                    <h1 className="text-4xl font-bold text-gray-900 mb-2">Dashboard</h1>
-                    <p className="text-gray-600">Welcome back! Here&apos;s your submission
-                        overview</p>
+                    <p className="text-sm font-medium text-purple-600 mb-1">
+                        {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {studentName.split(' ')[0]}!
+                    </p>
+                    <h1 className="text-4xl font-bold text-gray-900 mb-2">My Dashboard</h1>
+                    <p className="text-gray-500">Here&apos;s an overview of your academic progress</p>
                 </div>
                 <button
                     onClick={handleRefresh}
@@ -300,9 +313,10 @@ export default function StudentDashboardPage() {
                             ) : (
                                 upcomingDeadlines.map((assignment) => {
                                     const deadline = getDaysRemaining(assignment.dueDate);
+                                    const isOverdue = deadline.color === 'text-red-600';
                                     return (
                                         <div key={assignment.id}
-                                             className="p-6 hover:bg-gray-50 transition-colors">
+                                             className={`p-5 hover:bg-gray-50 transition-colors ${isOverdue ? 'border-l-4 border-l-red-400' : ''}`}>
                                             <div className="flex items-start justify-between gap-4">
                                                 <div className="flex-1">
                                                     <h3 className="font-semibold text-gray-900 mb-1">{assignment.title}</h3>
@@ -331,10 +345,10 @@ export default function StudentDashboardPage() {
                                                 </div>
                                                 <button
                                                     onClick={() => router.push(`/submissions/student/answer/${assignment.id}`)}
-                                                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium flex items-center gap-2 cursor-pointer"
+                                                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 active:bg-purple-800 transition-colors text-sm font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm"
                                                 >
-                                                    <Edit size={16}/>
-                                                    Start
+                                                    <Edit size={14}/>
+                                                    Answer
                                                 </button>
                                             </div>
                                         </div>

@@ -76,10 +76,11 @@ function AvailableAssignments({
     return (
         <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
+                <div className="h-5 w-1 bg-purple-500 rounded-full"/>
                 <h2 className="text-lg font-bold text-gray-900">Assignments to Answer</h2>
                 {!loading && (
                     <span
-                        className="inline-flex items-center justify-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-700">
+                        className="inline-flex items-center justify-center rounded-full bg-purple-600 px-2.5 py-0.5 text-xs font-bold text-white">
                         {assignments.length}
                     </span>
                 )}
@@ -106,11 +107,17 @@ function AvailableAssignments({
                         const hasDraft = submissionIds.has(asg.id);
                         const dueDate = asg.dueDate ? new Date(asg.dueDate) : null;
                         const isOverdue = dueDate ? dueDate.getTime() < PAGE_LOAD_TIME : false;
+                        const diffMs = dueDate ? dueDate.getTime() - PAGE_LOAD_TIME : null;
+                        const dueSoon = diffMs !== null && diffMs > 0 && diffMs < 2 * 24 * 60 * 60 * 1000;
 
                         return (
                             <div
                                 key={asg.id}
-                                className="bg-white rounded-lg border border-gray-200 p-4 flex flex-wrap items-center gap-4 hover:shadow-sm transition-shadow"
+                                className={`bg-white rounded-lg border p-4 flex flex-wrap items-center gap-4 hover:shadow-md transition-all ${
+                                    isOverdue ? 'border-red-300 bg-red-50/30' :
+                                    dueSoon ? 'border-amber-300 bg-amber-50/20' :
+                                    'border-gray-200 hover:border-purple-200'
+                                }`}
                             >
                                 {/* Calendar icon */}
                                 <div
@@ -298,6 +305,12 @@ export default function MySubmissionsPage() {
                 router={router}
             />
 
+            {/* Section divider */}
+            <div className="flex items-center gap-3 mb-6">
+                <div className="h-5 w-1 bg-gray-400 rounded-full"/>
+                <h2 className="text-lg font-bold text-gray-900">My Submissions</h2>
+            </div>
+
             {/* Stats Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
                 <StatCard value={stats.total} label="Total" colorClass="text-gray-900"
@@ -327,25 +340,23 @@ export default function MySubmissionsPage() {
             </div>
 
             {/* Filter bar */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-                <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-sm font-medium text-gray-700">Filter:</span>
-                    <div className="flex flex-wrap gap-2">
-                        {FILTERS.map(({key, label, activeClass}) => (
-                            <button
-                                key={key}
-                                onClick={() => setFilter(key)}
-                                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                                    filter === key
-                                        ? activeClass
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                }`}
-                            >
-                                {label} ({countFor(key)})
-                            </button>
-                        ))}
-                    </div>
-                </div>
+            <div className="flex flex-wrap items-center gap-2 mb-6">
+                {FILTERS.map(({key, label, activeClass}) => (
+                    <button
+                        key={key}
+                        onClick={() => setFilter(key)}
+                        className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all cursor-pointer border ${
+                            filter === key
+                                ? `${activeClass} border-transparent shadow-sm`
+                                : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+                        }`}
+                    >
+                        {label}
+                        <span className={`ml-1.5 text-xs ${filter === key ? 'opacity-80' : 'text-gray-400'}`}>
+                            ({countFor(key)})
+                        </span>
+                    </button>
+                ))}
             </div>
 
             {/* Error banner */}

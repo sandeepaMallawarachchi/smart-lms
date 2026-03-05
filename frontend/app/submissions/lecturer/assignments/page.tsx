@@ -120,65 +120,83 @@ export default function LecturerManageAssignmentsPage() {
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 {loading ? (
-                    [1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-20" />)
+                    [1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24" />)
                 ) : (
                     <>
-                        <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                            <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-                            <div className="text-xs text-gray-500 mt-1">Total</div>
+                        <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-5 rounded-xl text-white shadow-md">
+                            <div className="text-3xl font-bold">{stats.total}</div>
+                            <div className="text-xs text-blue-100 mt-1 font-medium">Total Assignments</div>
                         </div>
-                        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                            <div className="text-2xl font-bold text-green-700">{stats.open}</div>
-                            <div className="text-xs text-green-600 mt-1">Open</div>
+                        <div className="bg-green-50 p-5 rounded-xl border border-green-200 shadow-sm">
+                            <div className="text-3xl font-bold text-green-700">{stats.open}</div>
+                            <div className="text-xs text-green-600 mt-1 font-medium">Open</div>
                         </div>
-                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                            <div className="text-2xl font-bold text-gray-700">{stats.draft}</div>
-                            <div className="text-xs text-gray-500 mt-1">Drafts</div>
+                        <div className="bg-amber-50 p-5 rounded-xl border border-amber-200 shadow-sm">
+                            <div className="text-3xl font-bold text-amber-700">{stats.draft}</div>
+                            <div className="text-xs text-amber-600 mt-1 font-medium">Drafts</div>
                         </div>
-                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                            <div className="text-2xl font-bold text-blue-700">{stats.closed}</div>
-                            <div className="text-xs text-blue-600 mt-1">Closed</div>
+                        <div className="bg-gray-100 p-5 rounded-xl border border-gray-200 shadow-sm">
+                            <div className="text-3xl font-bold text-gray-600">{stats.closed}</div>
+                            <div className="text-xs text-gray-500 mt-1 font-medium">Closed</div>
                         </div>
                     </>
                 )}
             </div>
 
             {/* Filters */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-6">
                 <div className="flex flex-col md:flex-row gap-4">
                     <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                         <input
                             type="text"
-                            placeholder="Search projects, tasks, modules…"
+                            placeholder="Search by title, module code or name…"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                         />
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
-                        <Filter size={18} className="text-gray-400" />
-                        <select
-                            value={filterType}
-                            onChange={(e) => setFilterType(e.target.value as TypeFilter)}
-                            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            <option value="all">All Types</option>
-                            <option value="project">Projects</option>
-                            <option value="task">Tasks</option>
-                        </select>
-                        <select
-                            value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value as StatusFilter)}
-                            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            <option value="all">All Status</option>
-                            <option value="OPEN">Open</option>
-                            <option value="DRAFT">Draft</option>
-                            <option value="CLOSED">Closed</option>
-                        </select>
+                        <Filter size={15} className="text-gray-400" />
+                        {/* Type pills */}
+                        <div className="flex gap-1.5">
+                            {(['all', 'project', 'task'] as TypeFilter[]).map((t) => (
+                                <button key={t} onClick={() => setFilterType(t)}
+                                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer border ${
+                                        filterType === t
+                                            ? t === 'project' ? 'bg-blue-600 text-white border-transparent' :
+                                              t === 'task' ? 'bg-teal-600 text-white border-transparent' :
+                                              'bg-gray-800 text-white border-transparent'
+                                            : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                                    }`}>
+                                    {t === 'all' ? 'All Types' : t.charAt(0).toUpperCase() + t.slice(1) + 's'}
+                                </button>
+                            ))}
+                        </div>
+                        {/* Status pills */}
+                        <div className="flex gap-1.5">
+                            {(['all', 'OPEN', 'DRAFT', 'CLOSED'] as StatusFilter[]).map((s) => (
+                                <button key={s} onClick={() => setFilterStatus(s)}
+                                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer border ${
+                                        filterStatus === s
+                                            ? s === 'OPEN' ? 'bg-green-600 text-white border-transparent' :
+                                              s === 'DRAFT' ? 'bg-amber-500 text-white border-transparent' :
+                                              s === 'CLOSED' ? 'bg-gray-500 text-white border-transparent' :
+                                              'bg-gray-800 text-white border-transparent'
+                                            : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                                    }`}>
+                                    {s === 'all' ? 'All Status' : s.charAt(0) + s.slice(1).toLowerCase()}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
+                {selectedCourse && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2 text-sm text-blue-700">
+                        <span className="h-2 w-2 bg-blue-500 rounded-full"/>
+                        Showing results for: <span className="font-semibold">{selectedCourse.name}</span>
+                    </div>
+                )}
             </div>
 
             {/* List */}
@@ -202,7 +220,9 @@ export default function LecturerManageAssignmentsPage() {
                         return (
                             <div
                                 key={assignment.id}
-                                className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+                                className={`bg-white rounded-xl shadow-sm border p-6 hover:shadow-md transition-all hover:border-blue-200 ${
+                                    isOverdue ? 'border-l-4 border-l-red-400 border-gray-200' : 'border-gray-200'
+                                }`}
                             >
                                 <div className="flex items-start justify-between">
                                     {/* Left */}

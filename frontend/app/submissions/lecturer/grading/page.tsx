@@ -167,29 +167,32 @@ export default function LecturerGradingQueuePage() {
                     [1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-20" />)
                 ) : (
                     <>
-                        <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-4 rounded-lg text-white shadow-lg">
+                        <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-4 rounded-xl text-white shadow-lg">
                             <div className="text-3xl font-bold">{stats.total}</div>
-                            <div className="text-xs text-blue-100 mt-1">Total Pending</div>
+                            <div className="text-xs text-blue-100 mt-1 font-medium">Total Pending</div>
                         </div>
-                        <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-                            <div className="text-2xl font-bold text-red-700">{stats.high}</div>
-                            <div className="text-xs text-red-600 mt-1">High Priority</div>
-                        </div>
-                        <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
-                            <div className="text-2xl font-bold text-amber-700">{stats.medium}</div>
-                            <div className="text-xs text-amber-600 mt-1">Medium Priority</div>
-                        </div>
-                        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                            <div className="text-2xl font-bold text-green-700">{stats.low}</div>
-                            <div className="text-xs text-green-600 mt-1">Low Priority</div>
-                        </div>
-                        <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                        <button onClick={() => setFilterPriority(filterPriority === 'high' ? 'all' : 'high')}
+                            className={`p-4 rounded-xl border cursor-pointer transition-all text-left ${filterPriority === 'high' ? 'bg-red-600 border-red-600 shadow-md' : 'bg-red-50 border-red-200 hover:shadow-sm'}`}>
+                            <div className={`text-2xl font-bold ${filterPriority === 'high' ? 'text-white' : 'text-red-700'}`}>{stats.high}</div>
+                            <div className={`text-xs mt-1 font-medium ${filterPriority === 'high' ? 'text-red-100' : 'text-red-600'}`}>High Priority</div>
+                        </button>
+                        <button onClick={() => setFilterPriority(filterPriority === 'medium' ? 'all' : 'medium')}
+                            className={`p-4 rounded-xl border cursor-pointer transition-all text-left ${filterPriority === 'medium' ? 'bg-amber-500 border-amber-500 shadow-md' : 'bg-amber-50 border-amber-200 hover:shadow-sm'}`}>
+                            <div className={`text-2xl font-bold ${filterPriority === 'medium' ? 'text-white' : 'text-amber-700'}`}>{stats.medium}</div>
+                            <div className={`text-xs mt-1 font-medium ${filterPriority === 'medium' ? 'text-amber-100' : 'text-amber-600'}`}>Medium Priority</div>
+                        </button>
+                        <button onClick={() => setFilterPriority(filterPriority === 'low' ? 'all' : 'low')}
+                            className={`p-4 rounded-xl border cursor-pointer transition-all text-left ${filterPriority === 'low' ? 'bg-green-600 border-green-600 shadow-md' : 'bg-green-50 border-green-200 hover:shadow-sm'}`}>
+                            <div className={`text-2xl font-bold ${filterPriority === 'low' ? 'text-white' : 'text-green-700'}`}>{stats.low}</div>
+                            <div className={`text-xs mt-1 font-medium ${filterPriority === 'low' ? 'text-green-100' : 'text-green-600'}`}>Low Priority</div>
+                        </button>
+                        <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
                             <div className="text-2xl font-bold text-purple-700">{stats.late}</div>
-                            <div className="text-xs text-purple-600 mt-1">Late Submissions</div>
+                            <div className="text-xs text-purple-600 mt-1 font-medium">Late Submissions</div>
                         </div>
-                        <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-                            <div className="text-2xl font-bold text-orange-700">{stats.flagged}</div>
-                            <div className="text-xs text-orange-600 mt-1">Plagiarism Flagged</div>
+                        <div className={`p-4 rounded-xl border ${stats.flagged > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+                            <div className={`text-2xl font-bold ${stats.flagged > 0 ? 'text-red-700' : 'text-gray-500'}`}>{stats.flagged}</div>
+                            <div className={`text-xs mt-1 font-medium ${stats.flagged > 0 ? 'text-red-600' : 'text-gray-400'}`}>Plagiarism Flagged</div>
                         </div>
                     </>
                 )}
@@ -269,18 +272,18 @@ export default function LecturerGradingQueuePage() {
                 {loading ? (
                     [1, 2, 3].map((i) => <Skeleton key={i} className="h-48" />)
                 ) : filteredQueue.length === 0 ? (
-                    <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-                        <CheckCircle2 size={64} className="mx-auto text-green-500 mb-4" />
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">All Caught Up! 🎉</h3>
-                        <p className="text-gray-500">
+                    <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+                        <CheckCircle2 size={56} className="mx-auto text-green-500 mb-4" />
+                        <h3 className="text-xl font-bold text-gray-900 mb-2">All Caught Up!</h3>
+                        <p className="text-gray-500 text-sm">
                             {queue.length === 0
-                                ? 'No submissions pending grading.'
+                                ? 'No submissions are pending grading right now.'
                                 : 'No submissions match your current filters.'}
                         </p>
                         {queue.length > 0 && (
                             <button
-                                onClick={() => { setSearchQuery(''); setFilterPriority('all'); setFilterModule('all'); }}
-                                className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                onClick={() => { setSearchQuery(''); setFilterPriority('all'); }}
+                                className="mt-4 px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium cursor-pointer"
                             >
                                 Clear Filters
                             </button>
@@ -290,12 +293,12 @@ export default function LecturerGradingQueuePage() {
                     filteredQueue.map((item) => (
                         <div
                             key={item.id}
-                            className={`bg-white rounded-lg shadow-sm border-2 p-6 hover:shadow-lg transition-all cursor-pointer ${
+                            className={`bg-white rounded-xl shadow-sm border-2 p-6 hover:shadow-lg transition-all cursor-pointer group ${
                                 item.priority === 'high'
-                                    ? 'border-red-200 bg-red-50/30'
+                                    ? 'border-red-300 bg-red-50/30 hover:border-red-400'
                                     : item.priority === 'medium'
-                                    ? 'border-amber-200 bg-amber-50/30'
-                                    : 'border-gray-200'
+                                    ? 'border-amber-300 bg-amber-50/20 hover:border-amber-400'
+                                    : 'border-gray-200 hover:border-blue-200'
                             }`}
                             onClick={() => router.push(`/submissions/lecturer/grading/${item.id}`)}
                         >
@@ -399,9 +402,9 @@ export default function LecturerGradingQueuePage() {
                                 <div className="ml-4 flex flex-col items-end gap-3">
                                     <button
                                         onClick={(e) => { e.stopPropagation(); router.push(`/submissions/lecturer/grading/${item.id}`); }}
-                                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 shadow-lg"
+                                        className="px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 active:bg-blue-800 transition-all font-semibold flex items-center gap-2 shadow-md hover:shadow-lg group-hover:bg-blue-700"
                                     >
-                                        <Edit size={18} /> Start Grading
+                                        <Edit size={16} /> Grade
                                     </button>
                                     <button
                                         onClick={(e) => { e.stopPropagation(); router.push(`/submissions/lecturer/submissions`); }}
