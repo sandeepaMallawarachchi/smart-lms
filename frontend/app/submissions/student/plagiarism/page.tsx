@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Shield,
@@ -73,21 +73,17 @@ function SkeletonCard() {
 export default function PlagiarismReportsPage() {
     const router = useRouter();
     const [filterStatus, setFilterStatus] = useState<'all' | SeverityStatus>('all');
-    const [studentId, setStudentId] = useState<string | null>(null);
-
-    // Decode student ID from JWT
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
+    const [studentId] = useState<string | null>(() => {
+        if (typeof window === 'undefined') return null;
         try {
             const token = localStorage.getItem('authToken');
-            if (token) {
-                const payload = JSON.parse(atob(token.split('.')[1]));
-                setStudentId(payload.userId ?? payload.sub ?? null);
-            }
+            if (!token) return null;
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.userId ?? payload.sub ?? null;
         } catch {
-            setStudentId(null);
+            return null;
         }
-    }, []);
+    });
 
     const { data: submissions, loading, error, refetch } = useSubmissions(studentId);
 
