@@ -407,19 +407,19 @@ function _mapTaskFull(t: _RawTask): AssignmentWithQuestions {
  */
 export const projectsAndTasksService = {
     /** Student: all projects for enrolled courses (JWT identifies the student). */
-    async getStudentProjects(): Promise<Assignment[]> {
+    async getStudentProjects(): Promise<AssignmentWithQuestions[]> {
         const res = await apiRequest<{ data: { projects: _RawProject[] } }>(
             '/api/projects-and-tasks/student/projects'
         );
-        return (res.data?.projects ?? []).map(_mapProject);
+        return (res.data?.projects ?? []).map(_mapProjectFull);
     },
 
     /** Student: all tasks for enrolled courses. */
-    async getStudentTasks(): Promise<Assignment[]> {
+    async getStudentTasks(): Promise<AssignmentWithQuestions[]> {
         const res = await apiRequest<{ data: { tasks: _RawTask[] } }>(
             '/api/projects-and-tasks/student/tasks'
         );
-        return (res.data?.tasks ?? []).map(_mapTask);
+        return (res.data?.tasks ?? []).map(_mapTaskFull);
     },
 
     /** Lecturer: all projects for a specific course. */
@@ -683,10 +683,9 @@ export const plagiarismService = {
  * Fetch a single assignment by ID and return it with questions[].
  *
  * Resolution order:
- *  1. Try the project endpoint (mainTasks → Question[])
- *  2. Try the task endpoint (subtasks → Question[])
- *  3. Fall back to the submission-management-service assignments endpoint
- *     (questions[] will be empty — legacy / non-P&T assignments)
+ *  1. Try the single-item project endpoint (mainTasks → Question[])
+ *  2. Try the single-item task endpoint (subtasks → Question[])
+ *  3. Fetch full student P&T lists and find by id (no port 8081 required)
  */
 export async function getAssignmentWithFallback(id: string): Promise<AssignmentWithQuestions> {
     // 1. Try as a project
@@ -700,10 +699,16 @@ export async function getAssignmentWithFallback(id: string): Promise<AssignmentW
     try {
         return await projectsAndTasksService.getTaskById(id);
     } catch {
-        // not a task — fall back to legacy
+        // not a task — search lists
     }
 
-    // 3. Legacy submission-management-service assignment
-    const assignment = await submissionService.getAssignment(id);
-    return { ...assignment, questions: [] };
+    // 3. Fetch student P&T lists and find by id
+    const [projects, tasks] = await Promise.all([
+        projectsAndTasksService.getStudentProjects().catch(() => [] as AssignmentWithQuestions[]),
+        projectsAndTasksService.getStudentTasks().catch(() => [] as AssignmentWithQuestions[]),
+    ]);
+    const found = [...projects, ...tasks].find((a) => a.id === id);
+    if (found) return found;
+
+    throw new Error(`Assignment "${id}" not found`);
 }

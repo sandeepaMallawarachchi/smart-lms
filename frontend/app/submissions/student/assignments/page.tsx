@@ -77,6 +77,7 @@ export default function StudentAssignmentsPage() {
     const router = useRouter();
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<'all' | 'OPEN' | 'CLOSED'>('all');
+    const [filterType, setFilterType] = useState<'all' | 'project' | 'task'>('all');
 
     const { data: assignments, loading, error, refetch } = useAssignments();
 
@@ -87,7 +88,8 @@ export default function StudentAssignmentsPage() {
             a.moduleCode.toLowerCase().includes(q) ||
             (a.moduleName ?? '').toLowerCase().includes(q);
         const matchesStatus = filterStatus === 'all' || a.status === filterStatus;
-        return matchesSearch && matchesStatus;
+        const matchesType   = filterType === 'all' || a.assignmentType === filterType;
+        return matchesSearch && matchesStatus && matchesType;
     });
 
     const stats = {
@@ -102,7 +104,7 @@ export default function StudentAssignmentsPage() {
             <div className="flex items-start justify-between mb-8">
                 <div>
                     <h1 className="text-4xl font-bold text-gray-900 mb-2">My Assignments</h1>
-                    <p className="text-gray-600">All assignments and exams for your enrolled modules</p>
+                    <p className="text-gray-600">All projects and tasks assigned to you</p>
                 </div>
                 <button
                     onClick={() => refetch()}
@@ -137,12 +139,21 @@ export default function StudentAssignmentsPage() {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                         <input
                             type="text"
-                            placeholder="Search assignments or modules…"
+                            placeholder="Search projects, tasks or modules…"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                         />
                     </div>
+                    <select
+                        value={filterType}
+                        onChange={(e) => setFilterType(e.target.value as 'all' | 'project' | 'task')}
+                        className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                        <option value="all">All Types</option>
+                        <option value="project">Projects</option>
+                        <option value="task">Tasks</option>
+                    </select>
                     <select
                         value={filterStatus}
                         onChange={(e) => setFilterStatus(e.target.value as 'all' | 'OPEN' | 'CLOSED')}
@@ -191,6 +202,16 @@ export default function StudentAssignmentsPage() {
                                             <div className="flex flex-wrap items-center gap-2 mb-2">
                                                 <h3 className="text-lg font-semibold text-gray-900">{assignment.title}</h3>
                                                 <StatusBadge status={assignment.status} />
+                                                {assignment.assignmentType === 'project' && (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                                        Project
+                                                    </span>
+                                                )}
+                                                {assignment.assignmentType === 'task' && (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
+                                                        Task
+                                                    </span>
+                                                )}
                                             </div>
                                             <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
                                                 <BookOpen size={16} />

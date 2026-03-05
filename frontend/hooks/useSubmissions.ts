@@ -333,25 +333,87 @@ export function useAssignments(params?: {
                 const role = typeof window !== 'undefined'
                     ? localStorage.getItem('userRole')
                     : null;
+                const token = typeof window !== 'undefined'
+                    ? localStorage.getItem('authToken')
+                    : null;
+
+                // Extract userId from JWT (used as lecturerId for lecturer endpoints)
+                let jwtUserId: string | null = null;
+                if (token) {
+                    try {
+                        const payload = JSON.parse(atob(token.split('.')[1]));
+                        jwtUserId = payload.userId ?? payload.sub ?? null;
+                    } catch { /* ignore */ }
+                }
 
                 let data: Assignment[];
 
                 if (role === 'student') {
-                    // Fetch projects + tasks in parallel from the student endpoints
+                    // Student: fetch projects + tasks in parallel from student-specific endpoints
                     const [projects, tasks] = await Promise.all([
                         projectsAndTasksService.getStudentProjects(),
                         projectsAndTasksService.getStudentTasks(),
                     ]);
                     data = [...projects, ...tasks];
-                } else if (lecturerId && courseId) {
-                    // Fetch projects + tasks for a specific course (lecturer view)
-                    const [projects, tasks] = await Promise.all([
-                        projectsAndTasksService.getLecturerProjects(courseId, lecturerId),
-                        projectsAndTasksService.getLecturerTasks(courseId, lecturerId),
-                    ]);
-                    data = [...projects, ...tasks];
+
+                } else if (role === 'lecture') {
+                    // Lecturer: resolve lecturerId from param or JWT
+                    const resolvedLecturerId = lecturerId ?? jwtUserId;
+
+                    if (resolvedLecturerId && courseId) {
+                        // Explicit courseId provided — fetch just that course
+                        const [projects, tasks] = await Promise.all([
+                            projectsAndTasksService.getLecturerProjects(courseId, resolvedLecturerId),
+                            projectsAndTasksService.getLecturerTasks(courseId, resolvedLecturerId),
+                        ]);
+                        data = [...projects, ...tasks];
+
+                    } else if (resolvedLecturerId) {
+                        // No explicit courseId — auto-fetch all courses for this lecturer
+                        const coursesRes = await fetch('/api/lecturer/courses', {
+                            headers: token ? { Authorization: `Bearer ${token}` } : {},
+                        });
+
+                        if (coursesRes.ok) {
+                            const json = await coursesRes.json();
+                            const courses: Array<{ _id: unknown }> = json.data?.courses ?? [];
+
+                            // Fetch projects + tasks for every course in parallel
+                            const allResults = await Promise.all(
+                                courses.map(async (c) => {
+                                    const cid = String(
+                                        c._id && typeof c._id === 'object'
+                                            ? (c._id as { toString(): string }).toString()
+                                            : c._id
+                                    );
+                                    try {
+                                        const [p, t] = await Promise.all([
+                                            projectsAndTasksService.getLecturerProjects(cid, resolvedLecturerId),
+                                            projectsAndTasksService.getLecturerTasks(cid, resolvedLecturerId),
+                                        ]);
+                                        return [...p, ...t] as Assignment[];
+                                    } catch {
+                                        return [] as Assignment[];
+                                    }
+                                })
+                            );
+                            data = allResults.flat();
+                        } else {
+                            // Courses endpoint failed — fall back to legacy
+                            data = await submissionService.getAssignments(
+                                status || moduleCode ? { status, moduleCode } : undefined
+                            );
+                        }
+
+                    } else {
+                        // No userId available — legacy fallback
+                        data = await submissionService.getAssignments(
+                            status || moduleCode ? { status, moduleCode } : undefined
+                        );
+                    }
+
                 } else {
-                    // No role/params available — try legacy assignments endpoint
+                    // Unknown role — try legacy assignments endpoint (port 8081)
                     data = await submissionService.getAssignments(
                         status || moduleCode ? { status, moduleCode } : undefined
                     );

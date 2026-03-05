@@ -68,17 +68,20 @@ export function useModuleConfig(userRole: UserRole) {
             let submissionCount = 0
             let dueSoonCount = 0
 
-            // Fetch assignments from own API
+            // Fetch assignments from P&T student endpoints (projects + tasks)
             try {
-              const res = await fetch(`${SUBMISSION_API}/api/assignments`, { headers })
-              if (res.ok) {
-                const data = await res.json()
-                const items: Array<{ status?: string }> = Array.isArray(data)
-                  ? data
-                  : (data?.data ?? data?.content ?? [])
-                assignmentCount = items.length
-                dueSoonCount = items.filter(a => a.status === 'OPEN' || a.status === 'ACTIVE').length
-              }
+              const [projRes, taskRes] = await Promise.all([
+                fetch('/api/projects-and-tasks/student/projects', { headers }),
+                fetch('/api/projects-and-tasks/student/tasks', { headers }),
+              ])
+              const projects = projRes.ok ? ((await projRes.json())?.data?.projects ?? []) : []
+              const tasks    = taskRes.ok ? ((await taskRes.json())?.data?.tasks    ?? []) : []
+              const items: Array<{ deadline?: string }> = [...projects, ...tasks]
+              assignmentCount = items.length
+              dueSoonCount = items.filter(a => {
+                if (!a.deadline) return true
+                return new Date(a.deadline).getTime() > Date.now()
+              }).length
             } catch { /* silent */ }
 
             // Fetch student submissions from own API

@@ -27,6 +27,7 @@ function Skeleton({ className = '' }: { className?: string }) {
 }
 
 type StatusFilter = 'all' | 'OPEN' | 'CLOSED' | 'DRAFT';
+type TypeFilter  = 'all' | 'project' | 'task';
 
 function statusBadge(status: Assignment['status']) {
     switch (status) {
@@ -57,6 +58,7 @@ export default function LecturerManageAssignmentsPage() {
     const router = useRouter();
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<StatusFilter>('all');
+    const [filterType, setFilterType] = useState<TypeFilter>('all');
 
     const { data: assignments, loading, error, refetch } = useAssignments();
 
@@ -69,9 +71,10 @@ export default function LecturerManageAssignmentsPage() {
                 a.moduleCode.toLowerCase().includes(q) ||
                 (a.moduleName ?? '').toLowerCase().includes(q);
             const matchesStatus = filterStatus === 'all' || a.status === filterStatus;
-            return matchesSearch && matchesStatus;
+            const matchesType   = filterType === 'all' || a.assignmentType === filterType;
+            return matchesSearch && matchesStatus && matchesType;
         });
-    }, [assignments, searchQuery, filterStatus]);
+    }, [assignments, searchQuery, filterStatus, filterType]);
 
     const stats = useMemo(() => {
         const all = assignments ?? [];
@@ -89,7 +92,7 @@ export default function LecturerManageAssignmentsPage() {
             <div className="flex items-start justify-between mb-8">
                 <div>
                     <h1 className="text-4xl font-bold text-gray-900 mb-2">Manage Assignments</h1>
-                    <p className="text-gray-600">Create, edit, and organize all your assignments</p>
+                    <p className="text-gray-600">All projects and tasks across your courses</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <button
@@ -148,14 +151,23 @@ export default function LecturerManageAssignmentsPage() {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                         <input
                             type="text"
-                            placeholder="Search assignments, modules…"
+                            placeholder="Search projects, tasks, modules…"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         <Filter size={18} className="text-gray-400" />
+                        <select
+                            value={filterType}
+                            onChange={(e) => setFilterType(e.target.value as TypeFilter)}
+                            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="all">All Types</option>
+                            <option value="project">Projects</option>
+                            <option value="task">Tasks</option>
+                        </select>
                         <select
                             value={filterStatus}
                             onChange={(e) => setFilterStatus(e.target.value as StatusFilter)}
@@ -210,6 +222,16 @@ export default function LecturerManageAssignmentsPage() {
                                                 <div className="flex items-center gap-2 flex-wrap mb-1">
                                                     <h3 className="text-lg font-semibold text-gray-900">{assignment.title}</h3>
                                                     {statusBadge(assignment.status)}
+                                                    {assignment.assignmentType === 'project' && (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                                            Project
+                                                        </span>
+                                                    )}
+                                                    {assignment.assignmentType === 'task' && (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
+                                                            Task
+                                                        </span>
+                                                    )}
                                                     {isOverdue && (
                                                         <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">Overdue</span>
                                                     )}
