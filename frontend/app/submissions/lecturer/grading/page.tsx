@@ -20,6 +20,7 @@ import {
     TrendingUp,
 } from 'lucide-react';
 import { useAllSubmissions } from '@/hooks/useSubmissions';
+import { useLecturerCourses } from '@/hooks/useLecturerCourses';
 import type { Submission } from '@/types/submission.types';
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -58,6 +59,7 @@ export default function LecturerGradingQueuePage() {
     const [sortBy, setSortBy] = useState<'date' | 'priority' | 'plagiarism' | 'ai'>('priority');
 
     const { data: allSubmissions, loading, error, refetch } = useAllSubmissions();
+    const { courses } = useLecturerCourses();
 
     // Only queue submissions that need grading
     const queue = useMemo((): (Submission & { priority: Priority })[] => {
@@ -65,13 +67,6 @@ export default function LecturerGradingQueuePage() {
             .filter((s) => ['SUBMITTED', 'PENDING_REVIEW', 'FLAGGED'].includes(s.status))
             .map((s) => ({ ...s, priority: getPriority(s) }));
     }, [allSubmissions]);
-
-    // Distinct modules
-    const modules = useMemo(() => {
-        const seen = new Set<string>();
-        queue.forEach((s) => { if (s.moduleCode) seen.add(s.moduleCode); });
-        return Array.from(seen).sort();
-    }, [queue]);
 
     // Filter + sort
     const filteredQueue = useMemo(() => {
@@ -82,7 +77,8 @@ export default function LecturerGradingQueuePage() {
                 (item.studentRegistrationId ?? '').toLowerCase().includes(q) ||
                 (item.assignmentTitle ?? '').toLowerCase().includes(q);
             const matchesPriority = filterPriority === 'all' || item.priority === filterPriority;
-            const matchesModule = filterModule === 'all' || item.moduleCode === filterModule;
+            const matchesModule = filterModule === 'all' ||
+                item.moduleName === filterModule || item.moduleCode === filterModule;
             return matchesSearch && matchesPriority && matchesModule;
         });
 
@@ -264,8 +260,8 @@ export default function LecturerGradingQueuePage() {
                             className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                             <option value="all">All Modules</option>
-                            {modules.map((m) => (
-                                <option key={m} value={m}>{m}</option>
+                            {courses.map((c) => (
+                                <option key={c.id} value={c.name}>{c.name}</option>
                             ))}
                         </select>
                     </div>

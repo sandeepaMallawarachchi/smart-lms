@@ -217,7 +217,8 @@ export default function MySubmissionsPage() {
     // so the "Start Answering" button shows "Continue" for in-progress work.
     const draftAssignmentIds = React.useMemo<Set<string>>(() => {
         const set = new Set<string>();
-        (submissions ?? []).forEach((s) => {
+        const safeSubmissions = Array.isArray(submissions) ? submissions : [];
+        safeSubmissions.forEach((s) => {
             if (s.status === 'DRAFT') set.add(s.assignmentId);
         });
         return set;
@@ -225,14 +226,14 @@ export default function MySubmissionsPage() {
 
     // ── Filtered list
     const filtered = useMemo(() => {
-        if (!submissions) return [];
-        if (filter === 'all') return submissions;
-        return submissions.filter((s) => s.status === filter);
+        const safeSubmissions = Array.isArray(submissions) ? submissions : [];
+        if (filter === 'all') return safeSubmissions;
+        return safeSubmissions.filter((s) => s.status === filter);
     }, [submissions, filter]);
 
     // ── Computed stats
     const stats = useMemo(() => {
-        const list = submissions ?? [];
+        const list = Array.isArray(submissions) ? submissions : [];
         const graded = list.filter((s) => s.status === 'GRADED');
         return {
             total: list.length,
@@ -252,8 +253,8 @@ export default function MySubmissionsPage() {
 
     // ── Filter button counts
     const countFor = (f: Filter) => {
-        if (!submissions) return 0;
-        return f === 'all' ? submissions.length : submissions.filter((s) => s.status === f).length;
+        const safeSubmissions = Array.isArray(submissions) ? submissions : [];
+        return f === 'all' ? safeSubmissions.length : safeSubmissions.filter((s) => s.status === f).length;
     };
 
     return (

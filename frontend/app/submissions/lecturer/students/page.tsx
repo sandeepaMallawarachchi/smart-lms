@@ -13,6 +13,7 @@ import {
     Users,
 } from 'lucide-react';
 import { useAllSubmissions } from '@/hooks/useSubmissions';
+import { useLecturerCourses } from '@/hooks/useLecturerCourses';
 import type { Submission } from '@/types/submission.types';
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -71,6 +72,7 @@ export default function LecturerStudentInsightsPage() {
     const [sortBy, setSortBy] = useState<'name' | 'grade' | 'plagiarism' | 'submissions'>('grade');
 
     const { data: submissions, loading, error, refetch } = useAllSubmissions();
+    const { courses } = useLecturerCourses();
 
     // ── Build student summaries
     const students = useMemo((): StudentSummary[] => {
@@ -130,12 +132,6 @@ export default function LecturerStudentInsightsPage() {
         });
     }, [submissions]);
 
-    // Distinct modules
-    const modules = useMemo(() => {
-        const seen = new Set<string>();
-        students.forEach((s) => s.modules.forEach((m) => seen.add(m)));
-        return Array.from(seen).sort();
-    }, [students]);
 
     // Filter + sort
     const filtered = useMemo(() => {
@@ -257,7 +253,7 @@ export default function LecturerStudentInsightsPage() {
                             className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                             <option value="all">All Modules</option>
-                            {modules.map((m) => <option key={m} value={m}>{m}</option>)}
+                            {courses.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
                         </select>
                         <select
                             value={sortBy}

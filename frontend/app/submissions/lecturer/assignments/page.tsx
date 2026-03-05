@@ -12,7 +12,6 @@ import {
     Eye,
     FileText,
     Filter,
-    Plus,
     RefreshCw,
     Search,
     Users,
@@ -96,22 +95,14 @@ export default function LecturerManageAssignmentsPage() {
                     <h1 className="text-4xl font-bold text-gray-900 mb-2">Manage Assignments</h1>
                     <p className="text-gray-600">All projects and tasks across your courses</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={refetch}
-                        disabled={loading}
-                        className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50"
-                    >
-                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                        Refresh
-                    </button>
-                    <button
-                        onClick={() => router.push('/submissions/lecturer/assignments/create')}
-                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 shadow-lg"
-                    >
-                        <Plus size={18} /> Create Assignment
-                    </button>
-                </div>
+                <button
+                    onClick={refetch}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50"
+                >
+                    <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                    Refresh
+                </button>
             </div>
 
             {error && (
@@ -194,14 +185,6 @@ export default function LecturerManageAssignmentsPage() {
                         <p className="text-gray-500 text-lg">
                             {assignments?.length === 0 ? 'No assignments yet' : 'No assignments match your filters'}
                         </p>
-                        {assignments?.length === 0 && (
-                            <button
-                                onClick={() => router.push('/submissions/lecturer/assignments/create')}
-                                className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 mx-auto"
-                            >
-                                <Plus size={16} /> Create First Assignment
-                            </button>
-                        )}
                     </div>
                 ) : (
                     filtered.map((assignment) => {

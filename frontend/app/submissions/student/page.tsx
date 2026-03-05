@@ -72,8 +72,8 @@ export default function StudentDashboardPage() {
 
     // ── Computed stats
     const stats = useMemo(() => {
-        const subs = submissions ?? [];
-        const assgs = assignments ?? [];
+        const subs = Array.isArray(submissions) ? submissions : [];
+        const assgs = Array.isArray(assignments) ? assignments : [];
 
         const submittedIds = new Set(subs.map((s) => s.assignmentId));
         const graded = subs.filter((s) => s.status === 'GRADED');
@@ -115,7 +115,7 @@ export default function StudentDashboardPage() {
 
     // ── Recent submissions
     const recentSubmissions = useMemo(() => {
-        return [...(submissions ?? [])]
+        return [...(Array.isArray(submissions) ? submissions : [])]
             .sort((a, b) => {
                 const t = (s: Submission) =>
                     s.submittedAt ? new Date(s.submittedAt).getTime() : new Date(s.createdAt).getTime();
@@ -126,7 +126,7 @@ export default function StudentDashboardPage() {
 
     // ── Recent feedback (graded submissions = published grades)
     const recentFeedback = useMemo(() => {
-        return [...(submissions ?? [])]
+        return [...(Array.isArray(submissions) ? submissions : [])]
             .filter((s) => s.status === 'GRADED')
             .sort((a, b) => {
                 const t = (s: Submission) =>

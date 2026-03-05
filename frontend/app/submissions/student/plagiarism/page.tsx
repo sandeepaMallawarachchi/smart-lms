@@ -92,7 +92,7 @@ export default function PlagiarismReportsPage() {
     const { data: submissions, loading, error, refetch } = useSubmissions(studentId);
 
     // Only show submissions that have a plagiarism score
-    const reports = (submissions ?? []).filter((s) => s.plagiarismScore != null);
+    const reports = (Array.isArray(submissions) ? submissions : []).filter((s) => s.plagiarismScore != null);
 
     const filtered = reports.filter((s) => {
         if (filterStatus === 'all') return true;

@@ -87,10 +87,14 @@ async function apiRequest<T>(
 
 export const submissionService = {
     /** Get all submissions for the current student */
-    getStudentSubmissions(studentId: string): Promise<Submission[]> {
-        return apiRequest<Submission[]>(
+    async getStudentSubmissions(studentId: string): Promise<Submission[]> {
+        const res = await apiRequest<Submission[] | { data?: Submission[]; content?: Submission[] }>(
             `${SUBMISSION_API}/api/submissions?studentId=${encodeURIComponent(studentId)}`
         );
+        if (Array.isArray(res)) return res;
+        return (res as { data?: Submission[]; content?: Submission[] }).data
+            ?? (res as { data?: Submission[]; content?: Submission[] }).content
+            ?? [];
     },
 
     /** Get all submissions (lecturer view) */
