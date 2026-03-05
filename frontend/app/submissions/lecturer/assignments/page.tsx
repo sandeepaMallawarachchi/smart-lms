@@ -54,6 +54,8 @@ function statusBadge(status: Assignment['status']) {
 
 // ─── Page ─────────────────────────────────────────────────────
 
+const PAGE_LOAD_TIME = Date.now();
+
 export default function LecturerManageAssignmentsPage() {
     const router = useRouter();
     const [searchQuery, setSearchQuery] = useState('');
@@ -206,7 +208,7 @@ export default function LecturerManageAssignmentsPage() {
                         const submitted = assignment.submissionsCount ?? 0;
                         const graded = assignment.gradedCount ?? 0;
                         const dueDate = new Date(assignment.dueDate);
-                        const isOverdue = assignment.status === 'OPEN' && dueDate.getTime() < Date.now();
+                        const isOverdue = assignment.status === 'OPEN' && dueDate.getTime() < PAGE_LOAD_TIME;
 
                         return (
                             <div
