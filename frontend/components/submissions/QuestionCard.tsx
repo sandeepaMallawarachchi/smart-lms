@@ -66,7 +66,7 @@ export function QuestionCard({
     questionIndex,
 }: QuestionCardProps) {
 
-    console.debug('[QuestionCard] render — questionId:', question.id, '| index:', questionIndex);
+    console.debug('[QuestionCard] render — questionId:', question.id, '| index:', questionIndex, '| submissionId:', submissionId, '| initialAnswer.length:', (initialAnswer ?? '').length);
 
     // ── Hook: all debounced behaviour ─────────────────────────
     const {
@@ -92,6 +92,7 @@ export function QuestionCard({
     const handleTextChange = (newText: string) => {
         handleChange(newText);
         onAnswerChange(question.id, newText);
+        console.debug('[QuestionCard] handleTextChange — questionId:', question.id, '| chars:', newText.length);
     };
 
     // ── Auto-save status indicator ────────────────────────────
@@ -186,17 +187,15 @@ export function QuestionCard({
 
                     {/* ── Right: AI feedback panel (sticky on desktop) ── */}
                     <div className="lg:w-72 xl:w-80 flex-shrink-0">
-                        <div className="lg:sticky lg:top-4">
-                            {disabled ? (
-                                /* After submission — hide the panel to avoid confusion */
-                                <div className="rounded-lg border border-gray-100 bg-gray-50 p-4 text-center text-xs text-gray-400">
-                                    Submission locked — AI feedback is not available in review mode.
-                                </div>
-                            ) : (
-                                <LiveFeedbackPanel
-                                    feedback={liveFeedback}
-                                    loading={feedbackLoading}
-                                />
+                        <div className="lg:sticky lg:top-4 flex flex-col gap-3">
+                            <LiveFeedbackPanel
+                                feedback={liveFeedback}
+                                loading={feedbackLoading}
+                            />
+                            {disabled && liveFeedback && (
+                                <p className="text-xs text-gray-400 text-center">
+                                    AI feedback from your last submission
+                                </p>
                             )}
                         </div>
                     </div>

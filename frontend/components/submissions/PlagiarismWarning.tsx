@@ -33,7 +33,10 @@ export interface PlagiarismWarningProps {
 
 export function PlagiarismWarning({ result, loading }: PlagiarismWarningProps) {
 
-    console.debug('[PlagiarismWarning] render — severity:', result?.severity, '| score:', result?.similarityScore);
+    console.debug('[PlagiarismWarning] render — loading:', loading,
+        '| severity:', result?.severity ?? 'n/a',
+        '| score:', result?.similarityScore ?? 'n/a', '%',
+        '| flagged:', result?.flagged ?? false);
 
     // Render nothing while loading or before any result arrives.
     if (loading || !result) return null;

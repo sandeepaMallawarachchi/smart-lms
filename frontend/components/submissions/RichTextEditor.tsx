@@ -112,11 +112,11 @@ export function RichTextEditor({
         (e: React.ChangeEvent<HTMLTextAreaElement>) => {
             const newText = e.target.value;
             const words = countWords(newText);
-            console.debug('[RichTextEditor] onChange — words:', words);
+            console.debug('[RichTextEditor] onChange — words:', words, '| chars:', newText.length, '| expectedWordCount:', expectedWordCount ?? '(none)');
             onChange(newText);
             // Height sync happens via the useEffect above (value change).
         },
-        [onChange]
+        [onChange, expectedWordCount]
     );
 
     // ── Derived display values ────────────────────────────────

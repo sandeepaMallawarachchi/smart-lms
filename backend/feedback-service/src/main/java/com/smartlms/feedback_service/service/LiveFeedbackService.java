@@ -44,6 +44,12 @@ public class LiveFeedbackService {
         log.info("Generating live feedback for questionId={} textLength={}",
                 request.getQuestionId(), request.getAnswerText().length());
 
+        // Pre-validate: detect gibberish before calling the AI
+        if (isGibberish(request.getAnswerText())) {
+            log.info("Gibberish detected for questionId={} — returning zero scores", request.getQuestionId());
+            return ApiResponse.success("Gibberish detected", buildGibberishResponse(request.getQuestionId()));
+        }
+
         try {
             String prompt = buildPrompt(request);
             String rawResponse = huggingFaceService.generateCompletion(prompt);
@@ -57,10 +63,57 @@ public class LiveFeedbackService {
             return ApiResponse.success("Live feedback generated", feedback);
 
         } catch (Exception e) {
-            log.warn("Live feedback AI call failed for questionId={}: {} — returning fallback",
-                    request.getQuestionId(), e.getMessage());
-            return ApiResponse.success("Feedback generated (fallback)", buildFallback(request));
+            log.warn("Live feedback AI call failed for questionId={}: {}", request.getQuestionId(), e.getMessage());
+            throw new RuntimeException("AI feedback service unavailable", e);
         }
+    }
+
+    // ── Gibberish detection ───────────────────────────────────────────────────
+
+    /**
+     * Heuristic gibberish detector.
+     * A word is flagged as gibberish if it has no vowels OR has 5+ consecutive consonants.
+     * If more than 40 % of words are gibberish, the whole text is classified as gibberish.
+     */
+    private boolean isGibberish(String text) {
+        if (text == null || text.isBlank()) return true;
+        String[] words = text.trim().split("\\s+");
+        if (words.length == 0) return true;
+
+        int gibberishCount = 0;
+        for (String word : words) {
+            String cleaned = word.toLowerCase().replaceAll("[^a-z]", "");
+            if (cleaned.isEmpty()) continue;
+            boolean hasVowel = cleaned.matches(".*[aeiou].*");
+            boolean hasLongConsonantCluster = cleaned.matches(".*[^aeiou]{5,}.*");
+            if (!hasVowel || hasLongConsonantCluster) gibberishCount++;
+        }
+
+        double gibberishRatio = (double) gibberishCount / words.length;
+        int pct = (int) Math.round(gibberishRatio * 100);
+        boolean isGibberish = gibberishRatio > 0.40;
+        log.info("[LiveFeedback] Gibberish check: {}/{} words flagged ({}%) — result={}",
+                gibberishCount, words.length, pct, isGibberish ? "GIBBERISH" : "OK");
+        return isGibberish;
+    }
+
+    /** Zero-score response returned when gibberish text is detected. */
+    private LiveFeedbackResponse buildGibberishResponse(String questionId) {
+        return LiveFeedbackResponse.builder()
+                .questionId(questionId)
+                .grammarScore(0.0)
+                .clarityScore(0.0)
+                .completenessScore(0.0)
+                .relevanceScore(0.0)
+                .strengths(List.of("None detected — no meaningful content found."))
+                .improvements(List.of(
+                        "Your response appears to contain random text or gibberish.",
+                        "Write in complete sentences using proper English words."))
+                .suggestions(List.of(
+                        "Re-read the question carefully and write a meaningful answer.",
+                        "Use real words and explain your understanding of the topic."))
+                .generatedAt(LocalDateTime.now().toString())
+                .build();
     }
 
     // ── Prompt construction ───────────────────────────────────────────────────
@@ -79,7 +132,13 @@ public class LiveFeedbackService {
                 ? "Question: " + request.getQuestionPrompt() + "\n"
                 : "";
 
-        return "[INST] You are a helpful academic writing assistant. Analyze this student answer briefly.\n"
+        return "You are a strict academic writing evaluator. Analyze this student answer CRITICALLY and HONESTLY.\n"
+                + "IMPORTANT RULES:\n"
+                + "- If the answer contains gibberish, random letters, or no real words: ALL scores must be 0.\n"
+                + "- If the answer does not address the question at all: RELEVANCE must be 0.\n"
+                + "- If grammar is very poor or text is incoherent: GRAMMAR must be 0-2.\n"
+                + "- Only give scores above 5 if the answer genuinely demonstrates understanding.\n"
+                + "- Be strict. A poor answer should receive low scores.\n\n"
                 + questionContext
                 + "Student Answer: " + request.getAnswerText() + "\n"
                 + completenessHint + "\n\n"
@@ -88,13 +147,12 @@ public class LiveFeedbackService {
                 + "CLARITY: <score 0-10>\n"
                 + "COMPLETENESS: <score 0-10>\n"
                 + "RELEVANCE: <score 0-10>\n"
-                + "STRENGTH1: <one strength>\n"
-                + "STRENGTH2: <one strength>\n"
-                + "IMPROVEMENT1: <one area to improve>\n"
-                + "IMPROVEMENT2: <one area to improve>\n"
-                + "SUGGESTION1: <one specific suggestion>\n"
-                + "SUGGESTION2: <one specific suggestion>\n"
-                + "[/INST]";
+                + "STRENGTH1: <one genuine strength, or 'None detected' if the answer is poor>\n"
+                + "STRENGTH2: <one genuine strength, or 'None detected' if the answer is poor>\n"
+                + "IMPROVEMENT1: <one specific area to improve>\n"
+                + "IMPROVEMENT2: <one specific area to improve>\n"
+                + "SUGGESTION1: <one actionable suggestion>\n"
+                + "SUGGESTION2: <one actionable suggestion>";
     }
 
     // ── Response parsing ──────────────────────────────────────────────────────
@@ -107,20 +165,34 @@ public class LiveFeedbackService {
     private LiveFeedbackResponse parseResponse(String raw, String questionId) {
         // Remove [INST]...[/INST] wrapper if the model echoed it
         String text = raw.replaceAll("(?s)\\[INST\\].*?\\[/INST\\]", "").trim();
+        log.debug("[LiveFeedback] Parsing response for questionId={} | cleanedLen={}",
+                questionId, text.length());
 
         double grammar       = extractScore(text, "GRAMMAR");
         double clarity       = extractScore(text, "CLARITY");
         double completeness  = extractScore(text, "COMPLETENESS");
         double relevance     = extractScore(text, "RELEVANCE");
 
+        log.info("[LiveFeedback] Parsed scores for questionId={} | grammar={} clarity={} completeness={} relevance={}",
+                questionId, grammar, clarity, completeness, relevance);
+
         List<String> strengths    = extractLines(text, "STRENGTH");
         List<String> improvements = extractLines(text, "IMPROVEMENT");
         List<String> suggestions  = extractLines(text, "SUGGESTION");
 
         // Ensure lists are non-empty (fallback single item if parsing fails)
-        if (strengths.isEmpty())    strengths    = List.of("Answer addresses the question topic.");
-        if (improvements.isEmpty()) improvements = List.of("Consider expanding on key points.");
-        if (suggestions.isEmpty())  suggestions  = List.of("Review for grammar and clarity.");
+        if (strengths.isEmpty()) {
+            log.warn("[LiveFeedback] No STRENGTH lines parsed from response");
+            strengths = List.of("Answer addresses the question topic.");
+        }
+        if (improvements.isEmpty()) {
+            log.warn("[LiveFeedback] No IMPROVEMENT lines parsed from response");
+            improvements = List.of("Consider expanding on key points.");
+        }
+        if (suggestions.isEmpty()) {
+            log.warn("[LiveFeedback] No SUGGESTION lines parsed from response");
+            suggestions = List.of("Review for grammar and clarity.");
+        }
 
         return LiveFeedbackResponse.builder()
                 .questionId(questionId)
@@ -145,7 +217,7 @@ public class LiveFeedbackService {
                 return Math.min(10.0, Math.max(0.0, val));
             } catch (NumberFormatException ignored) { }
         }
-        return 6.0; // neutral fallback
+        return 0.0; // unknown — do not assume positive score
     }
 
     /** Extract numbered list items for a given prefix (e.g. STRENGTH1, STRENGTH2). */
@@ -165,8 +237,9 @@ public class LiveFeedbackService {
     // ── Fallback ──────────────────────────────────────────────────────────────
 
     /**
-     * Sensible default returned when the AI call fails or times out.
-     * Scores are moderate (6/10) so the UI renders without alarming the student.
+     * Returned when the AI call fails or times out.
+     * Only completeness (word count ratio) is estimated; all other scores are 0
+     * so the student does not receive misleading positive feedback.
      */
     private LiveFeedbackResponse buildFallback(LiveFeedbackRequest request) {
         int wordCount = request.getAnswerText().trim().split("\\s+").length;
@@ -175,13 +248,13 @@ public class LiveFeedbackService {
 
         return LiveFeedbackResponse.builder()
                 .questionId(request.getQuestionId())
-                .grammarScore(6.0)
-                .clarityScore(6.0)
+                .grammarScore(0.0)
+                .clarityScore(0.0)
                 .completenessScore(Math.round(completeness * 10.0) / 10.0)
-                .relevanceScore(6.0)
-                .strengths(List.of("You have started answering the question.", "Your answer shows engagement with the topic."))
-                .improvements(List.of("Consider expanding your answer with more detail.", "Review for grammar and spelling."))
-                .suggestions(List.of("Add specific examples to support your points.", "Ensure your answer directly addresses all parts of the question."))
+                .relevanceScore(0.0)
+                .strengths(List.of("AI analysis temporarily unavailable — scores are not available right now."))
+                .improvements(List.of("Continue writing; analysis will retry automatically.", "Ensure your answer addresses the question directly."))
+                .suggestions(List.of("Review your answer for grammar and clarity.", "Add specific details and examples to strengthen your response."))
                 .generatedAt(LocalDateTime.now().toString())
                 .build();
     }

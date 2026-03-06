@@ -138,12 +138,14 @@ export default function AnswerPage({
         async function load() {
             try {
                 setLoading(true);
+                console.debug('[AnswerPage] load START — assignmentId:', assignmentId, '| studentId:', sid);
 
                 // 1. Fetch assignment (with questions); falls back to sample data if API is down
                 const raw = await getAssignmentWithFallback(assignmentId);
                 // Cast — questions[] is returned by the backend but typed as optional
                 const asg = raw as AssignmentWithQuestions;
                 setAssignment(asg);
+                console.debug('[AnswerPage] Assignment loaded — title:', asg.title, '| questions:', asg.questions?.length ?? 0, '| type:', asg.assignmentType ?? '(none)', '| dueDate:', asg.dueDate ?? '(none)');
 
                 // 2. Get or create draft submission
                 const draft = await submissionService.getOrCreateDraftSubmission(
@@ -152,6 +154,11 @@ export default function AnswerPage({
                     sName,
                 );
                 setSubmissionId(draft.id);
+                console.debug('[AnswerPage] Draft submission — id:', draft.id, '| status:', draft.status);
+
+                if (!draft.id) {
+                    console.error('[AnswerPage] WARNING: draft.id is falsy — auto-save will be skipped! draft:', draft);
+                }
 
                 // 3. Pre-load saved answers
                 try {
@@ -163,13 +170,15 @@ export default function AnswerPage({
                         map[a.questionId] = a.answerText;
                     }
                     setAnswerMap(map);
-                } catch {
+                    console.debug('[AnswerPage] Pre-loaded', answers.length, 'saved answers for submissionId:', draft.id, '| questionIds:', answers.map(a => a.questionId));
+                } catch (ansErr) {
                     // No answers yet — that's fine
+                    console.debug('[AnswerPage] No saved answers (or fetch failed) for submissionId:', draft.id, '—', ansErr);
                 }
 
-                console.debug('[AnswerPage] Loaded — submissionId:', draft.id, '| questions:', asg.questions?.length ?? 0);
+                console.debug('[AnswerPage] Load COMPLETE — submissionId:', draft.id, '| questions:', asg.questions?.length ?? 0);
             } catch (err) {
-                console.error('[AnswerPage] Load failed:', err);
+                console.error('[AnswerPage] Load FAILED:', err);
                 setError('Could not load the assignment. Please try again.');
             } finally {
                 setLoading(false);
@@ -208,13 +217,17 @@ export default function AnswerPage({
     // ── Submit handler ────────────────────────────────────────
 
     async function handleSubmit() {
-        if (!submissionId) return;
+        if (!submissionId) {
+            console.error('[AnswerPage] handleSubmit called but submissionId is empty!');
+            return;
+        }
+        console.debug('[AnswerPage] handleSubmit — submissionId:', submissionId, '| answeredCount:', answeredCount, '/', questions.length, '| totalWords:', totalWords);
         setSubmitting(true);
         try {
             await submissionService.submitSubmission(submissionId);
             setSubmitDone(true);
             setShowConfirm(false);
-            console.debug('[AnswerPage] Submitted successfully — submissionId:', submissionId);
+            console.debug('[AnswerPage] Submit SUCCESS — submissionId:', submissionId);
             // Short delay so the user sees the success state before redirect.
             setTimeout(() => {
                 router.push('/submissions/student/my-submissions');

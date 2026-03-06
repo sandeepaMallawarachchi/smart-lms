@@ -50,6 +50,7 @@ async function apiRequest<T>(
     options: RequestInit = {}
 ): Promise<T> {
     const token = getToken();
+    const method = options.method ?? 'GET';
 
     const headers: Record<string, string> = {
         ...(options.headers as Record<string, string>),
@@ -64,15 +65,20 @@ async function apiRequest<T>(
         headers['Content-Type'] = 'application/json';
     }
 
+    console.debug(`[apiRequest] ${method} ${url}`);
+
     const response = await fetch(url, { ...options, headers });
+
+    console.debug(`[apiRequest] ${method} ${url} → HTTP ${response.status}`);
 
     if (!response.ok) {
         let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         try {
             const errorBody = await response.json();
+            console.error(`[apiRequest] ERROR ${method} ${url} → HTTP ${response.status}`, errorBody);
             errorMessage = errorBody.message ?? errorMessage;
         } catch {
-            // ignore parse error
+            console.error(`[apiRequest] ERROR ${method} ${url} → HTTP ${response.status} (no parseable body)`);
         }
         throw new Error(errorMessage);
     }
@@ -211,19 +217,41 @@ export const submissionService = {
         studentId: string,
         studentName: string = 'Student',
     ): Promise<Submission> {
+        console.debug('[submissionService] getOrCreateDraftSubmission — assignmentId:', assignmentId, '| studentId:', studentId);
+
         // Try to find an existing DRAFT
-        const existing = await apiRequest<Submission[] | { content: Submission[] }>(
+        // Backend returns ApiResponse<Page<Submission>> → { data: { content: Submission[] } }
+        const existing = await apiRequest<unknown>(
             `${SUBMISSION_API}/api/submissions?studentId=${encodeURIComponent(studentId)}&assignmentId=${encodeURIComponent(assignmentId)}`
         );
-        const list: Submission[] = Array.isArray(existing)
-            ? existing
-            : (existing as { content: Submission[] }).content ?? [];
+        console.debug('[submissionService] getOrCreateDraftSubmission — raw response type:', typeof existing, '| isArray:', Array.isArray(existing));
+
+        let list: Submission[] = [];
+        if (Array.isArray(existing)) {
+            list = existing as Submission[];
+        } else if (existing && typeof existing === 'object') {
+            const obj = existing as Record<string, unknown>;
+            const inner = obj.data ?? existing;
+            if (Array.isArray(inner)) {
+                list = inner as Submission[];
+            } else if (inner && typeof inner === 'object') {
+                const page = inner as Record<string, unknown>;
+                list = (page.content as Submission[]) ?? [];
+            }
+        }
+
+        console.debug('[submissionService] getOrCreateDraftSubmission — found', list.length, 'submissions; statuses:', list.map(s => s.status));
 
         const draft = list.find((s) => s.status === 'DRAFT');
-        if (draft) return draft;
+        if (draft) {
+            console.debug('[submissionService] getOrCreateDraftSubmission — reusing existing DRAFT id:', draft.id);
+            return draft;
+        }
 
-        // Create new draft
-        return apiRequest<Submission>(`${SUBMISSION_API}/api/submissions`, {
+        console.debug('[submissionService] getOrCreateDraftSubmission — no DRAFT found, creating new submission');
+
+        // Create new draft — backend returns ApiResponse<Submission> → { data: Submission }
+        const created = await apiRequest<unknown>(`${SUBMISSION_API}/api/submissions`, {
             method: 'POST',
             body: JSON.stringify({
                 studentId,
@@ -233,6 +261,20 @@ export const submissionService = {
                 submissionType: 'ASSIGNMENT',
             }),
         });
+
+        console.debug('[submissionService] getOrCreateDraftSubmission — created raw type:', typeof created, '| keys:', created && typeof created === 'object' ? Object.keys(created as object) : '(none)');
+
+        if (created && typeof created === 'object') {
+            const obj = created as Record<string, unknown>;
+            if (obj.data && typeof obj.data === 'object') {
+                const submission = obj.data as Submission;
+                console.debug('[submissionService] getOrCreateDraftSubmission — new submissionId (from .data):', submission.id);
+                return submission;
+            }
+        }
+        const submission = created as Submission;
+        console.debug('[submissionService] getOrCreateDraftSubmission — new submissionId (direct):', submission?.id);
+        return submission;
     },
 
     /**
@@ -244,6 +286,7 @@ export const submissionService = {
         questionId: string,
         payload: SaveAnswerPayload,
     ): Promise<void> {
+        console.debug('[submissionService] saveAnswer — submissionId:', submissionId, '| questionId:', questionId, '| wordCount:', payload.wordCount, '| chars:', payload.characterCount);
         return apiRequest<void>(
             `${SUBMISSION_API}/api/submissions/${submissionId}/answers/${questionId}`,
             { method: 'PUT', body: JSON.stringify(payload) }
@@ -254,10 +297,21 @@ export const submissionService = {
      * Get all saved answers for a submission.
      * GET /api/submissions/{submissionId}/answers
      */
-    getAnswers(submissionId: string): Promise<TextAnswer[]> {
-        return apiRequest<TextAnswer[]>(
+    async getAnswers(submissionId: string): Promise<TextAnswer[]> {
+        console.debug('[submissionService] getAnswers — submissionId:', submissionId);
+        const res = await apiRequest<unknown>(
             `${SUBMISSION_API}/api/submissions/${submissionId}/answers`
         );
+        console.debug('[submissionService] getAnswers — raw response type:', typeof res, '| isArray:', Array.isArray(res));
+        let answers: TextAnswer[] = [];
+        if (Array.isArray(res)) {
+            answers = res as TextAnswer[];
+        } else if (res && typeof res === 'object') {
+            const obj = res as Record<string, unknown>;
+            if (Array.isArray(obj.data)) answers = obj.data as TextAnswer[];
+        }
+        console.debug('[submissionService] getAnswers — returning', answers.length, 'answers; questionIds:', answers.map(a => a.questionId));
+        return answers;
     },
 };
 
@@ -567,16 +621,21 @@ export const feedbackService = {
      * Called ~3 seconds after typing stops. Not persisted to DB.
      * POST /api/feedback/live
      */
-    generateLiveFeedback(payload: {
+    async generateLiveFeedback(payload: {
         questionId: string;
         answerText: string;
         questionPrompt?: string;
         expectedWordCount?: number;
     }): Promise<LiveFeedback> {
-        return apiRequest<LiveFeedback>(`${FEEDBACK_API}/api/feedback/live`, {
+        console.debug('[feedbackService] generateLiveFeedback — questionId:', payload.questionId, '| textLen:', payload.answerText.length, '| expectedWords:', payload.expectedWordCount ?? '(none)');
+        // Backend wraps in ApiResponse<LiveFeedbackResponse> → unwrap .data
+        const res = await apiRequest<{ data: LiveFeedback }>(`${FEEDBACK_API}/api/feedback/live`, {
             method: 'POST',
             body: JSON.stringify(payload),
         });
+        const fb = res.data;
+        console.debug('[feedbackService] generateLiveFeedback — received scores: grammar=', fb?.grammarScore, '| clarity=', fb?.clarityScore, '| completeness=', fb?.completenessScore, '| relevance=', fb?.relevanceScore);
+        return fb;
     },
 };
 
@@ -646,6 +705,7 @@ export const plagiarismService = {
         textContent: string;
         questionText?: string;
     }): Promise<LivePlagiarismResult> {
+        console.debug('[plagiarismService] checkLiveSimilarity — questionId:', payload.questionId, '| textLen:', payload.textContent.length, '| sessionId:', payload.sessionId);
         // The backend questionId field is a Long — parse string to number
         const backendPayload = {
             sessionId: payload.sessionId,
@@ -656,15 +716,17 @@ export const plagiarismService = {
             questionType: 'TEXT',
         };
 
-        const raw = await apiRequest<{
-            similarityScore?: number;
-            flagged?: boolean;
-            matchedText?: string;
-            sessionId?: string;
+        const res = await apiRequest<{
+            data: {
+                similarityScore?: number;
+                flagged?: boolean;
+                warningMessage?: string;
+            };
         }>(`${PLAGIARISM_API}/api/integrity/realtime/check`, {
             method: 'POST',
             body: JSON.stringify(backendPayload),
         });
+        const raw = res.data ?? {};
 
         // Normalise similarity from [0.0-1.0] or [0-100] to [0-100]
         const rawScore = raw.similarityScore ?? 0;
@@ -672,14 +734,17 @@ export const plagiarismService = {
         const severity: LivePlagiarismResult['severity'] =
             normalised >= 70 ? 'HIGH' : normalised >= 40 ? 'MEDIUM' : 'LOW';
 
-        return {
+        const result: LivePlagiarismResult = {
             questionId: payload.questionId,
             similarityScore: Math.round(normalised * 10) / 10,
             severity,
             flagged: raw.flagged ?? normalised >= 70,
-            matchedText: raw.matchedText,
+            matchedText: raw.warningMessage,
             checkedAt: new Date().toISOString(),
         };
+
+        console.debug('[plagiarismService] checkLiveSimilarity — rawScore:', rawScore, '| normalised:', result.similarityScore, '%', '| severity:', severity, '| flagged:', result.flagged);
+        return result;
     },
 };
 

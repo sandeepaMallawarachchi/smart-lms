@@ -139,10 +139,10 @@ export function useAnswerEditor({
     /** Fire AI feedback request for the given text. */
     const requestFeedback = useCallback(async (text: string) => {
         if (!text || text.length < MIN_TEXT_LENGTH) {
-            console.debug('[useAnswerEditor] Skipping AI feedback — text too short:', text.length, 'chars');
+            console.debug('[useAnswerEditor] Skipping AI feedback — text too short:', text.length, 'chars (min:', MIN_TEXT_LENGTH, ')');
             return;
         }
-        console.debug('[useAnswerEditor] Requesting live feedback for questionId:', questionId);
+        console.debug('[useAnswerEditor] AI feedback timer FIRED — questionId:', questionId, '| textLen:', text.length, '| expectedWords:', expectedWordCount ?? '(none)');
         setFeedbackLoading(true);
         try {
             const feedback = await feedbackService.generateLiveFeedback({
@@ -151,10 +151,14 @@ export function useAnswerEditor({
                 questionPrompt: questionText,
                 expectedWordCount,
             });
-            console.debug('[useAnswerEditor] Live feedback received — grammar:', feedback.grammarScore, '| clarity:', feedback.clarityScore);
+            console.debug('[useAnswerEditor] AI feedback received — questionId:', questionId,
+                '| grammar:', feedback.grammarScore,
+                '| clarity:', feedback.clarityScore,
+                '| completeness:', feedback.completenessScore,
+                '| relevance:', feedback.relevanceScore);
             setLiveFeedback(feedback);
         } catch (err) {
-            console.warn('[useAnswerEditor] Live feedback request failed:', err);
+            console.warn('[useAnswerEditor] AI feedback FAILED for questionId:', questionId, '—', err);
             // Don't clear existing feedback — keep the last good result visible.
         } finally {
             setFeedbackLoading(false);
@@ -164,10 +168,10 @@ export function useAnswerEditor({
     /** Fire plagiarism check for the given text. */
     const requestPlagiarismCheck = useCallback(async (text: string) => {
         if (!text || text.length < MIN_TEXT_LENGTH) {
-            console.debug('[useAnswerEditor] Skipping plagiarism check — text too short:', text.length, 'chars');
+            console.debug('[useAnswerEditor] Skipping plagiarism check — text too short:', text.length, 'chars (min:', MIN_TEXT_LENGTH, ')');
             return;
         }
-        console.debug('[useAnswerEditor] Requesting plagiarism check for questionId:', questionId);
+        console.debug('[useAnswerEditor] Plagiarism timer FIRED — questionId:', questionId, '| textLen:', text.length, '| sessionId:', sessionId.current);
         setPlagiarismLoading(true);
         try {
             const result = await plagiarismService.checkLiveSimilarity({
@@ -177,10 +181,13 @@ export function useAnswerEditor({
                 textContent: text,
                 questionText,
             });
-            console.debug('[useAnswerEditor] Plagiarism result — severity:', result.severity, '| score:', result.similarityScore, '%');
+            console.debug('[useAnswerEditor] Plagiarism result — questionId:', questionId,
+                '| severity:', result.severity,
+                '| score:', result.similarityScore, '%',
+                '| flagged:', result.flagged);
             setPlagiarismResult(result);
         } catch (err) {
-            console.warn('[useAnswerEditor] Plagiarism check failed:', err);
+            console.warn('[useAnswerEditor] Plagiarism check FAILED for questionId:', questionId, '—', err);
         } finally {
             setPlagiarismLoading(false);
         }
@@ -190,11 +197,11 @@ export function useAnswerEditor({
     const autoSave = useCallback(async (text: string) => {
         // Only auto-save if there is a valid submission to attach the answer to.
         if (!submissionId) {
-            console.debug('[useAnswerEditor] Skipping auto-save — no submissionId yet.');
+            console.warn('[useAnswerEditor] Skipping auto-save — submissionId is empty/undefined for questionId:', questionId, '(submission not yet created?)');
             return;
         }
         const words = countWords(text);
-        console.debug('[useAnswerEditor] Auto-saving — submissionId:', submissionId, '| questionId:', questionId, '| words:', words);
+        console.debug('[useAnswerEditor] Auto-save timer FIRED — submissionId:', submissionId, '| questionId:', questionId, '| words:', words, '| chars:', text.length);
         setAutoSaving(true);
         try {
             await submissionService.saveAnswer(submissionId, questionId, {
@@ -205,9 +212,9 @@ export function useAnswerEditor({
             });
             const savedAt = new Date();
             setLastSaved(savedAt);
-            console.debug('[useAnswerEditor] Auto-save complete at', savedAt.toLocaleTimeString());
+            console.debug('[useAnswerEditor] Auto-save DONE at', savedAt.toLocaleTimeString(), '— submissionId:', submissionId, '| questionId:', questionId);
         } catch (err) {
-            console.warn('[useAnswerEditor] Auto-save failed:', err);
+            console.warn('[useAnswerEditor] Auto-save FAILED for submissionId:', submissionId, '| questionId:', questionId, '—', err);
         } finally {
             setAutoSaving(false);
         }
@@ -230,18 +237,21 @@ export function useAnswerEditor({
         clearTimeout(feedbackTimer.current);
         if (newText.length >= MIN_TEXT_LENGTH) {
             feedbackTimer.current = setTimeout(() => requestFeedback(newText), FEEDBACK_DEBOUNCE_MS);
+            console.debug('[useAnswerEditor] AI feedback timer scheduled (', FEEDBACK_DEBOUNCE_MS, 'ms) — questionId:', questionId, '| textLen:', newText.length);
         }
 
         // ── Reset and reschedule plagiarism check (3 s debounce)
         clearTimeout(plagiarismTimer.current);
         if (newText.length >= MIN_TEXT_LENGTH) {
             plagiarismTimer.current = setTimeout(() => requestPlagiarismCheck(newText), PLAGIARISM_DEBOUNCE_MS);
+            console.debug('[useAnswerEditor] Plagiarism timer scheduled (', PLAGIARISM_DEBOUNCE_MS, 'ms) — questionId:', questionId);
         }
 
         // ── Reset and reschedule auto-save (5 s debounce) ──────
         clearTimeout(autoSaveTimer.current);
         autoSaveTimer.current = setTimeout(() => autoSave(newText), AUTO_SAVE_DEBOUNCE_MS);
-    }, [requestFeedback, requestPlagiarismCheck, autoSave]);
+        console.debug('[useAnswerEditor] Auto-save timer scheduled (', AUTO_SAVE_DEBOUNCE_MS, 'ms) — submissionId:', submissionId, '| questionId:', questionId);
+    }, [requestFeedback, requestPlagiarismCheck, autoSave, questionId, submissionId]);
 
     // ── Cleanup on unmount ─────────────────────────────────────
     // Clears all pending timers so no API calls fire after unmount.
@@ -254,14 +264,28 @@ export function useAnswerEditor({
         };
     }, [questionId]);
 
-    // ── Sync initialText changes ───────────────────────────────
+    // ── Sync initialText + auto-trigger analysis on load ──────
     // When the parent loads previously saved answers and updates initialText,
-    // sync the editor state without triggering debounced side-effects.
+    // sync the editor state AND kick off feedback + plagiarism so the student
+    // sees their prior results immediately without having to type anything.
     useEffect(() => {
         if (initialText && answerText === '') {
             console.debug('[useAnswerEditor] Syncing initialText for questionId:', questionId, '| words:', countWords(initialText));
             setAnswerText(initialText);
             setWordCount(countWords(initialText));
+
+            // Stagger per-question requests slightly to avoid hammering the API
+            // when many questions load simultaneously (100 ms per question index).
+            if (initialText.length >= MIN_TEXT_LENGTH) {
+                const delay = 500;
+                console.debug('[useAnswerEditor] Pre-loading feedback + plagiarism for questionId:', questionId, '| delay:', delay, 'ms');
+                const feedbackId = setTimeout(() => requestFeedback(initialText), delay);
+                const plagiarismId = setTimeout(() => requestPlagiarismCheck(initialText), delay + 200);
+                return () => {
+                    clearTimeout(feedbackId);
+                    clearTimeout(plagiarismId);
+                };
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initialText]);
