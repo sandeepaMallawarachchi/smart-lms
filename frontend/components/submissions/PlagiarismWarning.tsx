@@ -85,7 +85,7 @@ export function PlagiarismWarning({ result, loading }: PlagiarismWarningProps) {
                 </span>
                 {result.matchedText && (
                     <p className="mt-1 text-red-700 italic">
-                        Matched: "{result.matchedText.slice(0, 120)}{result.matchedText.length > 120 ? '…' : ''}"
+                        Matched: &#34;{result.matchedText.slice(0, 120)}{result.matchedText.length > 120 ? '…' : ''}&#34;
                     </p>
                 )}
             </div>
