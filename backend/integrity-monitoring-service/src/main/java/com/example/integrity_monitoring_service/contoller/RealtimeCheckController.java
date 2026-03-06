@@ -30,11 +30,16 @@ public class RealtimeCheckController {
     @PostMapping("/check")
     public ResponseEntity<ApiResponse<RealtimeCheckResponse>> checkRealtime(
             @Valid @RequestBody RealtimeCheckRequest request) {
-        log.debug("POST /api/integrity/realtime/check - Session: {}", request.getSessionId());
+        log.info("POST /api/integrity/realtime/check — session={} student={} question={} textLen={}",
+                request.getSessionId(), request.getStudentId(),
+                request.getQuestionId(), request.getTextContent().length());
 
-        ApiResponse<RealtimeCheckResponse> response =
-                realtimeCheckService.checkRealtime(request);
+        ApiResponse<RealtimeCheckResponse> response = realtimeCheckService.checkRealtime(request);
 
+        if (response.getData() != null) {
+            log.info("POST /api/integrity/realtime/check — DONE similarity={} flagged={}",
+                    response.getData().getSimilarityScore(), response.getData().getFlagged());
+        }
         return ResponseEntity.ok(response);
     }
 }

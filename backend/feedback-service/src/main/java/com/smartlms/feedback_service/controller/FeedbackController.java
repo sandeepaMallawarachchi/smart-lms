@@ -38,11 +38,26 @@ public class FeedbackController {
     @PostMapping("/live")
     public ResponseEntity<ApiResponse<LiveFeedbackResponse>> generateLiveFeedback(
             @Valid @RequestBody LiveFeedbackRequest request) {
-        log.info("POST /api/feedback/live - questionId={} textLength={}",
-                request.getQuestionId(), request.getAnswerText().length());
+        log.info("POST /api/feedback/live — questionId={} textLen={} questionPrompt='{}'",
+                request.getQuestionId(),
+                request.getAnswerText().length(),
+                request.getQuestionPrompt() != null
+                        ? request.getQuestionPrompt().substring(0, Math.min(60, request.getQuestionPrompt().length()))
+                        : "(none)");
 
         ApiResponse<LiveFeedbackResponse> response = liveFeedbackService.generateLiveFeedback(request);
+        log.info("POST /api/feedback/live — DONE questionId={} grammar={} clarity={}",
+                request.getQuestionId(),
+                response.getData() != null ? response.getData().getGrammarScore() : "null",
+                response.getData() != null ? response.getData().getClarityScore() : "null");
         return ResponseEntity.ok(response);
+    }
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRuntimeException(RuntimeException ex) {
+        log.error("Unhandled exception in FeedbackController: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error("AI feedback service temporarily unavailable: " + ex.getMessage()));
     }
 
     /**

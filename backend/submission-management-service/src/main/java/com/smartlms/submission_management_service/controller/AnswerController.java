@@ -44,10 +44,16 @@ public class AnswerController {
             @PathVariable String questionId,
             @Valid @RequestBody SaveAnswerRequest request) {
 
-        log.info("PUT /api/submissions/{}/answers/{} — wordCount={}",
-                submissionId, questionId, request.getWordCount());
+        int textLen = request.getAnswerText() != null ? request.getAnswerText().length() : 0;
+        log.info("[AnswerController] PUT /api/submissions/{}/answers/{} — wordCount={} chars={}",
+                submissionId, questionId, request.getWordCount(), textLen);
 
         ApiResponse<AnswerResponse> response = answerService.saveAnswer(submissionId, questionId, request);
+
+        log.info("[AnswerController] PUT DONE — answerId={} success={}",
+                response.getData() != null ? response.getData().getId() : "null",
+                response.isSuccess());
+
         return ResponseEntity.ok(response);
     }
 
@@ -64,9 +70,13 @@ public class AnswerController {
     public ResponseEntity<ApiResponse<List<AnswerResponse>>> getAnswers(
             @PathVariable String submissionId) {
 
-        log.info("GET /api/submissions/{}/answers", submissionId);
+        log.info("[AnswerController] GET /api/submissions/{}/answers", submissionId);
 
         ApiResponse<List<AnswerResponse>> response = answerService.getAnswers(submissionId);
+
+        log.info("[AnswerController] GET DONE — returning {} answers for submissionId={}",
+                response.getData() != null ? response.getData().size() : 0, submissionId);
+
         return ResponseEntity.ok(response);
     }
 }

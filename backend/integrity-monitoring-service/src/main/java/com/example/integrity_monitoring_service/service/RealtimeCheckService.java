@@ -48,45 +48,48 @@ public class RealtimeCheckService {
             return ApiResponse.success("Real-time checking disabled", null);
         }
 
-        log.debug("Real-time check for session: {}", request.getSessionId());
+        log.info("[RealtimeCheck] Starting — session={} student={} question={} textLen={} enabled={}",
+                request.getSessionId(), request.getStudentId(), request.getQuestionId(),
+                request.getTextContent().length(), realtimeEnabled);
 
         try {
             // Skip if text too short
             if (request.getTextContent().length() < minTextLength) {
+                log.info("[RealtimeCheck] Skipped — text too short ({} < {} chars)",
+                        request.getTextContent().length(), minTextLength);
                 return ApiResponse.success("Text too short for checking",
                         buildResponse(request, 0.0, false));
             }
 
             // Check if plagiarism check needed for this question
             boolean checkNeeded = questionAnalyzer.isPlagiarismCheckNeeded(
-                    request.getQuestionText(),
-                    null
-            );
+                    request.getQuestionText(), null);
+            log.debug("[RealtimeCheck] isPlagiarismCheckNeeded={}", checkNeeded);
 
             if (!checkNeeded) {
+                log.info("[RealtimeCheck] Skipped — question type does not require plagiarism check");
                 return ApiResponse.success("Plagiarism check not needed for this question type",
                         buildResponse(request, 0.0, false));
             }
 
-            // Quick similarity check (limited to avoid API quota)
             double maxSimilarity = 0.0;
             boolean flagged = false;
 
-            // Check against internet (limited calls)
             if (request.getTextContent().length() > 100) {
+                log.debug("[RealtimeCheck] Calling Google search for text ({} chars)", request.getTextContent().length());
                 List<Map<String, String>> searchResults = googleSearch.searchInternet(
-                        request.getTextContent(), 3
-                );
+                        request.getTextContent(), 3);
+                log.debug("[RealtimeCheck] Google returned {} results", searchResults.size());
 
                 maxSimilarity = textSimilarity.calculateInternetSimilarity(
-                        request.getTextContent(),
-                        searchResults
-                );
-
+                        request.getTextContent(), searchResults);
                 flagged = maxSimilarity > textSimilarityThreshold;
+                log.info("[RealtimeCheck] Similarity={} threshold={} flagged={}",
+                        maxSimilarity, textSimilarityThreshold, flagged);
+            } else {
+                log.debug("[RealtimeCheck] Text <100 chars — skipping internet search");
             }
 
-            // Save check record
             RealtimeCheck check = RealtimeCheck.builder()
                     .sessionId(request.getSessionId())
                     .studentId(request.getStudentId())
@@ -98,19 +101,21 @@ public class RealtimeCheckService {
                     .build();
 
             realtimeCheckRepository.save(check);
+            log.debug("[RealtimeCheck] Saved record id={}", check.getId());
 
-            // Build response
             RealtimeCheckResponse response = buildResponse(request, maxSimilarity, flagged);
 
-            // Send WebSocket notification if flagged
             if (flagged) {
+                log.warn("[RealtimeCheck] FLAGGED — sending WebSocket warning to session={}",
+                        request.getSessionId());
                 sendWarningNotification(request.getSessionId(), response);
             }
 
             return ApiResponse.success("Real-time check completed", response);
 
         } catch (Exception e) {
-            log.error("Error in real-time check: {}", e.getMessage(), e);
+            log.error("[RealtimeCheck] ERROR — session={} question={}: {}",
+                    request.getSessionId(), request.getQuestionId(), e.getMessage(), e);
             return ApiResponse.error("Real-time check failed: " + e.getMessage());
         }
     }

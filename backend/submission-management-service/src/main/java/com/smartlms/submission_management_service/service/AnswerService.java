@@ -42,19 +42,27 @@ public class AnswerService {
     public ApiResponse<AnswerResponse> saveAnswer(String submissionId,
                                                    String questionId,
                                                    SaveAnswerRequest request) {
-        log.debug("Upserting answer for submissionId={} questionId={} wordCount={}",
-                submissionId, questionId, request.getWordCount());
+        int textLen = request.getAnswerText() != null ? request.getAnswerText().length() : 0;
+        log.info("[AnswerService] saveAnswer — submissionId={} questionId={} wordCount={} chars={}",
+                submissionId, questionId, request.getWordCount(), textLen);
 
         // Attempt to find an existing answer for this (submissionId, questionId) pair
+        boolean[] isNew = { false };
         Answer answer = answerRepository
                 .findBySubmissionIdAndQuestionId(submissionId, questionId)
                 .orElseGet(() -> {
-                    log.debug("No existing answer found — creating new Answer row");
+                    log.info("[AnswerService] No existing answer — INSERT new row for submissionId={} questionId={}",
+                            submissionId, questionId);
+                    isNew[0] = true;
                     return Answer.builder()
                             .submissionId(submissionId)
                             .questionId(questionId)
                             .build();
                 });
+
+        if (!isNew[0]) {
+            log.debug("[AnswerService] Existing answer found id={} — UPDATE", answer.getId());
+        }
 
         // Update mutable fields regardless of whether this is an INSERT or UPDATE
         answer.setQuestionText(request.getQuestionText());
@@ -63,7 +71,8 @@ public class AnswerService {
         answer.setCharacterCount(request.getCharacterCount());
 
         Answer saved = answerRepository.save(answer);
-        log.debug("Answer saved with id={}", saved.getId());
+        log.info("[AnswerService] saveAnswer DONE — answerId={} submissionId={} questionId={} wordCount={}",
+                saved.getId(), submissionId, questionId, saved.getWordCount());
 
         return ApiResponse.success("Answer saved", toResponse(saved));
     }
@@ -76,14 +85,15 @@ public class AnswerService {
      */
     @Transactional(readOnly = true)
     public ApiResponse<List<AnswerResponse>> getAnswers(String submissionId) {
-        log.debug("Fetching all answers for submissionId={}", submissionId);
+        log.info("[AnswerService] getAnswers — submissionId={}", submissionId);
 
         List<Answer> answers = answerRepository.findBySubmissionIdOrderByQuestionId(submissionId);
         List<AnswerResponse> responses = answers.stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
 
-        log.debug("Returning {} answers for submissionId={}", responses.size(), submissionId);
+        log.info("[AnswerService] getAnswers DONE — returning {} answers for submissionId={}",
+                responses.size(), submissionId);
         return ApiResponse.success(responses);
     }
 
