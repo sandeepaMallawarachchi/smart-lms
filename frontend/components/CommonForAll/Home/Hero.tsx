@@ -31,33 +31,23 @@ const HeroSection: React.FC = () => {
         {
             headline: 'THE FUTURE AWAITS YOU!',
             profileImage: '/commonforall/hero/logo1.png',
-            backgroundImage: '/commonforall/hero/1.webp',
+            backgroundImage: '/commonforall/hero/7.webp',
         },
         {
             headline: 'TRANSFORM YOUR SKILLS TODAY!',
             profileImage: '/commonforall/hero/logo2.png',
-            backgroundImage: '/commonforall/hero/2.webp',
+            backgroundImage: '/commonforall/hero/8.webp',
         },
         {
             headline: 'REACH YOUR GOALS FASTER!',
             profileImage: '/commonforall/hero/logo1.png',
-            backgroundImage: '/commonforall/hero/3.webp',
+            backgroundImage: '/commonforall/hero/9.webp',
         },
         {
             headline: 'EMBRACE THE CHANGE!',
             profileImage: '/commonforall/hero/logo2.png',
-            backgroundImage: '/commonforall/hero/4.webp',
-        },
-        {
-            headline: 'GROW WITH US!',
-            profileImage: '/commonforall/hero/logo1.png',
-            backgroundImage: '/commonforall/hero/5.webp',
-        },
-        {
-            headline: 'SUCCESS AWAITS!',
-            profileImage: '/commonforall/hero/logo2.png',
-            backgroundImage: '/commonforall/hero/6.webp',
-        },
+            backgroundImage: '/commonforall/hero/10.webp',
+        }
     ];
 
     const features: HeroFeature[] = [
@@ -149,7 +139,7 @@ const HeroSection: React.FC = () => {
         // Auto-slide every 5 seconds
         const interval = setInterval(() => {
             setCurrentSlide((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
-        }, 5000);
+        }, 6000);
 
         return () => clearInterval(interval);
     }, [slides.length]);
@@ -209,7 +199,7 @@ const HeroSection: React.FC = () => {
         <>
             <div
                 ref={containerRef}
-                className="relative bg-linear-to-br from-teal-600 via-transparent to-blue-500 overflow-hidden"
+                className="relative bg-linear-to-br from-teal-600 via-transparent to-blue-500 overflow-hidden h-[80vh]"
             >
                 {/* Background Image Overlay */}
                 {currentSlideData.backgroundImage && (
@@ -218,7 +208,7 @@ const HeroSection: React.FC = () => {
                             src={currentSlideData.backgroundImage}
                             alt="Background"
                             fill
-                            className="object-cover"
+                            className="object-top"
                             priority
                         />
                     </div>
@@ -236,7 +226,7 @@ const HeroSection: React.FC = () => {
                                 </h1>
 
                                 {/* Decorative accent */}
-                                <div className="h-1 w-24 bg-white rounded-full mb-8 opacity-80"></div>
+                                <div className="h-1 w-2 rounded-full mb-8 opacity-80"></div>
 
                                 <p className="text-white/80 text-base md:text-lg font-light leading-relaxed max-w-md">
                                     {/* Explore unlimited opportunities and unlock your potential with our comprehensive suite of resources. */}
@@ -314,8 +304,8 @@ const HeroSection: React.FC = () => {
                             disabled={!feature.route || isCheckingAuth}
                             className="flex flex-col items-center justify-center text-center group cursor-pointer transition-all duration-300 hover:-translate-y-2 disabled:cursor-default disabled:opacity-50"
                             style={{
-                                animation: `fadeInUp 0.6s ease-out forwards`,
-                                animationDelay: `${0.4 + index * 0.1}s`,
+                                animation: `fadeInUp 0.7s ease-out forwards`,
+                                animationDelay: `${0.5 + index * 0.1}s`,
                             }}
                         >
                             <div className="group mb-4 text-brand-yellow group-hover:text-brand-blue transition-colors">

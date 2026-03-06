@@ -53,6 +53,7 @@ interface PredictionResponse {
 
 export default function FullReportPage() {
     const router = useRouter();
+    const learningAnalyticsApiBaseUrl = (process.env.NEXT_PUBLIC_LEARNING_ANALYTICS_API_URL || '').replace(/\/$/, '');
     const [studentData, setStudentData] = useState<StudentData | null>(null);
     const [prediction, setPrediction] = useState<PredictionResponse | null>(null);
     const [inputData, setInputData] = useState<Record<string, any> | null>(null);
@@ -156,7 +157,13 @@ export default function FullReportPage() {
                 setInputData(predictionPayload);
 
                 // Call prediction API
-                const predictionResponse = await fetch('http://127.0.0.1:5000/api/predict', {
+                if (!learningAnalyticsApiBaseUrl) {
+                    setError('Learning Analytics API URL is not configured');
+                    setIsLoading(false);
+                    return;
+                }
+
+                const predictionResponse = await fetch(`${learningAnalyticsApiBaseUrl}/api/predict`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -182,7 +189,7 @@ export default function FullReportPage() {
         };
 
         fetchDataAndPredict();
-    }, []);
+    }, [learningAnalyticsApiBaseUrl]);
 
     const savePredictionToDatabase = async (
         predictionData: PredictionResponse,

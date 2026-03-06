@@ -8,10 +8,11 @@ import { successResponse, unauthorizedResponse, errorResponse, serverErrorRespon
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
+    const { id } = await params;
 
     const authHeader = request.headers.get('authorization');
     const token = authHeader?.replace('Bearer ', '');
@@ -30,7 +31,7 @@ export async function PUT(
     const { courseName, credits, year, semester, lecturerInCharge, lecturers } = body;
 
     const course = await Course.findByIdAndUpdate(
-      params.id,
+      id,
       {
         courseName,
         credits,
@@ -57,10 +58,11 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
+    const { id } = await params;
 
     const authHeader = request.headers.get('authorization');
     const token = authHeader?.replace('Bearer ', '');
@@ -75,7 +77,7 @@ export async function DELETE(
       return unauthorizedResponse('Unauthorized access');
     }
 
-    const course = await Course.findByIdAndDelete(params.id);
+    const course = await Course.findByIdAndDelete(id);
 
     if (!course) {
       return errorResponse('Course not found', {}, 404);

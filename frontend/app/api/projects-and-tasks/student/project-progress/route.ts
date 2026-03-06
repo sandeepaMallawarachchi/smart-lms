@@ -3,6 +3,10 @@ import { connectDB } from '@/lib/db';
 import { StudentProjectProgress, Project } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
 import { successResponse, unauthorizedResponse, notFoundResponse, serverErrorResponse } from '@/lib/api-response';
 import { verifyToken } from '@/lib/jwt';
+import {
+    cancelReminderJobsForStudentItem,
+    scheduleReminderJobsForStudentItem,
+} from '@/lib/projects-and-tasks/reminders/scheduler';
 
 export async function GET(request: NextRequest) {
     try {
@@ -135,6 +139,30 @@ export async function POST(request: NextRequest) {
         }
 
         await progress.save();
+
+        if (progress.status === 'done') {
+            await cancelReminderJobsForStudentItem({
+                studentId: payload.userId,
+                projectId,
+            });
+        } else if (progress.status === 'inprogress') {
+            const project = await Project.findById(projectId).lean();
+            if (project?.deadlineDate) {
+                await scheduleReminderJobsForStudentItem({
+                    studentId: payload.userId,
+                    itemType: 'project',
+                    itemId: projectId,
+                    itemName: project.projectName,
+                    deadlineDate: project.deadlineDate,
+                    deadlineTime: project.deadlineTime || '23:59',
+                });
+            }
+        } else {
+            await cancelReminderJobsForStudentItem({
+                studentId: payload.userId,
+                projectId,
+            });
+        }
 
         return successResponse('Project progress updated', { progress }, 200);
     } catch (error: any) {

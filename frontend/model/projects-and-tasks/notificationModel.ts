@@ -15,9 +15,15 @@ interface ITaskProgress {
 
 export interface INotification extends Document {
   studentId: string;
+  sourceAlertId?: string;
+  alertLevel?: 'low' | 'medium' | 'high';
   projectId?: string;
   taskId?: string;
-  type: 'project_reminder' | 'task_reminder' | 'deadline_warning' | 'overdue' | 'progress_update';
+  itemType?: 'project' | 'task';
+  itemName?: string;
+  reminderType?: 'project_25' | 'project_50' | 'project_75' | 'project_deadline' | 'task_25' | 'task_50' | 'task_75' | 'task_deadline';
+  dedupeKey?: string;
+  type: 'project_reminder' | 'task_reminder' | 'deadline_warning' | 'overdue' | 'progress_update' | 'lecturer_alert';
   reminderPercentage?: number;
   title: string;
   message: string;
@@ -26,19 +32,6 @@ export interface INotification extends Document {
   isRead: boolean;
   isSent: boolean;
   sentAt?: Date;
-  scheduledFor: Date;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface IScheduledReminder extends Document {
-  studentId: string;
-  projectId?: string;
-  taskId?: string;
-  reminderType: 'project_25' | 'project_50' | 'project_75' | 'project_deadline' | 'task_25' | 'task_50' | 'task_75' | 'task_deadline';
-  reminderPercentage: number;
-  deadlineDate: Date;
-  isProcessed: boolean;
   scheduledFor: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -69,6 +62,14 @@ const notificationSchema = new Schema<INotification>(
       required: true,
       index: true,
     },
+    sourceAlertId: {
+      type: String,
+      index: true,
+    },
+    alertLevel: {
+      type: String,
+      enum: ['low', 'medium', 'high'],
+    },
     projectId: {
       type: String,
       index: true,
@@ -77,9 +78,24 @@ const notificationSchema = new Schema<INotification>(
       type: String,
       index: true,
     },
+    itemType: {
+      type: String,
+      enum: ['project', 'task'],
+    },
+    itemName: {
+      type: String,
+      trim: true,
+    },
+    reminderType: {
+      type: String,
+      enum: ['project_25', 'project_50', 'project_75', 'project_deadline', 'task_25', 'task_50', 'task_75', 'task_deadline'],
+    },
+    dedupeKey: {
+      type: String,
+    },
     type: {
       type: String,
-      enum: ['project_reminder', 'task_reminder', 'deadline_warning', 'overdue', 'progress_update'],
+      enum: ['project_reminder', 'task_reminder', 'deadline_warning', 'overdue', 'progress_update', 'lecturer_alert'],
       required: true,
     },
     reminderPercentage: Number,
@@ -115,49 +131,13 @@ const notificationSchema = new Schema<INotification>(
   { timestamps: true }
 );
 
-const scheduledReminderSchema = new Schema<IScheduledReminder>(
+notificationSchema.index(
+  { dedupeKey: 1 },
   {
-    studentId: {
-      type: String,
-      required: true,
-      index: true,
-    },
-    projectId: {
-      type: String,
-      index: true,
-    },
-    taskId: {
-      type: String,
-      index: true,
-    },
-    reminderType: {
-      type: String,
-      enum: ['project_25', 'project_50', 'project_75', 'project_deadline', 'task_25', 'task_50', 'task_75', 'task_deadline'],
-      required: true,
-    },
-    reminderPercentage: {
-      type: Number,
-      required: true,
-    },
-    deadlineDate: {
-      type: Date,
-      required: true,
-    },
-    isProcessed: {
-      type: Boolean,
-      default: false,
-      index: true,
-    },
-    scheduledFor: {
-      type: Date,
-      required: true,
-      index: true,
-    },
-  },
-  { timestamps: true }
+    unique: true,
+    partialFilterExpression: { dedupeKey: { $exists: true, $type: 'string' } },
+  }
 );
 
 export const Notification =
   mongoose.models.Notification || mongoose.model<INotification>('Notification', notificationSchema);
-export const ScheduledReminder =
-  mongoose.models.ScheduledReminder || mongoose.model<IScheduledReminder>('ScheduledReminder', scheduledReminderSchema);

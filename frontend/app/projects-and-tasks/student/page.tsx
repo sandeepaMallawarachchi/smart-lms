@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { CheckCircle2, Clock, AlertCircle, Users, BarChart3, Plus } from 'lucide-react';
 
 export default function StudentDashboard() {
@@ -40,10 +40,6 @@ export default function StudentDashboard() {
     };
     return colors[color] || 'bg-gray-50';
   };
-
-  useEffect(() => {
-    fetch('/api/projects-and-tasks/student/notifications/init').catch(console.error);
-  }, []);
 
   return (
     <div>

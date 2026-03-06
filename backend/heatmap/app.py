@@ -34,17 +34,23 @@ def generate_heatmap():
     try:
         data = request.json
         student_id = data.get('studentId')
+        lookback_days = int(data.get('lookbackDays', Config.DEFAULT_LOOKBACK_DAYS))
+        forecast_days = int(data.get('forecastDays', Config.DEFAULT_FORECAST_DAYS))
         
         if not student_id:
             return jsonify({'error': 'studentId required'}), 400
+
+        # Constrain runtime windows to sane limits
+        lookback_days = max(30, min(lookback_days, 366))
+        forecast_days = max(0, min(forecast_days, 30))
         
-        # FULL YEAR: Jan 1 to Dec 31 of current year
         now = datetime.now()
-        start_date = datetime(now.year, 1, 1)
-        end_date = datetime(now.year, 12, 31)
+        today = now.date()
+        start_date = datetime.combine(today - timedelta(days=lookback_days - 1), datetime.min.time())
+        end_date = datetime.combine(today + timedelta(days=forecast_days), datetime.min.time())
         
         # Get activity history with items
-        activity_history = data_loader.get_activity_history(student_id, days=365)
+        activity_history = data_loader.get_activity_history(student_id, days=lookback_days)
         
         context = {
             'deadlines': data_loader.get_deadlines(student_id),
@@ -52,7 +58,7 @@ def generate_heatmap():
             'semester_start': data_loader.get_semester_start(student_id)
         }
         
-        # All dates in the year
+        # Build all dates in the configured window
         all_dates = []
         current = start_date
         while current <= end_date:
@@ -60,9 +66,7 @@ def generate_heatmap():
             current += timedelta(days=1)
         
         # Split into past and future
-        today = datetime.now().date()
         past_dates = [d for d in all_dates if d.date() <= today]
-        future_dates = [d for d in all_dates if d.date() > today]
         
         # Extract actual counts for past dates
         y_train = np.array([activity_history.get(d.strftime('%Y-%m-%d'), {}).get('count', 0) for d in past_dates])
@@ -90,11 +94,12 @@ def generate_heatmap():
         
         final_counts = np.array(final_counts)
         
-        # Detect anomalies
-        anomaly_flags = anomaly_detector.detect(final_counts)
-        
         # Prediction flags
         prediction_flags = [d.date() > today for d in all_dates]
+        
+        # Detect anomalies only on historical days
+        anomaly_types = anomaly_detector.detect_types(final_counts, prediction_flags=prediction_flags)
+        anomaly_flags = anomaly_types != 'none'
         
         # Adaptive thresholds based on actual past data
         past_counts = [activity_history.get(d.strftime('%Y-%m-%d'), {}).get('count', 0) for d in past_dates]
@@ -115,6 +120,7 @@ def generate_heatmap():
                 'level': int(levels[i]),
                 'isPrediction': bool(prediction_flags[i]),
                 'isAnomaly': bool(anomaly_flags[i]),
+                'anomalyType': str(anomaly_types[i]) if anomaly_flags[i] else None,
                 'items': items if not prediction_flags[i] else []
             })
         
@@ -130,6 +136,8 @@ def generate_heatmap():
                 'maxDaily': float(max([h['count'] for h in heatmap if not h['isPrediction']])) if any(not h['isPrediction'] for h in heatmap) else 0.0,
                 'activeDays': int(sum(1 for h in heatmap if h['count'] > 0 and not h['isPrediction'])),
                 'anomalyCount': int(sum(anomaly_flags)),
+                'positiveAnomalyCount': int(sum(1 for t in anomaly_types if t == 'positive')),
+                'negativeAnomalyCount': int(sum(1 for t in anomaly_types if t == 'negative')),
                 'predictedDays': int(sum(prediction_flags))
             },
             'model_info': {
