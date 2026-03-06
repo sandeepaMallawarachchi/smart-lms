@@ -17,12 +17,27 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(body),
     });
 
+    if (!response.ok) {
+      const errorText = await response.text();
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: `Chatbot request failed (${response.status})`,
+          error: errorText,
+        }),
+        {
+          status: response.status,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     const data = await response.json();
     return new Response(JSON.stringify(data), {
       status: response.status,
       headers: { 'Content-Type': 'application/json' },
     });
-  } catch (error) {
+  } catch {
     return serverErrorResponse('Failed to reach chatbot service');
   }
 }
