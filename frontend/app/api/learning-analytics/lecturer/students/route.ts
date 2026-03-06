@@ -43,10 +43,11 @@ export async function GET(request: NextRequest) {
     const specialization = params.get('specialization') || undefined;
     const includeLivePrediction = params.get('includeLivePrediction') === 'true';
 
-    const chatbotBaseUrl =
-      process.env.CHATBOT_BASE_URL ||
-      (process.env.CHATBOT_URL ? process.env.CHATBOT_URL.replace(/\/chat\/?$/, '') : '') ||
-      'http://localhost:5001';
+    const configuredChatbotUrl = process.env.CHATBOT_URL || process.env.CHATBOT_BASE_URL;
+    if (!configuredChatbotUrl) {
+      return serverErrorResponse('CHATBOT_URL is not configured');
+    }
+    const chatbotBaseUrl = configuredChatbotUrl.replace(/\/chat\/?$/, '').replace(/\/$/, '');
     const chatbotResponse = await fetch(`${chatbotBaseUrl}/analytics/student-insights`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
