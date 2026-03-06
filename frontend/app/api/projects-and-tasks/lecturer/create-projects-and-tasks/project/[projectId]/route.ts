@@ -3,7 +3,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Project, StudentProjectProgress } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
 import { connectDB } from '@/lib/db';
-import { scheduleReminderJobsForStudentItem } from '@/lib/projects-and-tasks/reminders/scheduler';
+import {
+  cancelReminderJobsForStudentItem,
+  scheduleReminderJobsForStudentItem,
+} from '@/lib/projects-and-tasks/reminders/scheduler';
 import CourseGroup from '@/model/CourseGroup';
 
 type ProjectWithGroupsLite = {
@@ -12,6 +15,7 @@ type ProjectWithGroupsLite = {
   deadlineTime?: string;
   projectName: string;
   assignedGroupIds?: string[];
+  isPublished?: boolean;
 } & Record<string, unknown>;
 
 export async function GET(
@@ -110,6 +114,7 @@ export async function PUT(
       deadlineDate?: string;
       deadlineTime?: string;
       specialNotes?: { html: string; text: string };
+      isPublished?: boolean;
     };
     console.log('Request body:', body);
 
@@ -175,6 +180,7 @@ export async function PUT(
         deadlineDate: body.deadlineDate,
         deadlineTime: body.deadlineTime || '23:59',
         specialNotes: body.specialNotes || { html: '', text: '' },
+        isPublished: typeof body.isPublished === 'boolean' ? body.isPublished : existingProject.isPublished ?? true,
       },
       { new: true, runValidators: true }
     );
@@ -191,8 +197,9 @@ export async function PUT(
       existingProject.deadlineDate !== updatedProject.deadlineDate ||
       (existingProject.deadlineTime || '23:59') !== (updatedProject.deadlineTime || '23:59') ||
       existingProject.projectName !== updatedProject.projectName;
+    const publishStateChanged = (existingProject.isPublished ?? true) !== (updatedProject.isPublished ?? true);
 
-    if (shouldRescheduleReminders) {
+    if (shouldRescheduleReminders || publishStateChanged) {
       const activeProgress = await StudentProjectProgress.find({
         projectId,
         status: 'inprogress',
@@ -200,18 +207,29 @@ export async function PUT(
         .select('studentId')
         .lean();
 
-      await Promise.all(
-        activeProgress.map((row: { studentId: string }) =>
-          scheduleReminderJobsForStudentItem({
-            studentId: row.studentId,
-            itemType: 'project',
-            itemId: projectId,
-            itemName: updatedProject.projectName,
-            deadlineDate: updatedProject.deadlineDate,
-            deadlineTime: updatedProject.deadlineTime || '23:59',
-          })
-        )
-      );
+      if (updatedProject.isPublished) {
+        await Promise.all(
+          activeProgress.map((row: { studentId: string }) =>
+            scheduleReminderJobsForStudentItem({
+              studentId: row.studentId,
+              itemType: 'project',
+              itemId: projectId,
+              itemName: updatedProject.projectName,
+              deadlineDate: updatedProject.deadlineDate,
+              deadlineTime: updatedProject.deadlineTime || '23:59',
+            })
+          )
+        );
+      } else {
+        await Promise.all(
+          activeProgress.map((row: { studentId: string }) =>
+            cancelReminderJobsForStudentItem({
+              studentId: row.studentId,
+              projectId,
+            })
+          )
+        );
+      }
     }
 
     console.log('Project updated successfully');
