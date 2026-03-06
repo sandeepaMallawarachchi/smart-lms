@@ -32,10 +32,14 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(params.get('limit') || '200', 10);
     const recommendationLimit = parseInt(params.get('recommendationLimit') || '8', 10);
 
-    const chatbotBaseUrl =
-      process.env.CHATBOT_BASE_URL ||
-      (process.env.CHATBOT_URL ? process.env.CHATBOT_URL.replace(/\/chat\/?$/, '') : '') ||
-      'http://localhost:5001';
+    const configuredChatbotUrl = process.env.CHATBOT_URL || process.env.CHATBOT_BASE_URL;
+    if (!configuredChatbotUrl) {
+      return NextResponse.json(
+        { success: false, message: 'CHATBOT_URL is not configured' },
+        { status: 500 }
+      );
+    }
+    const chatbotBaseUrl = configuredChatbotUrl.replace(/\/chat\/?$/, '').replace(/\/$/, '');
 
     const report = await getLecturerReportData(chatbotBaseUrl, {
       lecturerId: payload.userId,
@@ -121,4 +125,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
