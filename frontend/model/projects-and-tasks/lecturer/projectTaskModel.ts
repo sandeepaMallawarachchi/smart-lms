@@ -21,6 +21,7 @@ export interface IProject extends Document {
   projectName: string;
   description: { html: string; text: string };
   projectType: 'group' | 'individual';
+  assignedGroupIds: string[];
   deadlineDate: string;
   deadlineTime: string;
   specialNotes?: { html: string; text: string };
@@ -139,6 +140,12 @@ const projectSchema = new Schema<IProject>(
       enum: ['group', 'individual'],
       required: [true, 'Project type is required'],
     },
+    assignedGroupIds: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
     deadlineDate: {
       type: String,
       required: [true, 'Deadline date is required'],

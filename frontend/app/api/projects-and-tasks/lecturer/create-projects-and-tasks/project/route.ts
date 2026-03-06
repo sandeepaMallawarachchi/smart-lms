@@ -4,6 +4,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Project } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
 import { connectDB } from '@/lib/db';
 import { uploadFileToS3, validateFile } from '@/lib/s3-upload';
+import CourseGroup from '@/model/CourseGroup';
+
+type ProjectWithGroupsLite = { assignedGroupIds?: string[] } & Record<string, unknown>;
+type GroupLite = { _id: { toString(): string } } & Record<string, unknown>;
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,6 +31,7 @@ export async function POST(request: NextRequest) {
       (formData.get('specialNotes') as string) || '{"html":"","text":""}'
     );
     const mainTasks = JSON.parse((formData.get('mainTasks') as string) || '[]');
+    const assignedGroupIds = JSON.parse((formData.get('assignedGroupIds') as string) || '[]');
 
     // Validation
     if (!courseId) {
@@ -55,6 +60,34 @@ export async function POST(request: NextRequest) {
         { message: 'Deadline date is required' },
         { status: 400 }
       );
+    }
+
+    const normalizedAssignedGroupIds = Array.isArray(assignedGroupIds)
+      ? [...new Set(assignedGroupIds.map((id: string) => id.toString()))]
+      : [];
+
+    if (projectType === 'group') {
+      if (normalizedAssignedGroupIds.length === 0) {
+        return NextResponse.json(
+          { message: 'At least one group must be selected for a group project' },
+          { status: 400 }
+        );
+      }
+
+      const validGroups = await CourseGroup.find({
+        _id: { $in: normalizedAssignedGroupIds },
+        courseId,
+        isArchived: false,
+      })
+        .select('_id')
+        .lean();
+
+      if (validGroups.length !== normalizedAssignedGroupIds.length) {
+        return NextResponse.json(
+          { message: 'One or more selected groups are invalid for this course' },
+          { status: 400 }
+        );
+      }
     }
 
     // Handle file uploads
@@ -135,6 +168,7 @@ export async function POST(request: NextRequest) {
       projectName: projectName.trim(),
       description,
       projectType,
+      assignedGroupIds: projectType === 'group' ? normalizedAssignedGroupIds : [],
       deadlineDate,
       deadlineTime,
       specialNotes,
@@ -153,10 +187,10 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Create project error:', error);
     return NextResponse.json(
-      { message: error.message || 'Failed to create project' },
+      { message: error instanceof Error ? error.message : 'Failed to create project' },
       { status: 500 }
     );
   }
@@ -194,21 +228,43 @@ export async function GET(request: NextRequest) {
       .sort({ createdAt: -1 })
       .lean();
 
+    const allGroupIds = [
+      ...new Set((projects as ProjectWithGroupsLite[]).flatMap((project) => project.assignedGroupIds || [])),
+    ];
+    const groups = allGroupIds.length
+      ? await CourseGroup.find({
+          _id: { $in: allGroupIds },
+          isArchived: false,
+        })
+          .select('_id groupName')
+          .lean()
+      : [];
+    const normalizedGroups = (groups as GroupLite[]).map((group) => ({
+      _id: group._id.toString(),
+      groupName: String(group.groupName || ''),
+    }));
+    const groupById = new Map(normalizedGroups.map((group) => [group._id, group]));
+    const projectsWithGroups = (projects as ProjectWithGroupsLite[]).map((project) => ({
+      ...project,
+      assignedGroups: (project.assignedGroupIds || [])
+        .map((groupId: string) => groupById.get(groupId))
+        .filter(Boolean),
+    }));
+
     return NextResponse.json(
       {
         message: 'Projects fetched successfully',
         data: {
-          projects: projects || [],
+          projects: projectsWithGroups || [],
         },
       },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Fetch projects error:', error);
     return NextResponse.json(
-      { message: error.message || 'Failed to fetch projects' },
+      { message: error instanceof Error ? error.message : 'Failed to fetch projects' },
       { status: 500 }
     );
   }
 }
-

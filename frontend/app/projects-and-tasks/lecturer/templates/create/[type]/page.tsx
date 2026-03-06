@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { use, useEffect, useState } from 'react';
+import React, { Suspense, use, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Loader, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -73,7 +73,7 @@ const TEMPLATE_ITEMS = [
   },
 ];
 
-export default function CreateTemplatePage({ params: paramsPromise }: PageProps) {
+function CreateTemplatePageContent({ params: paramsPromise }: PageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const courseId = searchParams.get('courseId');
@@ -402,5 +402,13 @@ export default function CreateTemplatePage({ params: paramsPromise }: PageProps)
         </form>
       </div>
     </div>
+  );
+}
+
+export default function CreateTemplatePage(props: PageProps) {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+      <CreateTemplatePageContent {...props} />
+    </Suspense>
   );
 }

@@ -16,6 +16,19 @@ interface EditProjectTaskModalProps {
   onSave: (updatedData: any) => Promise<void>;
 }
 
+interface GroupStudent {
+  _id: string;
+  name: string;
+  studentIdNumber: string;
+}
+
+interface CourseGroup {
+  _id: string;
+  groupName: string;
+  studentIds: string[];
+  students?: GroupStudent[];
+}
+
 export default function EditProjectTaskModal({
   isOpen,
   type,
@@ -26,6 +39,8 @@ export default function EditProjectTaskModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState(data || {});
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [courseGroups, setCourseGroups] = useState<CourseGroup[]>([]);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
 
   React.useEffect(() => {
     if (data) {
@@ -33,6 +48,36 @@ export default function EditProjectTaskModal({
       setErrors({});
     }
   }, [data, isOpen]);
+
+  React.useEffect(() => {
+    const fetchCourseGroups = async () => {
+      if (!isOpen || type !== 'project' || !data?.courseId) return;
+      setIsLoadingGroups(true);
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(
+          `/api/projects-and-tasks/lecturer/course-groups?courseId=${data.courseId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        if (!response.ok) {
+          throw new Error('Failed to fetch groups');
+        }
+        const result = await response.json();
+        setCourseGroups(result?.data?.groups || []);
+      } catch (error) {
+        console.error('Error fetching groups for edit:', error);
+        setCourseGroups([]);
+      } finally {
+        setIsLoadingGroups(false);
+      }
+    };
+
+    fetchCourseGroups();
+  }, [isOpen, type, data?.courseId]);
 
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
@@ -43,6 +88,12 @@ export default function EditProjectTaskModal({
       }
       if (!formData.projectType || !['group', 'individual'].includes(formData.projectType)) {
         newErrors.projectType = 'Valid project type is required';
+      }
+      if (
+        formData.projectType === 'group' &&
+        (!Array.isArray(formData.assignedGroupIds) || formData.assignedGroupIds.length === 0)
+      ) {
+        newErrors.assignedGroupIds = 'Select at least one group for a group project';
       }
       if (!formData.deadlineDate) {
         newErrors.deadlineDate = 'Deadline date is required';
@@ -68,11 +119,12 @@ export default function EditProjectTaskModal({
     setIsSubmitting(true);
     try {
       // Send only the fields that can be edited (not the ID or file data)
-      const dataToSend = {
+      const dataToSend: Record<string, any> = {
         projectName: type === 'project' ? formData.projectName : undefined,
         taskName: type === 'task' ? formData.taskName : undefined,
         description: formData.description || { html: '', text: '' },
         projectType: type === 'project' ? formData.projectType : undefined,
+        assignedGroupIds: type === 'project' ? (formData.assignedGroupIds || []) : undefined,
         deadlineDate: formData.deadlineDate || '',
         deadlineTime: formData.deadlineTime || '23:59',
         specialNotes: formData.specialNotes || { html: '', text: '' },
@@ -205,7 +257,13 @@ export default function EditProjectTaskModal({
                             type="button"
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
-                            onClick={() => setFormData({ ...formData, projectType })}
+                            onClick={() =>
+                              setFormData({
+                                ...formData,
+                                projectType,
+                                assignedGroupIds: projectType === 'group' ? (formData.assignedGroupIds || []) : [],
+                              })
+                            }
                             className={`p-3 rounded-lg border-2 transition-all text-left ${
                               formData.projectType === projectType
                                 ? 'border-brand-blue bg-blue-50'
@@ -220,6 +278,53 @@ export default function EditProjectTaskModal({
                         ))}
                       </div>
                     </motion.div>
+
+                    {formData.projectType === 'group' && (
+                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.23 }}>
+                        <label className="block text-sm font-semibold text-gray-900 mb-3">
+                          Assign Groups <span className="text-red-600">*</span>
+                        </label>
+                        {isLoadingGroups ? (
+                          <p className="text-sm text-gray-500">Loading groups...</p>
+                        ) : courseGroups.length === 0 ? (
+                          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                            No groups found for this course. Create groups in Admin Course Management first.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {courseGroups.map((group) => {
+                              const isChecked = (formData.assignedGroupIds || []).includes(group._id);
+                              return (
+                                <label
+                                  key={group._id}
+                                  className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                                    isChecked ? 'border-brand-blue bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() =>
+                                      setFormData((prev: any) => ({
+                                        ...prev,
+                                        assignedGroupIds: isChecked
+                                          ? (prev.assignedGroupIds || []).filter((id: string) => id !== group._id)
+                                          : [...(prev.assignedGroupIds || []), group._id],
+                                      }))
+                                    }
+                                    className="mt-1 h-4 w-4 accent-brand-blue"
+                                  />
+                                  <div>
+                                    <p className="text-sm font-semibold text-gray-900">{group.groupName}</p>
+                                    <p className="text-xs text-gray-600">{(group.students || []).length} students</p>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
 
                     {/* Deadline */}
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }}>

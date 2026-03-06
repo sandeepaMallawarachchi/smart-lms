@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import {
   Target,
   Plus,
@@ -31,7 +31,7 @@ interface Goal {
   createdAt: string;
 }
 
-export default function LearningGoalsPage() {
+function LearningGoalsPageContent() {
   const searchParams = useSearchParams();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -669,5 +669,13 @@ export default function LearningGoalsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LearningGoalsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+      <LearningGoalsPageContent />
+    </Suspense>
   );
 }

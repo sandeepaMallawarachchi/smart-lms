@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Search,
@@ -31,7 +31,7 @@ interface User {
   isVerified?: boolean;
 }
 
-export default function AllUsersPage() {
+function AllUsersPageContent() {
   const searchParams = useSearchParams();
   const filterParam = searchParams.get('filter');
 
@@ -479,5 +479,13 @@ export default function AllUsersPage() {
       />
 
     </div>
+  );
+}
+
+export default function AllUsersPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50" />}>
+      <AllUsersPageContent />
+    </Suspense>
   );
 }

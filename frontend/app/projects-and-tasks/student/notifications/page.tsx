@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Bell, Loader, AlertCircle, Trash2 } from 'lucide-react';
+import { Bell, Loader, AlertCircle } from 'lucide-react';
 import NotificationCard from '@/components/projects-and-tasks/notifications/NotificationCard';
 
 interface TaskProgress {
@@ -58,9 +58,9 @@ export default function NotificationsPage() {
       const data = await response.json();
       setNotifications(data.data.notifications || []);
       setError(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching notifications:', err);
-      setError(err.message || 'Failed to load notifications');
+      setError(err instanceof Error ? err.message : 'Failed to load notifications');
     } finally {
       setIsLoading(false);
     }
@@ -69,7 +69,7 @@ export default function NotificationsPage() {
   const handleMarkRead = async (notificationId: string) => {
     try {
       const token = localStorage.getItem('authToken');
-      await fetch('/api/notifications/mark-read', {
+      await fetch('/api/projects-and-tasks/student/notifications/mark-read', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -88,9 +88,16 @@ export default function NotificationsPage() {
     }
   };
 
-  const displayedNotifications = filter === 'unread' 
-    ? notifications.filter(n => !n.isRead)
-    : notifications;
+  const displayedNotifications = notifications
+    .filter((notification) => {
+      if (filter === 'unread' && notification.isRead) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (a.type === 'lecturer_alert' && b.type !== 'lecturer_alert') return -1;
+      if (a.type !== 'lecturer_alert' && b.type === 'lecturer_alert') return 1;
+      return new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime();
+    });
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -115,7 +122,7 @@ export default function NotificationsPage() {
               <Bell size={28} />
             </div>
             <div>
-              <h1 className="text-4xl font-bold text-brand-blue">Notifications</h1>
+              <h1 className="text-4xl font-bold text-brand-blue">Notifications & Alerts</h1>
               <p className="text-gray-600 mt-1">
                 {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}` : 'All notifications read'}
               </p>
@@ -190,11 +197,13 @@ export default function NotificationsPage() {
           >
             <Bell className="mx-auto text-gray-300 mb-4" size={48} />
             <h3 className="text-xl font-bold text-gray-900 mb-2">
-              {filter === 'unread' ? 'No unread notifications' : 'No notifications yet'}
+              {filter === 'unread'
+                ? 'No unread notifications'
+                : 'No notifications yet'}
             </h3>
             <p className="text-gray-600">
-              {filter === 'unread' 
-                ? 'Great! You\'re all caught up.' 
+              {filter === 'unread'
+                ? 'Great! You\'re all caught up.'
                 : 'Notifications will appear here as you receive reminders'}
             </p>
           </motion.div>

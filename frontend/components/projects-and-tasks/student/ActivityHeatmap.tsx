@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, TrendingUp, AlertTriangle, Sparkles } from 'lucide-react';
+import { Calendar, TrendingUp, AlertTriangle, Sparkles, Info, X } from 'lucide-react';
 
 interface HeatmapDay {
   date: string;
@@ -10,6 +10,7 @@ interface HeatmapDay {
   level: number;
   isPrediction: boolean;
   isAnomaly: boolean;
+  anomalyType?: 'positive' | 'negative' | null;
   items: Array<{
     id: string;
     name: string;
@@ -27,6 +28,8 @@ interface HeatmapData {
     maxDaily: number;
     activeDays: number;
     anomalyCount: number;
+    positiveAnomalyCount?: number;
+    negativeAnomalyCount?: number;
     predictedDays: number;
   };
   model_info: {
@@ -40,11 +43,14 @@ interface HeatmapData {
 }
 
 export default function ActivityHeatmap() {
+  const CELL_SIZE = 20;
+  const CELL_GAP = 4;
   const [data, setData] = useState<HeatmapData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hoveredDay, setHoveredDay] = useState<HeatmapDay | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [showHeatmapInfo, setShowHeatmapInfo] = useState(false);
 
   useEffect(() => {
     fetchHeatmapData();
@@ -97,7 +103,11 @@ export default function ActivityHeatmap() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ studentId }),
+        body: JSON.stringify({
+          studentId,
+          lookbackDays: 182,
+          forecastDays: 14,
+        }),
       });
 
       console.log('📡 Response status:', response.status);
@@ -256,7 +266,19 @@ export default function ActivityHeatmap() {
   }
 
   const weeks = organizeIntoWeeks(data.heatmap);
-  const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthMarkers = (() => {
+    const markers: Array<{ weekIndex: number; label: string }> = [];
+    weeks.forEach((week, index) => {
+      const firstValid = week.find((day) => day.date);
+      if (!firstValid) return;
+      const monthLabel = new Date(firstValid.date).toLocaleDateString('en-US', { month: 'short' });
+      const prev = markers[markers.length - 1];
+      if (!prev || prev.label !== monthLabel) {
+        markers.push({ weekIndex: index, label: monthLabel });
+      }
+    });
+    return markers;
+  })();
 
   return (
     <div className="space-y-6 p-6">
@@ -265,7 +287,7 @@ export default function ActivityHeatmap() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Calendar className="w-6 h-6 text-cyan-600" />
-            Activity Heatmap 2026
+            Activity Heatmap (Last 6 Months)
           </h2>
           <p className="text-gray-600 mt-1">
             Your learning activity patterns with ML-powered predictions
@@ -367,18 +389,29 @@ export default function ActivityHeatmap() {
 
       {/* Heatmap Grid */}
       <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Semester Activity Map</h3>
+          <button
+            type="button"
+            onClick={() => setShowHeatmapInfo(true)}
+            className="inline-flex items-center justify-center h-8 w-8 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            title="What is included in this heatmap?"
+          >
+            <Info size={16} />
+          </button>
+        </div>
         <div className="overflow-x-auto">
           <div className="inline-block min-w-full">
             {/* Month Labels */}
-            <div className="flex mb-2 ml-8">
-              {monthLabels.map((month, idx) => (
-                <div
-                  key={idx}
-                  className="text-xs text-gray-600 font-medium"
-                  style={{ width: `${100 / 12}%` }}
+            <div className="relative mb-2 ml-8 h-4">
+              {monthMarkers.map((marker) => (
+                <span
+                  key={`${marker.label}-${marker.weekIndex}`}
+                  className="absolute text-xs text-gray-600 font-medium"
+                  style={{ left: `${marker.weekIndex * (CELL_SIZE + CELL_GAP)}px` }}
                 >
-                  {month}
-                </div>
+                  {marker.label}
+                </span>
               ))}
             </div>
 
@@ -386,13 +419,13 @@ export default function ActivityHeatmap() {
             <div className="flex gap-1">
               {/* Day Labels */}
               <div className="flex flex-col gap-1 text-xs text-gray-600 mr-2">
-                <div style={{ height: '12px' }}>Sun</div>
-                <div style={{ height: '12px' }}>Mon</div>
-                <div style={{ height: '12px' }}>Tue</div>
-                <div style={{ height: '12px' }}>Wed</div>
-                <div style={{ height: '12px' }}>Thu</div>
-                <div style={{ height: '12px' }}>Fri</div>
-                <div style={{ height: '12px' }}>Sat</div>
+                <div style={{ height: `${CELL_SIZE}px` }}>Sun</div>
+                <div style={{ height: `${CELL_SIZE}px` }}>Mon</div>
+                <div style={{ height: `${CELL_SIZE}px` }}>Tue</div>
+                <div style={{ height: `${CELL_SIZE}px` }}>Wed</div>
+                <div style={{ height: `${CELL_SIZE}px` }}>Thu</div>
+                <div style={{ height: `${CELL_SIZE}px` }}>Fri</div>
+                <div style={{ height: `${CELL_SIZE}px` }}>Sat</div>
               </div>
 
               {/* Weeks */}
@@ -408,17 +441,23 @@ export default function ActivityHeatmap() {
                         whileHover={{ scale: day.date ? 1.3 : 1 }}
                       >
                         <div
-                          className={`w-3 h-3 rounded-sm ${
+                          className={`rounded-sm ${
                             day.date ? 'cursor-pointer' : ''
                           }`}
                           style={{
+                            width: `${CELL_SIZE}px`,
+                            height: `${CELL_SIZE}px`,
                             backgroundColor: day.date ? getColor(day) : 'transparent',
                             border: day.date ? '1px solid rgba(0,0,0,0.1)' : 'none',
                           }}
                         >
                           {/* Anomaly Indicator */}
                           {day.isAnomaly && !day.isPrediction && (
-                            <div className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-red-600 rounded-full" />
+                            <div
+                              className={`absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full ${
+                                day.anomalyType === 'positive' ? 'bg-emerald-600' : 'bg-red-600'
+                              }`}
+                            />
                           )}
                         </div>
                       </motion.div>
@@ -447,7 +486,7 @@ export default function ActivityHeatmap() {
               <span className="text-sm text-gray-600 font-medium">More</span>
             </div>
 
-            <div className="flex items-center gap-6 text-sm">
+              <div className="flex items-center gap-6 text-sm">
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded-sm bg-green-400 border border-gray-300" />
                 <span className="text-gray-700">Historical</span>
@@ -456,14 +495,20 @@ export default function ActivityHeatmap() {
                 <div className="w-4 h-4 rounded-sm bg-blue-400 border border-gray-300" />
                 <span className="text-gray-700">Predicted</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-sm bg-gray-200 border border-gray-300 relative">
-                  <div className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-red-600 rounded-full" />
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-sm bg-gray-200 border border-gray-300 relative">
+                    <div className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-emerald-600 rounded-full" />
+                  </div>
+                  <span className="text-gray-700">Positive Anomaly</span>
                 </div>
-                <span className="text-gray-700">Anomaly</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-sm bg-gray-200 border border-gray-300 relative">
+                    <div className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-red-600 rounded-full" />
+                  </div>
+                  <span className="text-gray-700">Negative Anomaly</span>
+                </div>
               </div>
             </div>
-          </div>
         </div>
       </div>
 
@@ -539,9 +584,17 @@ export default function ActivityHeatmap() {
             </div>
 
             {hoveredDay.isAnomaly && (
-              <div className="flex items-center gap-2 text-red-300 text-sm">
+              <div
+                className={`flex items-center gap-2 text-sm ${
+                  hoveredDay.anomalyType === 'positive' ? 'text-emerald-300' : 'text-red-300'
+                }`}
+              >
                 <AlertTriangle className="w-4 h-4" />
-                <span>Anomaly detected</span>
+                <span>
+                  {hoveredDay.anomalyType === 'positive'
+                    ? 'Positive anomaly (higher than usual activity)'
+                    : 'Negative anomaly (lower than usual activity)'}
+                </span>
               </div>
             )}
 
@@ -567,6 +620,29 @@ export default function ActivityHeatmap() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {showHeatmapInfo && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <h3 className="text-base font-semibold text-gray-900">Heatmap Guide</h3>
+              <button
+                type="button"
+                onClick={() => setShowHeatmapInfo(false)}
+                className="inline-flex items-center justify-center h-8 w-8 rounded-full text-gray-600 hover:bg-gray-100"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="px-5 py-4 text-sm text-gray-700 space-y-2">
+              <p>This heatmap includes your project/task activity for the last 6 months.</p>
+              <p>Green squares are historical activity. Blue squares are ML-predicted activity for the next 14 days.</p>
+              <p>Prediction is based on your recent activity pattern, upcoming deadlines, active projects, and semester context.</p>
+              <p>Red-dot anomaly means the day’s activity is unusually high/low compared with your normal pattern.</p>
+            </div>
           </div>
         </div>
       )}
