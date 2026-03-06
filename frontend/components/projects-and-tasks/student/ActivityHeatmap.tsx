@@ -10,6 +10,7 @@ interface HeatmapDay {
   level: number;
   isPrediction: boolean;
   isAnomaly: boolean;
+  anomalyType?: 'positive' | 'negative' | null;
   items: Array<{
     id: string;
     name: string;
@@ -27,6 +28,8 @@ interface HeatmapData {
     maxDaily: number;
     activeDays: number;
     anomalyCount: number;
+    positiveAnomalyCount?: number;
+    negativeAnomalyCount?: number;
     predictedDays: number;
   };
   model_info: {
@@ -40,6 +43,8 @@ interface HeatmapData {
 }
 
 export default function ActivityHeatmap() {
+  const CELL_SIZE = 20;
+  const CELL_GAP = 4;
   const [data, setData] = useState<HeatmapData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -403,7 +408,7 @@ export default function ActivityHeatmap() {
                 <span
                   key={`${marker.label}-${marker.weekIndex}`}
                   className="absolute text-xs text-gray-600 font-medium"
-                  style={{ left: `${marker.weekIndex * 16}px` }}
+                  style={{ left: `${marker.weekIndex * (CELL_SIZE + CELL_GAP)}px` }}
                 >
                   {marker.label}
                 </span>
@@ -414,13 +419,13 @@ export default function ActivityHeatmap() {
             <div className="flex gap-1">
               {/* Day Labels */}
               <div className="flex flex-col gap-1 text-xs text-gray-600 mr-2">
-                <div style={{ height: '12px' }}>Sun</div>
-                <div style={{ height: '12px' }}>Mon</div>
-                <div style={{ height: '12px' }}>Tue</div>
-                <div style={{ height: '12px' }}>Wed</div>
-                <div style={{ height: '12px' }}>Thu</div>
-                <div style={{ height: '12px' }}>Fri</div>
-                <div style={{ height: '12px' }}>Sat</div>
+                <div style={{ height: `${CELL_SIZE}px` }}>Sun</div>
+                <div style={{ height: `${CELL_SIZE}px` }}>Mon</div>
+                <div style={{ height: `${CELL_SIZE}px` }}>Tue</div>
+                <div style={{ height: `${CELL_SIZE}px` }}>Wed</div>
+                <div style={{ height: `${CELL_SIZE}px` }}>Thu</div>
+                <div style={{ height: `${CELL_SIZE}px` }}>Fri</div>
+                <div style={{ height: `${CELL_SIZE}px` }}>Sat</div>
               </div>
 
               {/* Weeks */}
@@ -436,17 +441,23 @@ export default function ActivityHeatmap() {
                         whileHover={{ scale: day.date ? 1.3 : 1 }}
                       >
                         <div
-                          className={`w-3 h-3 rounded-sm ${
+                          className={`rounded-sm ${
                             day.date ? 'cursor-pointer' : ''
                           }`}
                           style={{
+                            width: `${CELL_SIZE}px`,
+                            height: `${CELL_SIZE}px`,
                             backgroundColor: day.date ? getColor(day) : 'transparent',
                             border: day.date ? '1px solid rgba(0,0,0,0.1)' : 'none',
                           }}
                         >
                           {/* Anomaly Indicator */}
                           {day.isAnomaly && !day.isPrediction && (
-                            <div className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-red-600 rounded-full" />
+                            <div
+                              className={`absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full ${
+                                day.anomalyType === 'positive' ? 'bg-emerald-600' : 'bg-red-600'
+                              }`}
+                            />
                           )}
                         </div>
                       </motion.div>
@@ -475,7 +486,7 @@ export default function ActivityHeatmap() {
               <span className="text-sm text-gray-600 font-medium">More</span>
             </div>
 
-            <div className="flex items-center gap-6 text-sm">
+              <div className="flex items-center gap-6 text-sm">
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded-sm bg-green-400 border border-gray-300" />
                 <span className="text-gray-700">Historical</span>
@@ -484,14 +495,20 @@ export default function ActivityHeatmap() {
                 <div className="w-4 h-4 rounded-sm bg-blue-400 border border-gray-300" />
                 <span className="text-gray-700">Predicted</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-sm bg-gray-200 border border-gray-300 relative">
-                  <div className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-red-600 rounded-full" />
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-sm bg-gray-200 border border-gray-300 relative">
+                    <div className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-emerald-600 rounded-full" />
+                  </div>
+                  <span className="text-gray-700">Positive Anomaly</span>
                 </div>
-                <span className="text-gray-700">Anomaly</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-sm bg-gray-200 border border-gray-300 relative">
+                    <div className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-red-600 rounded-full" />
+                  </div>
+                  <span className="text-gray-700">Negative Anomaly</span>
+                </div>
               </div>
             </div>
-          </div>
         </div>
       </div>
 
@@ -567,9 +584,17 @@ export default function ActivityHeatmap() {
             </div>
 
             {hoveredDay.isAnomaly && (
-              <div className="flex items-center gap-2 text-red-300 text-sm">
+              <div
+                className={`flex items-center gap-2 text-sm ${
+                  hoveredDay.anomalyType === 'positive' ? 'text-emerald-300' : 'text-red-300'
+                }`}
+              >
                 <AlertTriangle className="w-4 h-4" />
-                <span>Anomaly detected</span>
+                <span>
+                  {hoveredDay.anomalyType === 'positive'
+                    ? 'Positive anomaly (higher than usual activity)'
+                    : 'Negative anomaly (lower than usual activity)'}
+                </span>
               </div>
             )}
 
