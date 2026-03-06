@@ -226,7 +226,7 @@ const HeroSection: React.FC = () => {
                                 </h1>
 
                                 {/* Decorative accent */}
-                                <div className="h-1 w-24 bg-white rounded-full mb-8 opacity-80"></div>
+                                <div className="h-1 w-2 rounded-full mb-8 opacity-80"></div>
 
                                 <p className="text-white/80 text-base md:text-lg font-light leading-relaxed max-w-md">
                                     {/* Explore unlimited opportunities and unlock your potential with our comprehensive suite of resources. */}
