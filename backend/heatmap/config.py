@@ -30,6 +30,6 @@ class Config:
     }
     
     # Heatmap settings
-    DEFAULT_LOOKBACK_DAYS = 365
+    DEFAULT_LOOKBACK_DAYS = 182
     DEFAULT_FORECAST_DAYS = 14
     MIN_TRAINING_SAMPLES = 10
