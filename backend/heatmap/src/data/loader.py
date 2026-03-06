@@ -48,6 +48,8 @@ class DataLoader:
                 date_str = progress['updatedAt'].strftime('%Y-%m-%d')
                 if date_str in activity_map:
                     project_id = str(progress.get('projectId'))
+                    if project_id not in project_map:
+                        continue
                     activity_map[date_str]["count"] += 1
                     activity_map[date_str]["items"].append({
                         "type": "project",
@@ -62,6 +64,8 @@ class DataLoader:
                 date_str = progress['updatedAt'].strftime('%Y-%m-%d')
                 if date_str in activity_map:
                     task_id = str(progress.get('taskId'))
+                    if task_id not in task_map:
+                        continue
                     activity_map[date_str]["count"] += 1
                     activity_map[date_str]["items"].append({
                         "type": "task",
@@ -76,13 +80,21 @@ class DataLoader:
         """Get all projects for student"""
         courses = self.get_student_courses(student_id)
         course_ids = [str(c['_id']) for c in courses]
-        return list(self.db.projects.find({"courseId": {"$in": course_ids}}))
+        return list(self.db.projects.find({
+            "courseId": {"$in": course_ids},
+            "isArchived": {"$ne": True},
+            "isPublished": {"$ne": False},
+        }))
     
     def _get_student_tasks(self, student_id):
         """Get all tasks for student"""
         courses = self.get_student_courses(student_id)
         course_ids = [str(c['_id']) for c in courses]
-        return list(self.db.tasks.find({"courseId": {"$in": course_ids}}))
+        return list(self.db.tasks.find({
+            "courseId": {"$in": course_ids},
+            "isArchived": {"$ne": True},
+            "isPublished": {"$ne": False},
+        }))
     
     def get_student_courses(self, student_id):
         student = self.db.students.find_one({"_id": ObjectId(student_id)})

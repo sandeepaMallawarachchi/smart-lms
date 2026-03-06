@@ -31,23 +31,26 @@ export async function GET(request: NextRequest) {
             return notFoundResponse('Task ID is required');
         }
 
+        const visibleTask = await Task.findOne({
+            _id: taskId,
+            isPublished: { $ne: false },
+        }).lean();
+
+        if (!visibleTask) {
+            return notFoundResponse('Task not found');
+        }
+
         let progress = await StudentTaskProgress.findOne({
             studentId: payload.userId,
             taskId,
         });
 
         if (!progress) {
-            const task = await Task.findById(taskId);
-
-            if (!task) {
-                return notFoundResponse('Task not found');
-            }
-
             progress = new StudentTaskProgress({
                 studentId: payload.userId,
                 taskId,
                 status: 'todo',
-                subtasks: task.subtasks.map((st: any) => ({
+                subtasks: visibleTask.subtasks.map((st: any) => ({
                     id: st.id,
                     title: st.title,
                     description: st.description,
@@ -56,6 +59,18 @@ export async function GET(request: NextRequest) {
             });
 
             await progress.save();
+
+        }
+
+        if (progress.status !== 'done' && visibleTask.deadlineDate) {
+            await scheduleReminderJobsForStudentItem({
+                studentId: payload.userId,
+                itemType: 'task',
+                itemId: taskId,
+                itemName: visibleTask.taskName,
+                deadlineDate: visibleTask.deadlineDate,
+                deadlineTime: visibleTask.deadlineTime || '23:59',
+            });
         }
 
         return successResponse('Task progress retrieved', { progress }, 200);
@@ -89,23 +104,26 @@ export async function POST(request: NextRequest) {
             return notFoundResponse('Task ID is required');
         }
 
+        const visibleTask = await Task.findOne({
+            _id: taskId,
+            isPublished: { $ne: false },
+        }).lean();
+
+        if (!visibleTask) {
+            return notFoundResponse('Task not found');
+        }
+
         let progress = await StudentTaskProgress.findOne({
             studentId: payload.userId,
             taskId,
         });
 
         if (!progress) {
-            const task = await Task.findById(taskId);
-
-            if (!task) {
-                return notFoundResponse('Task not found');
-            }
-
             progress = new StudentTaskProgress({
                 studentId: payload.userId,
                 taskId,
                 status: status || 'todo',
-                subtasks: task.subtasks.map((st: any) => ({
+                subtasks: subtasks || visibleTask.subtasks.map((st: any) => ({
                     id: st.id,
                     title: st.title,
                     description: st.description,
@@ -133,23 +151,17 @@ export async function POST(request: NextRequest) {
                 studentId: payload.userId,
                 taskId,
             });
-        } else if (progress.status === 'inprogress') {
-            const task = await Task.findById(taskId).lean();
-            if (task?.deadlineDate) {
+        } else {
+            if (visibleTask.deadlineDate) {
                 await scheduleReminderJobsForStudentItem({
                     studentId: payload.userId,
                     itemType: 'task',
                     itemId: taskId,
-                    itemName: task.taskName,
-                    deadlineDate: task.deadlineDate,
-                    deadlineTime: task.deadlineTime || '23:59',
+                    itemName: visibleTask.taskName,
+                    deadlineDate: visibleTask.deadlineDate,
+                    deadlineTime: visibleTask.deadlineTime || '23:59',
                 });
             }
-        } else {
-            await cancelReminderJobsForStudentItem({
-                studentId: payload.userId,
-                taskId,
-            });
         }
 
         return successResponse('Task progress updated', { progress }, 200);
