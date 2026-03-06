@@ -94,11 +94,12 @@ def generate_heatmap():
         
         final_counts = np.array(final_counts)
         
-        # Detect anomalies
-        anomaly_flags = anomaly_detector.detect(final_counts)
-        
         # Prediction flags
         prediction_flags = [d.date() > today for d in all_dates]
+        
+        # Detect anomalies only on historical days
+        anomaly_types = anomaly_detector.detect_types(final_counts, prediction_flags=prediction_flags)
+        anomaly_flags = anomaly_types != 'none'
         
         # Adaptive thresholds based on actual past data
         past_counts = [activity_history.get(d.strftime('%Y-%m-%d'), {}).get('count', 0) for d in past_dates]
@@ -119,6 +120,7 @@ def generate_heatmap():
                 'level': int(levels[i]),
                 'isPrediction': bool(prediction_flags[i]),
                 'isAnomaly': bool(anomaly_flags[i]),
+                'anomalyType': str(anomaly_types[i]) if anomaly_flags[i] else None,
                 'items': items if not prediction_flags[i] else []
             })
         
@@ -134,6 +136,8 @@ def generate_heatmap():
                 'maxDaily': float(max([h['count'] for h in heatmap if not h['isPrediction']])) if any(not h['isPrediction'] for h in heatmap) else 0.0,
                 'activeDays': int(sum(1 for h in heatmap if h['count'] > 0 and not h['isPrediction'])),
                 'anomalyCount': int(sum(anomaly_flags)),
+                'positiveAnomalyCount': int(sum(1 for t in anomaly_types if t == 'positive')),
+                'negativeAnomalyCount': int(sum(1 for t in anomaly_types if t == 'negative')),
                 'predictedDays': int(sum(prediction_flags))
             },
             'model_info': {
