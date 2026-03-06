@@ -8,8 +8,10 @@ class DataLoader:
         self.client = MongoClient(Config.MONGODB_URI)
         self.db = self.client['test']
     
-    def get_activity_history(self, student_id, days=365):
+    def get_activity_history(self, student_id, days=None):
         """Get activity with items details"""
+        if days is None:
+            days = Config.DEFAULT_LOOKBACK_DAYS
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
         

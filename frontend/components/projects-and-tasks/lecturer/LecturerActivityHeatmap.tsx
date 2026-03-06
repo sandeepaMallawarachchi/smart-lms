@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Loader } from 'lucide-react';
+import { Info, Loader, X } from 'lucide-react';
 
 interface SelectedCourse {
   _id: string;
@@ -39,6 +39,7 @@ export default function LecturerActivityHeatmap() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hoverDay, setHoverDay] = useState<HeatmapDay | null>(null);
+  const [showHeatmapInfo, setShowHeatmapInfo] = useState(false);
 
   useEffect(() => {
     try {
@@ -166,8 +167,18 @@ export default function LecturerActivityHeatmap() {
       ) : (
         <>
           <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-gray-600">Daily activity distribution for the current year</p>
-            <p className="text-sm text-gray-600">{totalActivities} activities</p>
+            <p className="text-sm text-gray-600">Daily activity distribution for the last 6 months</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-gray-600">{totalActivities} activities</p>
+              <button
+                type="button"
+                onClick={() => setShowHeatmapInfo(true)}
+                className="inline-flex items-center justify-center h-8 w-8 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                title="What is included in this heatmap?"
+              >
+                <Info size={16} />
+              </button>
+            </div>
           </div>
 
           {weeks.length === 0 ? (
@@ -219,6 +230,29 @@ export default function LecturerActivityHeatmap() {
             </>
           )}
         </>
+      )}
+
+      {showHeatmapInfo && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <h3 className="text-base font-semibold text-gray-900">Heatmap Guide</h3>
+              <button
+                type="button"
+                onClick={() => setShowHeatmapInfo(false)}
+                className="inline-flex items-center justify-center h-8 w-8 rounded-full text-gray-600 hover:bg-gray-100"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="px-5 py-4 text-sm text-gray-700 space-y-2">
+              <p>This heatmap shows student task/project progress updates for the last 6 months.</p>
+              <p>Each square represents one day and color intensity indicates update volume.</p>
+              <p>Hover a day to see which student updated which project/task and current status.</p>
+              <p>This lecturer view is historical activity only. It does not include ML predictions or anomaly flags.</p>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, TrendingUp, AlertTriangle, Sparkles } from 'lucide-react';
+import { Calendar, TrendingUp, AlertTriangle, Sparkles, Info, X } from 'lucide-react';
 
 interface HeatmapDay {
   date: string;
@@ -45,6 +45,7 @@ export default function ActivityHeatmap() {
   const [error, setError] = useState<string | null>(null);
   const [hoveredDay, setHoveredDay] = useState<HeatmapDay | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [showHeatmapInfo, setShowHeatmapInfo] = useState(false);
 
   useEffect(() => {
     fetchHeatmapData();
@@ -97,7 +98,11 @@ export default function ActivityHeatmap() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ studentId }),
+        body: JSON.stringify({
+          studentId,
+          lookbackDays: 182,
+          forecastDays: 14,
+        }),
       });
 
       console.log('📡 Response status:', response.status);
@@ -256,7 +261,19 @@ export default function ActivityHeatmap() {
   }
 
   const weeks = organizeIntoWeeks(data.heatmap);
-  const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthMarkers = (() => {
+    const markers: Array<{ weekIndex: number; label: string }> = [];
+    weeks.forEach((week, index) => {
+      const firstValid = week.find((day) => day.date);
+      if (!firstValid) return;
+      const monthLabel = new Date(firstValid.date).toLocaleDateString('en-US', { month: 'short' });
+      const prev = markers[markers.length - 1];
+      if (!prev || prev.label !== monthLabel) {
+        markers.push({ weekIndex: index, label: monthLabel });
+      }
+    });
+    return markers;
+  })();
 
   return (
     <div className="space-y-6 p-6">
@@ -265,7 +282,7 @@ export default function ActivityHeatmap() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Calendar className="w-6 h-6 text-cyan-600" />
-            Activity Heatmap 2026
+            Activity Heatmap (Last 6 Months)
           </h2>
           <p className="text-gray-600 mt-1">
             Your learning activity patterns with ML-powered predictions
@@ -367,18 +384,29 @@ export default function ActivityHeatmap() {
 
       {/* Heatmap Grid */}
       <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Semester Activity Map</h3>
+          <button
+            type="button"
+            onClick={() => setShowHeatmapInfo(true)}
+            className="inline-flex items-center justify-center h-8 w-8 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            title="What is included in this heatmap?"
+          >
+            <Info size={16} />
+          </button>
+        </div>
         <div className="overflow-x-auto">
           <div className="inline-block min-w-full">
             {/* Month Labels */}
-            <div className="flex mb-2 ml-8">
-              {monthLabels.map((month, idx) => (
-                <div
-                  key={idx}
-                  className="text-xs text-gray-600 font-medium"
-                  style={{ width: `${100 / 12}%` }}
+            <div className="relative mb-2 ml-8 h-4">
+              {monthMarkers.map((marker) => (
+                <span
+                  key={`${marker.label}-${marker.weekIndex}`}
+                  className="absolute text-xs text-gray-600 font-medium"
+                  style={{ left: `${marker.weekIndex * 16}px` }}
                 >
-                  {month}
-                </div>
+                  {marker.label}
+                </span>
               ))}
             </div>
 
@@ -567,6 +595,29 @@ export default function ActivityHeatmap() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {showHeatmapInfo && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <h3 className="text-base font-semibold text-gray-900">Heatmap Guide</h3>
+              <button
+                type="button"
+                onClick={() => setShowHeatmapInfo(false)}
+                className="inline-flex items-center justify-center h-8 w-8 rounded-full text-gray-600 hover:bg-gray-100"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="px-5 py-4 text-sm text-gray-700 space-y-2">
+              <p>This heatmap includes your project/task activity for the last 6 months.</p>
+              <p>Green squares are historical activity. Blue squares are ML-predicted activity for the next 14 days.</p>
+              <p>Prediction is based on your recent activity pattern, upcoming deadlines, active projects, and semester context.</p>
+              <p>Red-dot anomaly means the day’s activity is unusually high/low compared with your normal pattern.</p>
+            </div>
           </div>
         </div>
       )}
