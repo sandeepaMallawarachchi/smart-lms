@@ -40,7 +40,7 @@ interface Notification {
   message: string;
   time: string;
   type: 'alert' | 'warning' | 'info' | 'success';
-  icon: React.ComponentType<any>;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
 }
 
 interface SidebarConfig {
@@ -188,9 +188,7 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
           description: 'Download your analytics',
           href: '/learning-analytics/student/reports',
           subsections: [
-            { id: 'progress-report', label: 'Progress Report' },
-            { id: 'attendance-report', label: 'Attendance Report' },
-            { id: 'export-data', label: 'Export Data' },
+            { id: 'progress-report', label: 'Progress Report', href: '/learning-analytics/student/reports' },
           ],
         },
       ],
