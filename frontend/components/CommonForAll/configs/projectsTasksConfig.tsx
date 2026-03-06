@@ -290,7 +290,7 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           id: 'projects',
           label: 'Projects & Tasks',
           icon: <ListTodo size={22} />,
-          href: '/projects-and-tasks/lecturer/projects',
+          href: '/projects-and-tasks/lecturer/all-projects-and-tasks',
           subsections: [
             { id: 'all-projects-and-tasks', label: 'All Projects and Tasks', href: '/projects-and-tasks/lecturer/all-projects-and-tasks' },
             { id: 'create-project-and-task', label: 'Create Project and task ', href: '/projects-and-tasks/lecturer/create-projects-and-tasks' },

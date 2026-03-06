@@ -121,8 +121,11 @@ export async function GET(request: NextRequest) {
     );
 
     const now = new Date();
-    const yearStart = new Date(now.getFullYear(), 0, 1);
-    const yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+    const rangeEnd = new Date(now);
+    rangeEnd.setHours(23, 59, 59, 999);
+    const rangeStart = new Date(now);
+    rangeStart.setDate(rangeStart.getDate() - 181);
+    rangeStart.setHours(0, 0, 0, 0);
 
     const activityMap = new Map<
       string,
@@ -139,8 +142,8 @@ export async function GET(request: NextRequest) {
       }
     >();
 
-    const cursor = new Date(yearStart);
-    while (cursor <= yearEnd) {
+    const cursor = new Date(rangeStart);
+    while (cursor <= rangeEnd) {
       const key = cursor.toISOString().split('T')[0];
       activityMap.set(key, { count: 0, items: [] });
       cursor.setDate(cursor.getDate() + 1);
@@ -152,7 +155,7 @@ export async function GET(request: NextRequest) {
       const updatedAt = updatedAtRaw instanceof Date ? updatedAtRaw : new Date(updatedAtRaw);
       if (Number.isNaN(updatedAt.getTime())) return;
 
-      if (updatedAt < yearStart || updatedAt > yearEnd) return;
+      if (updatedAt < rangeStart || updatedAt > rangeEnd) return;
       const key = updatedAt.toISOString().split('T')[0];
       const day = activityMap.get(key);
       if (!day) return;
