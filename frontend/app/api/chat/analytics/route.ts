@@ -4,13 +4,12 @@ import { serverErrorResponse } from '@/lib/api-response';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const rawChatbotUrl =
-      process.env.CHATBOT_URL ||
-      (process.env.CHATBOT_BASE_URL ? `${process.env.CHATBOT_BASE_URL}/chat` : '') ||
-      'http://localhost:5001/chat';
-    const chatbotUrl = rawChatbotUrl.endsWith('/chat')
-      ? rawChatbotUrl
-      : `${rawChatbotUrl.replace(/\/+$/, '')}/chat`;
+    const configuredChatbotUrl = process.env.CHATBOT_URL || process.env.CHATBOT_BASE_URL;
+    if (!configuredChatbotUrl) {
+      return serverErrorResponse('CHATBOT_URL is not configured');
+    }
+    const normalized = configuredChatbotUrl.replace(/\/$/, '');
+    const chatbotUrl = /\/chat$/.test(normalized) ? normalized : `${normalized}/chat`;
 
     const response = await fetch(chatbotUrl, {
       method: 'POST',
