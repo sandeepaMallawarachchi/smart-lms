@@ -76,7 +76,14 @@ export async function PUT(
       );
     }
 
-    const body = await request.json();
+    const body = (await request.json()) as {
+      taskName?: string;
+      description?: { html: string; text: string };
+      deadlineDate?: string;
+      deadlineTime?: string;
+      specialNotes?: { html: string; text: string };
+      isPublished?: boolean;
+    };
     console.log('Request body:', body);
 
     // Validate required fields
@@ -98,6 +105,7 @@ export async function PUT(
         deadlineDate: body.deadlineDate || '',
         deadlineTime: body.deadlineTime || '23:59',
         specialNotes: body.specialNotes || { html: '', text: '' },
+        isPublished: typeof body.isPublished === 'boolean' ? body.isPublished : existingTask.isPublished ?? true,
       },
       { new: true, runValidators: true }
     );
@@ -114,7 +122,8 @@ export async function PUT(
       (existingTask.deadlineDate || '') !== (updatedTask.deadlineDate || '') ||
       (existingTask.deadlineTime || '23:59') !== (updatedTask.deadlineTime || '23:59');
     const nameChanged = existingTask.taskName !== updatedTask.taskName;
-    const shouldRescheduleReminders = deadlineChanged || nameChanged;
+    const publishStateChanged = (existingTask.isPublished ?? true) !== (updatedTask.isPublished ?? true);
+    const shouldRescheduleReminders = deadlineChanged || nameChanged || publishStateChanged;
 
     if (shouldRescheduleReminders) {
       const activeProgress = await StudentTaskProgress.find({
@@ -124,7 +133,7 @@ export async function PUT(
         .select('studentId')
         .lean();
 
-      if (updatedTask.deadlineDate) {
+      if (updatedTask.isPublished && updatedTask.deadlineDate) {
         await Promise.all(
           activeProgress.map((row: { studentId: string }) =>
             scheduleReminderJobsForStudentItem({

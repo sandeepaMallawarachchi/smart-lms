@@ -31,23 +31,26 @@ export async function GET(request: NextRequest) {
             return notFoundResponse('Project ID is required');
         }
 
+        const visibleProject = await Project.findOne({
+            _id: projectId,
+            isPublished: { $ne: false },
+        }).lean();
+
+        if (!visibleProject) {
+            return notFoundResponse('Project not found');
+        }
+
         let progress = await StudentProjectProgress.findOne({
             studentId: payload.userId,
             projectId,
         });
 
         if (!progress) {
-            const project = await Project.findById(projectId);
-
-            if (!project) {
-                return notFoundResponse('Project not found');
-            }
-
             progress = new StudentProjectProgress({
                 studentId: payload.userId,
                 projectId,
                 status: 'todo',
-                mainTasks: project.mainTasks.map((task: any) => ({
+                mainTasks: visibleProject.mainTasks.map((task: any) => ({
                     id: task.id,
                     title: task.title,
                     description: task.description,
@@ -95,23 +98,26 @@ export async function POST(request: NextRequest) {
             return notFoundResponse('Project ID is required');
         }
 
+        const visibleProject = await Project.findOne({
+            _id: projectId,
+            isPublished: { $ne: false },
+        }).lean();
+
+        if (!visibleProject) {
+            return notFoundResponse('Project not found');
+        }
+
         let progress = await StudentProjectProgress.findOne({
             studentId: payload.userId,
             projectId,
         });
 
         if (!progress) {
-            const project = await Project.findById(projectId);
-
-            if (!project) {
-                return notFoundResponse('Project not found');
-            }
-
             progress = new StudentProjectProgress({
                 studentId: payload.userId,
                 projectId,
                 status: status || 'todo',
-                mainTasks: mainTasks || project.mainTasks.map((task: any) => ({
+                mainTasks: mainTasks || visibleProject.mainTasks.map((task: any) => ({
                     id: task.id,
                     title: task.title,
                     description: task.description,
@@ -146,15 +152,14 @@ export async function POST(request: NextRequest) {
                 projectId,
             });
         } else if (progress.status === 'inprogress') {
-            const project = await Project.findById(projectId).lean();
-            if (project?.deadlineDate) {
+            if (visibleProject.deadlineDate) {
                 await scheduleReminderJobsForStudentItem({
                     studentId: payload.userId,
                     itemType: 'project',
                     itemId: projectId,
-                    itemName: project.projectName,
-                    deadlineDate: project.deadlineDate,
-                    deadlineTime: project.deadlineTime || '23:59',
+                    itemName: visibleProject.projectName,
+                    deadlineDate: visibleProject.deadlineDate,
+                    deadlineTime: visibleProject.deadlineTime || '23:59',
                 });
             }
         } else {
