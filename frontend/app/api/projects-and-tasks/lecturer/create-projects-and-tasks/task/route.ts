@@ -5,6 +5,38 @@ import { Task } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
 import { connectDB } from '@/lib/db';
 import { uploadFileToS3, validateFile } from '@/lib/s3-upload';
 
+type IncomingSubtask = { id?: string; title?: string; description?: string; marks?: number | string };
+
+function normalizeTaskSubtasks(subtasks: unknown): { ok: true; value: IncomingSubtask[] } | { ok: false; message: string } {
+  if (!Array.isArray(subtasks)) {
+    return { ok: false, message: 'Subtasks must be an array' };
+  }
+
+  let totalMarks = 0;
+  const normalized: IncomingSubtask[] = [];
+
+  for (const rawSubtask of subtasks) {
+    const subtask = (rawSubtask || {}) as IncomingSubtask;
+    const marks = Number(subtask.marks ?? 0);
+    if (!Number.isFinite(marks) || marks < 0 || marks > 100) {
+      return { ok: false, message: 'Each subtask mark must be between 0 and 100' };
+    }
+    totalMarks += marks;
+    if (totalMarks > 100) {
+      return { ok: false, message: 'Total subtask marks cannot exceed 100' };
+    }
+
+    normalized.push({
+      id: String(subtask.id || ''),
+      title: String(subtask.title || ''),
+      description: String(subtask.description || ''),
+      marks,
+    });
+  }
+
+  return { ok: true, value: normalized };
+}
+
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
@@ -25,7 +57,7 @@ export async function POST(request: NextRequest) {
     const specialNotes = JSON.parse(
       (formData.get('specialNotes') as string) || '{"html":"","text":""}'
     );
-    const subtasks = JSON.parse((formData.get('subtasks') as string) || '[]');
+    const subtasksRaw = JSON.parse((formData.get('subtasks') as string) || '[]');
 
     // Validation
     if (!courseId) {
@@ -41,6 +73,15 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const normalizedSubtasksResult = normalizeTaskSubtasks(subtasksRaw);
+    if (!normalizedSubtasksResult.ok) {
+      return NextResponse.json(
+        { message: normalizedSubtasksResult.message },
+        { status: 400 }
+      );
+    }
+    const subtasks = normalizedSubtasksResult.value;
 
     // Handle file uploads
     const templateDocuments = [];
@@ -137,10 +178,10 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Create task error:', error);
     return NextResponse.json(
-      { message: error.message || 'Failed to create task' },
+      { message: error instanceof Error ? error.message : 'Failed to create task' },
       { status: 500 }
     );
   }
@@ -187,16 +228,14 @@ export async function GET(request: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Fetch tasks error:', error);
     return NextResponse.json(
-      { message: error.message || 'Failed to fetch tasks' },
+      { message: error instanceof Error ? error.message : 'Failed to fetch tasks' },
       { status: 500 }
     );
   }
 }
-
-
 
 
 

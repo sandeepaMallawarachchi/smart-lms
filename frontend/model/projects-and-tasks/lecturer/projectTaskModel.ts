@@ -4,6 +4,7 @@ interface ISubtask {
   id: string;
   title: string;
   description?: string;
+  marks?: number;
   completed?: boolean;
 }
 
@@ -11,6 +12,7 @@ interface IMainTask {
   id: string;
   title: string;
   description?: string;
+  marks?: number;
   subtasks?: ISubtask[];
   completed?: boolean;
 }
@@ -79,6 +81,12 @@ const subtaskSchema = new Schema<ISubtask>(
       maxlength: [200, 'Subtask title cannot exceed 200 characters'],
     },
     description: String,
+    marks: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
     completed: {
       type: Boolean,
       default: false,
@@ -97,6 +105,12 @@ const mainTaskSchema = new Schema<IMainTask>(
       maxlength: [200, 'Main task title cannot exceed 200 characters'],
     },
     description: String,
+    marks: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
     subtasks: [subtaskSchema],
     completed: {
       type: Boolean,

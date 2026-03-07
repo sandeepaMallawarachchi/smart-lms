@@ -11,6 +11,7 @@ interface Subtask {
   id: string;
   title: string;
   description?: string;
+  marks?: number;
 }
 
 interface FormState {
@@ -36,6 +37,7 @@ export default function TaskCreationForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [newSubtaskMarks, setNewSubtaskMarks] = useState<string>('');
 
   // File upload states
   const [templateDocs, setTemplateDocs] = useState<File[]>([]);
@@ -57,6 +59,14 @@ export default function TaskCreationForm({
 
     if (!formState.taskName.trim()) {
       newErrors.taskName = 'Task name is required';
+    }
+
+    const subtaskMarksTotal = formState.subtasks.reduce(
+      (sum, subtask) => sum + Number(subtask.marks || 0),
+      0
+    );
+    if (subtaskMarksTotal > 100) {
+      newErrors.subtaskMarks = 'Total subtask marks cannot exceed 100';
     }
 
     setErrors(newErrors);
@@ -117,9 +127,10 @@ export default function TaskCreationForm({
 
       toast.success('Task created successfully!');
       onSuccess?.();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Task creation error:', error);
-      toast.error(error.message || 'Failed to create task');
+      const message = error instanceof Error ? error.message : 'Failed to create task';
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -132,10 +143,25 @@ export default function TaskCreationForm({
       return;
     }
 
+    const parsedMarks = Number(newSubtaskMarks);
+    if (!Number.isFinite(parsedMarks) || parsedMarks <= 0) {
+      toast.error('Enter valid marks for the subtask');
+      return;
+    }
+    const currentTotal = formState.subtasks.reduce(
+      (sum, subtask) => sum + Number(subtask.marks || 0),
+      0
+    );
+    if (currentTotal + parsedMarks > 100) {
+      toast.error('Total subtask marks cannot exceed 100');
+      return;
+    }
+
     const newSubtask: Subtask = {
       id: Date.now().toString(),
       title: newSubtaskTitle,
       description: '',
+      marks: parsedMarks,
     };
 
     setFormState({
@@ -144,6 +170,7 @@ export default function TaskCreationForm({
     });
 
     setNewSubtaskTitle('');
+    setNewSubtaskMarks('');
     toast.success('Subtask added');
   };
 
@@ -193,6 +220,8 @@ export default function TaskCreationForm({
       setImageFiles(imageFiles.filter((f) => f.name !== fileName));
     }
   };
+  const getSubtaskMarksTotal = (): number =>
+    formState.subtasks.reduce((sum, subtask) => sum + Number(subtask.marks || 0), 0);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
@@ -295,9 +324,14 @@ export default function TaskCreationForm({
 
       {/* Subtasks */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <label className="block text-sm font-semibold text-gray-900 mb-4">
-          Subtasks (Optional)
-        </label>
+        <div className="flex items-center justify-between mb-4">
+          <label className="block text-sm font-semibold text-gray-900">
+            Subtasks (Optional)
+          </label>
+          <span className="text-xs font-semibold text-gray-700">
+            Total Subtask Marks: {getSubtaskMarksTotal()}/100
+          </span>
+        </div>
 
         {formState.subtasks.length > 0 && (
           <div className="space-y-2 mb-4">
@@ -309,6 +343,9 @@ export default function TaskCreationForm({
                 <div className="flex items-center gap-3 flex-1">
                   <div className="w-2 h-2 bg-brand-blue rounded-full"></div>
                   <span className="font-medium text-gray-900">{subtask.title}</span>
+                  <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded">
+                    {Number(subtask.marks || 0)} marks
+                  </span>
                 </div>
                 <button
                   type="button"
@@ -336,6 +373,16 @@ export default function TaskCreationForm({
             }}
             placeholder="Enter subtask title..."
             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue"
+          />
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step="0.5"
+            value={newSubtaskMarks}
+            onChange={(e) => setNewSubtaskMarks(e.target.value)}
+            placeholder="Marks"
+            className="w-28 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue"
           />
           <button
             type="button"
