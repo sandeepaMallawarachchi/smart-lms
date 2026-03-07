@@ -53,7 +53,16 @@ interface PredictionResponse {
 
 export default function FullReportPage() {
     const router = useRouter();
-    const learningAnalyticsApiBaseUrl = (process.env.NEXT_PUBLIC_LEARNING_ANALYTICS_API_URL || '').replace(/\/$/, '');
+    const configuredAnalyticsApiBaseUrl = (process.env.NEXT_PUBLIC_LEARNING_ANALYTICS_API_URL || '').replace(/\/$/, '');
+    const learningAnalyticsApiBaseUrls = Array.from(
+        new Set(
+            [
+                configuredAnalyticsApiBaseUrl,
+                configuredAnalyticsApiBaseUrl.replace('localhost', '127.0.0.1'),
+                'http://127.0.0.1:5000',
+            ].filter(Boolean)
+        )
+    );
     const [studentData, setStudentData] = useState<StudentData | null>(null);
     const [prediction, setPrediction] = useState<PredictionResponse | null>(null);
     const [inputData, setInputData] = useState<Record<string, any> | null>(null);
@@ -157,19 +166,35 @@ export default function FullReportPage() {
                 setInputData(predictionPayload);
 
                 // Call prediction API
-                if (!learningAnalyticsApiBaseUrl) {
+                if (learningAnalyticsApiBaseUrls.length === 0) {
                     setError('Learning Analytics API URL is not configured');
                     setIsLoading(false);
                     return;
                 }
+                let predictionResponse: Response | null = null;
+                let lastFetchError: unknown = null;
 
-                const predictionResponse = await fetch(`${learningAnalyticsApiBaseUrl}/api/predict`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(predictionPayload),
-                });
+                for (const baseUrl of learningAnalyticsApiBaseUrls) {
+                    try {
+                        predictionResponse = await fetch(`${baseUrl}/api/predict`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(predictionPayload),
+                        });
+                        if (predictionResponse.ok) break;
+                    } catch (fetchErr) {
+                        lastFetchError = fetchErr;
+                    }
+                }
+
+                if (!predictionResponse) {
+                    console.error('Prediction API fetch failed', lastFetchError);
+                    setError('Learning Analytics API is unreachable. Ensure Python service is running on port 5000.');
+                    setIsLoading(false);
+                    return;
+                }
 
                 if (!predictionResponse.ok) {
                     setError('Failed to get prediction');
@@ -189,7 +214,7 @@ export default function FullReportPage() {
         };
 
         fetchDataAndPredict();
-    }, [learningAnalyticsApiBaseUrl]);
+    }, [configuredAnalyticsApiBaseUrl]);
 
     const savePredictionToDatabase = async (
         predictionData: PredictionResponse,

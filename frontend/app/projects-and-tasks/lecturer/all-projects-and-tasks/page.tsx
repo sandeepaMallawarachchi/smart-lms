@@ -51,6 +51,7 @@ interface Project {
   otherDocuments?: Document[];
   images?: Document[];
   mainTasks?: MainTask[];
+  isPublished?: boolean;
 }
 
 interface Task {
@@ -66,6 +67,7 @@ interface Task {
   otherDocuments?: Document[];
   images?: Document[];
   subtasks?: Subtask[];
+  isPublished?: boolean;
 }
 
 interface SelectedCourse {
@@ -129,6 +131,7 @@ export default function AllProjectsAndTasksPage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingData, setEditingData] = useState<any>(null);
   const [editType, setEditType] = useState<'project' | 'task'>('project');
+  const [publishingItemId, setPublishingItemId] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -349,7 +352,7 @@ export default function AllProjectsAndTasksPage() {
     setEditModalOpen(true);
   };
 
- const handleSaveEdit = async (updatedData: any) => {
+const handleSaveEdit = async (updatedData: any) => {
   try {
     // Validate we have the ID
     if (!editingData?._id) {
@@ -410,6 +413,68 @@ export default function AllProjectsAndTasksPage() {
     throw new Error(error.message || `Failed to update ${editType}`);
   }
 };
+
+  const handleTogglePublish = async (item: Project | Task, type: 'project' | 'task') => {
+    try {
+      setPublishingItemId(item._id);
+      const token = localStorage.getItem('authToken');
+      if (!token) throw new Error('Authentication required');
+
+      const endpoint =
+        type === 'project'
+          ? `/api/projects-and-tasks/lecturer/create-projects-and-tasks/project/${item._id}`
+          : `/api/projects-and-tasks/lecturer/create-projects-and-tasks/task/${item._id}`;
+
+      const payload =
+        type === 'project'
+          ? {
+              projectName: (item as Project).projectName,
+              description: (item as Project).description || { html: '', text: '' },
+              projectType: (item as Project).projectType || 'individual',
+              assignedGroupIds: (item as Project).assignedGroupIds || [],
+              deadlineDate: (item as Project).deadlineDate,
+              deadlineTime: (item as Project).deadlineTime || '23:59',
+              specialNotes: (item as Project).specialNotes || { html: '', text: '' },
+              isPublished: !(item.isPublished ?? true),
+            }
+          : {
+              taskName: (item as Task).taskName,
+              description: (item as Task).description || { html: '', text: '' },
+              deadlineDate: (item as Task).deadlineDate || '',
+              deadlineTime: (item as Task).deadlineTime || '23:59',
+              specialNotes: (item as Task).specialNotes || { html: '', text: '' },
+              isPublished: !(item.isPublished ?? true),
+            };
+
+      const response = await fetch(endpoint, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to update ${type} publish state`);
+      }
+
+      const result = await response.json();
+      const updatedItem = result.data;
+
+      if (type === 'project') {
+        setProjects((prev) => prev.map((p) => (p._id === item._id ? updatedItem : p)));
+      } else {
+        setTasks((prev) => prev.map((t) => (t._id === item._id ? updatedItem : t)));
+      }
+    } catch (toggleError: any) {
+      console.error('Publish toggle error:', toggleError);
+      setError(toggleError.message || 'Failed to update publish state');
+    } finally {
+      setPublishingItemId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
@@ -601,6 +666,15 @@ export default function AllProjectsAndTasksPage() {
                                   >
                                     {project.projectType === 'group' ? '👥 Group' : '👤 Individual'}
                                   </motion.span>
+                                  <span
+                                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                                      (project.isPublished ?? true)
+                                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                        : 'border-slate-300 bg-slate-100 text-slate-700'
+                                    }`}
+                                  >
+                                    {(project.isPublished ?? true) ? 'Published' : 'Unpublished'}
+                                  </span>
                                   {project.projectType === 'group' &&
                                     (project.assignedGroups || []).map((group) => (
                                       <span
@@ -648,6 +722,23 @@ export default function AllProjectsAndTasksPage() {
                                 title="Edit project"
                               >
                                 <Edit size={20} className="text-brand-blue hover:text-blue-700" />
+                              </motion.button>
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.96 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTogglePublish(project, 'project');
+                                }}
+                                disabled={publishingItemId === project._id}
+                                className={`ml-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                  (project.isPublished ?? true)
+                                    ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                    : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                                } disabled:cursor-not-allowed disabled:opacity-60`}
+                                title={(project.isPublished ?? true) ? 'Unpublish project' : 'Publish project'}
+                              >
+                                {(project.isPublished ?? true) ? 'Unpublish' : 'Publish'}
                               </motion.button>
                             </div>
 
@@ -890,6 +981,17 @@ export default function AllProjectsAndTasksPage() {
                                     </div>
                                   </motion.div>
                                 )}
+                                <div className="ml-9">
+                                  <span
+                                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                                      (task.isPublished ?? true)
+                                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                        : 'border-slate-300 bg-slate-100 text-slate-700'
+                                    }`}
+                                  >
+                                    {(task.isPublished ?? true) ? 'Published' : 'Unpublished'}
+                                  </span>
+                                </div>
                               </div>
                               <motion.div
                                 animate={{ scale: 1 }}
@@ -911,6 +1013,23 @@ export default function AllProjectsAndTasksPage() {
                                 title="Edit task"
                               >
                                 <Edit size={20} className="text-brand-blue hover:text-blue-700" />
+                              </motion.button>
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.96 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTogglePublish(task, 'task');
+                                }}
+                                disabled={publishingItemId === task._id}
+                                className={`ml-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                  (task.isPublished ?? true)
+                                    ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                    : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                                } disabled:cursor-not-allowed disabled:opacity-60`}
+                                title={(task.isPublished ?? true) ? 'Unpublish task' : 'Publish task'}
+                              >
+                                {(task.isPublished ?? true) ? 'Unpublish' : 'Publish'}
                               </motion.button>
                             </div>
 

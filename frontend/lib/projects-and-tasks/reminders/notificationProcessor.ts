@@ -56,8 +56,8 @@ export async function processReminderJob(payload: ReminderJobPayload): Promise<v
 
   const isProject = payload.itemType === 'project';
   const item = isProject
-    ? await Project.findById(itemId).lean()
-    : await Task.findById(itemId).lean();
+    ? await Project.findOne({ _id: itemId, isPublished: { $ne: false } }).lean()
+    : await Task.findOne({ _id: itemId, isPublished: { $ne: false } }).lean();
 
   if (!item) return;
 

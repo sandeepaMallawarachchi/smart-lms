@@ -29,6 +29,7 @@ export interface IProject extends Document {
   otherDocuments: Array<{ url: string; name: string; fileSize: number }>;
   images: Array<{ url: string; name: string; fileSize: number }>;
   mainTasks: IMainTask[];
+  isPublished: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -45,6 +46,7 @@ export interface ITask extends Document {
   otherDocuments: Array<{ url: string; name: string; fileSize: number }>;
   images: Array<{ url: string; name: string; fileSize: number }>;
   subtasks: ISubtask[];
+  isPublished: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -162,6 +164,11 @@ const projectSchema = new Schema<IProject>(
     otherDocuments: [documentSchema],
     images: [documentSchema],
     mainTasks: [mainTaskSchema],
+    isPublished: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
   },
   { timestamps: true }
 );
@@ -204,6 +211,11 @@ const taskSchema = new Schema<ITask>(
     otherDocuments: [documentSchema],
     images: [documentSchema],
     subtasks: [subtaskSchema],
+    isPublished: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
   },
   { timestamps: true }
 );

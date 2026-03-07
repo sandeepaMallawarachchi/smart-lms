@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import type { FilterQuery } from 'mongoose';
 import { connectDB } from '@/lib/db';
 import Prediction from '@/model/Prediction';
 import Student from '@/model/Student';
@@ -67,12 +68,30 @@ export async function POST(request: NextRequest) {
     }
 
     // Create new prediction
+    const normalizedRiskFactors = Array.isArray(prediction?.risk_factors)
+      ? prediction.risk_factors.map((factor: unknown) => {
+          if (typeof factor === 'string') return factor;
+          if (factor && typeof factor === 'object' && 'description' in (factor as Record<string, unknown>)) {
+            return String((factor as Record<string, unknown>).description || '');
+          }
+          return JSON.stringify(factor);
+        }).filter(Boolean)
+      : [];
+
+    const normalizedPrediction = {
+      at_risk: Boolean(prediction.at_risk),
+      confidence: Number(prediction.confidence ?? 0),
+      risk_level: String(prediction.risk_level || 'low').toLowerCase(),
+      risk_probability: Number(prediction.risk_probability ?? 0),
+      risk_factors: normalizedRiskFactors,
+    };
+
     const newPrediction = new Prediction({
       studentId,
       studentIdNumber: studentIdNumber.toLowerCase(),
       inputData,
-      prediction,
-      recommendations,
+      prediction: normalizedPrediction,
+      recommendations: recommendations || prediction?.recommendations,
       apiTimestamp: apiTimestamp || new Date().toISOString(),
       semester,
       academicYear,
@@ -84,8 +103,21 @@ export async function POST(request: NextRequest) {
     return successResponse('Prediction saved successfully', {
       prediction: newPrediction,
     }, 201);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Save prediction error:', error);
+    if (error && typeof error === 'object' && 'name' in error && (error as { name?: string }).name === 'ValidationError') {
+      const validationError = error as {
+        errors?: Record<string, { message?: string }>;
+        message?: string;
+      };
+      const details: Record<string, string[]> = {};
+      if (validationError.errors) {
+        for (const [field, fieldError] of Object.entries(validationError.errors)) {
+          details[field] = [fieldError?.message || 'Invalid value'];
+        }
+      }
+      return errorResponse(validationError.message || 'Validation failed', details, 400);
+    }
     return serverErrorResponse('An error occurred while saving prediction');
   }
 }
@@ -121,7 +153,7 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
 
     // Build filter
-    const filter: any = {};
+    const filter: FilterQuery<unknown> = {};
 
     if (studentId) filter.studentId = studentId;
     if (studentIdNumber) filter.studentIdNumber = studentIdNumber.toLowerCase();
@@ -158,7 +190,7 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil(total / limit),
       },
     }, 200);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get predictions error:', error);
     return serverErrorResponse('An error occurred while fetching predictions');
   }

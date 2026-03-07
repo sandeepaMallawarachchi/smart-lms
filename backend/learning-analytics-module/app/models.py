@@ -18,6 +18,7 @@ class ModelPredictor:
         self.scaler = None
         self.label_encoders = None
         self.model_loaded = False
+        self.model_degraded = False
     
     
     def load_models(self):
@@ -39,6 +40,9 @@ class ModelPredictor:
             self.label_encoders = joblib.load(encoders_path)
             
             self.model_loaded = True
+            self.model_degraded = self._detect_model_degradation()
+            if self.model_degraded:
+                logger.warning("Model quality check failed. Falling back to heuristic risk scoring.")
             logger.info("All models loaded successfully")
             
             return True
@@ -47,6 +51,160 @@ class ModelPredictor:
             logger.error(f"Error loading models: {str(e)}")
             self.model_loaded = False
             raise Exception(f"Failed to load models: {str(e)}")
+
+    def _encode_feature_row(self, student_data):
+        """
+        Build unscaled model feature row in training feature order
+        """
+        all_features = current_app.config['ALL_FEATURES']
+        categorical_features = current_app.config['CATEGORICAL_FEATURES']
+        df = pd.DataFrame([student_data])
+
+        for col in categorical_features:
+            if col in self.label_encoders:
+                encoded_col = col + '_encoded'
+                try:
+                    df[encoded_col] = self.label_encoders[col].transform(df.get(col, pd.Series([''])).astype(str))
+                except Exception:
+                    df[encoded_col] = 0
+
+        feature_values = []
+        for feature in all_features:
+            if feature in df.columns:
+                feature_values.append(df[feature].values[0])
+            else:
+                feature_values.append(0)
+
+        return np.array(feature_values).reshape(1, -1)
+
+    def _get_model_risk_probability(self, features_scaled):
+        """
+        Return probability of at-risk class (label 1) robustly.
+        """
+        probability = self.model.predict_proba(features_scaled)[0]
+        classes = getattr(self.model, "classes_", None)
+
+        if classes is not None and 1 in classes:
+            class_index = int(np.where(classes == 1)[0][0])
+        else:
+            # Fallback: keep backward compatibility with binary models
+            class_index = 1 if len(probability) > 1 else 0
+
+        return float(probability[class_index]), probability
+
+    def _heuristic_risk_probability(self, student_data):
+        """
+        Fallback risk score when model is unstable for current deployment inputs.
+        """
+        completion_rate = float(student_data.get('completion_rate', 0) or 0)
+        late_submission_count = float(student_data.get('late_submission_count', 0) or 0)
+        avg_clicks_per_day = float(student_data.get('avg_clicks_per_day', 0) or 0)
+        days_active = float(student_data.get('days_active', 0) or 0)
+        study_span_days = float(student_data.get('study_span_days', 0) or 0)
+        avg_score = student_data.get('avg_score', None)
+
+        completion_risk = max(0.0, min(1.0, 1.0 - completion_rate))
+        late_risk = max(0.0, min(1.0, late_submission_count / 6.0))
+        click_risk = max(0.0, min(1.0, 1.0 - (avg_clicks_per_day / 2.0)))
+        activity_ratio = (days_active / study_span_days) if study_span_days > 0 else 0
+        consistency_risk = max(0.0, min(1.0, 1.0 - activity_ratio))
+
+        if avg_score is None:
+            score_risk = 0.5
+        else:
+            avg_score = float(avg_score or 0)
+            score_risk = max(0.0, min(1.0, 1.0 - (avg_score / 100.0)))
+
+        weighted = (
+            0.40 * completion_risk +
+            0.20 * late_risk +
+            0.15 * click_risk +
+            0.10 * consistency_risk +
+            0.15 * score_risk
+        )
+        return float(max(0.0, min(1.0, weighted)))
+
+    def _detect_model_degradation(self):
+        """
+        Basic sanity check to detect obviously broken model artifacts at runtime.
+        """
+        try:
+            low_risk_sample = {
+                'total_clicks': 5000,
+                'avg_clicks_per_day': 50,
+                'clicks_std': 25,
+                'max_clicks_single_day': 150,
+                'days_active': 100,
+                'study_span_days': 120,
+                'engagement_regularity': 0.5,
+                'pre_course_clicks': 200,
+                'avg_score': 75,
+                'score_std': 10,
+                'min_score': 60,
+                'max_score': 90,
+                'completion_rate': 0.9,
+                'first_score': 70,
+                'score_improvement': 20,
+                'avg_days_early': 2,
+                'timing_consistency': 3,
+                'worst_delay': -1,
+                'late_submission_count': 1,
+                'num_of_prev_attempts': 0,
+                'studied_credits': 60,
+                'early_registration': 1,
+                'withdrew': 0,
+                'gender': 'M',
+                'age_band': '0-35',
+                'highest_education': 'A Level or Equivalent',
+                'disability': 'N'
+            }
+            high_risk_sample = {
+                'total_clicks': 500,
+                'avg_clicks_per_day': 5,
+                'clicks_std': 10,
+                'max_clicks_single_day': 30,
+                'days_active': 30,
+                'study_span_days': 100,
+                'engagement_regularity': 2.0,
+                'pre_course_clicks': 0,
+                'avg_score': 35,
+                'score_std': 15,
+                'min_score': 20,
+                'max_score': 50,
+                'completion_rate': 0.4,
+                'first_score': 30,
+                'score_improvement': 20,
+                'avg_days_early': -3,
+                'timing_consistency': 10,
+                'worst_delay': -10,
+                'late_submission_count': 5,
+                'num_of_prev_attempts': 2,
+                'studied_credits': 60,
+                'early_registration': 0,
+                'withdrew': 0,
+                'gender': 'F',
+                'age_band': '35-55',
+                'highest_education': 'Lower Than A Level',
+                'disability': 'N'
+            }
+
+            low_scaled = self.scaler.transform(self._encode_feature_row(low_risk_sample))
+            high_scaled = self.scaler.transform(self._encode_feature_row(high_risk_sample))
+            low_prob, _ = self._get_model_risk_probability(low_scaled)
+            high_prob, _ = self._get_model_risk_probability(high_scaled)
+
+            # Model considered degraded if it cannot separate canonical low/high profiles.
+            if not (low_prob < high_prob and low_prob < 0.7):
+                logger.warning(
+                    "Model sanity check failed: low_prob=%.3f high_prob=%.3f",
+                    low_prob, high_prob
+                )
+                return True
+
+            return False
+        except Exception as e:
+            logger.warning("Model sanity check error: %s", str(e))
+            return True
     
     
     def preprocess_features(self, student_data):
@@ -58,27 +216,11 @@ class ModelPredictor:
             categorical_features = current_app.config['CATEGORICAL_FEATURES']
             
             df = pd.DataFrame([student_data])
-            
             for col in categorical_features:
-                if col in df.columns and col in self.label_encoders:
-                    encoded_col = col + '_encoded'
-                    try:
-                        df[encoded_col] = self.label_encoders[col].transform(df[col].astype(str))
-                    except Exception as e:
-                        logger.warning(f"Error encoding {col}: {str(e)}. Using default value 0")
-                        df[encoded_col] = 0
-            
-            all_features = current_app.config['ALL_FEATURES']
-            feature_values = []
-            
-            for feature in all_features:
-                if feature in df.columns:
-                    feature_values.append(df[feature].values[0])
-                else:
-                    logger.warning(f"Feature {feature} not found. Using 0 as default")
-                    feature_values.append(0)
-            
-            features_array = np.array(feature_values).reshape(1, -1)
+                if col not in df.columns and col in self.label_encoders:
+                    logger.warning(f"Categorical feature {col} missing. Using default encoder value 0")
+
+            features_array = self._encode_feature_row(student_data)
             features_scaled = self.scaler.transform(features_array)
             
             return features_scaled
@@ -98,10 +240,19 @@ class ModelPredictor:
             
             features = self.preprocess_features(student_data)
             
-            prediction = self.model.predict(features)[0]
-            probability = self.model.predict_proba(features)[0]
-            
-            risk_prob = probability[1]
+            model_risk_prob, probability = self._get_model_risk_probability(features)
+            heuristic_risk_prob = self._heuristic_risk_probability(student_data)
+
+            if self.model_degraded:
+                risk_prob = heuristic_risk_prob
+                confidence = round(float(0.5 + abs(risk_prob - 0.5)), 3)
+            else:
+                # Blend model + heuristic to reduce unstable extremes with sparse live data
+                risk_prob = (0.7 * model_risk_prob) + (0.3 * heuristic_risk_prob)
+                predicted_class = 1 if risk_prob >= current_app.config['RISK_THRESHOLD_MEDIUM'] else 0
+                confidence = round(float(probability[predicted_class]), 3)
+
+            prediction = 1 if risk_prob >= current_app.config['RISK_THRESHOLD_MEDIUM'] else 0
             risk_level = self._get_risk_level(risk_prob)
             risk_factors = self._identify_risk_factors(student_data)
             recommendations = self._generate_recommendations(risk_level, risk_factors)
@@ -109,7 +260,7 @@ class ModelPredictor:
             result = {
                 'at_risk': bool(prediction),
                 'risk_probability': round(float(risk_prob), 3),
-                'confidence': round(float(probability[prediction]), 3),
+                'confidence': confidence,
                 'risk_level': risk_level,
                 'risk_factors': risk_factors,
                 'recommendations': recommendations
@@ -239,6 +390,7 @@ class ModelPredictor:
         info = {
             'model_type': type(self.model).__name__,
             'model_loaded': self.model_loaded,
+            'model_degraded': self.model_degraded,
             'n_features': len(current_app.config['ALL_FEATURES']),
             'features': {
                 'numeric': current_app.config['NUMERIC_FEATURES'],

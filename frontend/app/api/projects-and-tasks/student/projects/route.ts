@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
     const projects = await Project.find({
       courseId: { $in: courseIds },
       isArchived: { $ne: true }, 
+      isPublished: { $ne: false },
     })
       .populate('lecturerId', 'name email position')
       .sort({ createdAt: -1 })

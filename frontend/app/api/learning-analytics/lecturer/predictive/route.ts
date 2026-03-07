@@ -23,10 +23,11 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(params.get('limit') || '200', 10);
     const recommendationLimit = parseInt(params.get('recommendationLimit') || '8', 10);
 
-    const chatbotBaseUrl =
-      process.env.CHATBOT_BASE_URL ||
-      (process.env.CHATBOT_URL ? process.env.CHATBOT_URL.replace(/\/chat\/?$/, '') : '') ||
-      'http://localhost:5001';
+    const configuredChatbotUrl = process.env.CHATBOT_URL || process.env.CHATBOT_BASE_URL;
+    if (!configuredChatbotUrl) {
+      return serverErrorResponse('CHATBOT_URL is not configured');
+    }
+    const chatbotBaseUrl = configuredChatbotUrl.replace(/\/chat\/?$/, '').replace(/\/$/, '');
 
     const chatbotResponse = await fetch(`${chatbotBaseUrl}/analytics/predictive-analytics`, {
       method: 'POST',

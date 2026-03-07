@@ -177,7 +177,7 @@ export default function LoginPage() {
 
         {/* Footer Info */}
         <div className="mt-8 text-center text-xs text-gray-500">
-          <p>For students and lecturers of SLIIT</p>
+          <p>For students and lecturers of University</p>
         </div>
       </div>
     </div>
