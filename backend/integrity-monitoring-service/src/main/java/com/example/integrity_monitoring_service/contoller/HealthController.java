@@ -43,4 +43,16 @@ public class HealthController {
 
         return ResponseEntity.ok(ApiResponse.success(health));
     }
+
+    /**
+     * Live diagnostic for the Google Custom Search API.
+     * Makes a real test call and returns the HTTP status + fix instructions.
+     *
+     * GET /api/health/google-search-test
+     */
+    @GetMapping("/google-search-test")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> testGoogleSearch() {
+        Map<String, Object> result = googleSearch.diagnose();
+        return ResponseEntity.ok(ApiResponse.success("Google Search API diagnostic", result));
+    }
 }

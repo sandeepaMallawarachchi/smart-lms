@@ -34,7 +34,7 @@ import { useAnswerEditor } from '@/hooks/useAnswerEditor';
 import { RichTextEditor } from './RichTextEditor';
 import { LiveFeedbackPanel } from './LiveFeedbackPanel';
 import { PlagiarismWarning } from './PlagiarismWarning';
-import type { Question } from '@/types/submission.types';
+import type { Question, LiveFeedback, LivePlagiarismResult } from '@/types/submission.types';
 
 // ─── Props ────────────────────────────────────────────────────
 
@@ -45,6 +45,10 @@ export interface QuestionCardProps {
     assignmentId: string;
     /** Pre-loaded text from a previous auto-save, or empty string. */
     initialAnswer?: string;
+    /** Saved AI feedback loaded from DB — shown immediately without re-calling the API. */
+    initialFeedback?: LiveFeedback | null;
+    /** Saved plagiarism result loaded from DB — shown immediately without re-calling the API. */
+    initialPlagiarism?: LivePlagiarismResult | null;
     /** True once the submission has been officially submitted. */
     disabled?: boolean;
     /** Fired on every keystroke so the parent page can track overall progress. */
@@ -61,12 +65,14 @@ export function QuestionCard({
     studentId,
     assignmentId,
     initialAnswer = '',
+    initialFeedback = null,
+    initialPlagiarism = null,
     disabled = false,
     onAnswerChange,
     questionIndex,
 }: QuestionCardProps) {
 
-    console.debug('[QuestionCard] render — questionId:', question.id, '| index:', questionIndex, '| submissionId:', submissionId, '| initialAnswer.length:', (initialAnswer ?? '').length);
+    console.debug('[QuestionCard] render — questionId:', question.id, '| index:', questionIndex, '| submissionId:', submissionId, '| initialAnswer.length:', (initialAnswer ?? '').length, '| hasSavedFeedback:', !!initialFeedback, '| hasSavedPlagiarism:', !!initialPlagiarism);
 
     // ── Hook: all debounced behaviour ─────────────────────────
     const {
@@ -86,6 +92,8 @@ export function QuestionCard({
         assignmentId,
         initialText: initialAnswer,
         expectedWordCount: question.expectedWordCount,
+        initialFeedback,
+        initialPlagiarism,
     });
 
     // Propagate text to parent for progress tracking.

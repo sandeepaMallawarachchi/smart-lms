@@ -29,6 +29,7 @@ public class RealtimeCheckService {
     private final GoogleSearchService googleSearch;
     private final QuestionAnalyzerService questionAnalyzer;
     private final SimpMessagingTemplate messagingTemplate;
+    private final SubmissionFetchService submissionFetch;
 
     @Value("${integrity.realtime.enabled:true}")
     private boolean realtimeEnabled;
@@ -38,6 +39,10 @@ public class RealtimeCheckService {
 
     @Value("${integrity.text-similarity-threshold:0.70}")
     private double textSimilarityThreshold;
+
+    /** Higher threshold for internet results — snippet-based corpus is noisier than peer text. */
+    @Value("${integrity.internet-similarity-threshold:0.85}")
+    private double internetSimilarityThreshold;
 
     /**
      * Check text in real-time as student types
@@ -76,18 +81,63 @@ public class RealtimeCheckService {
             boolean flagged = false;
 
             if (request.getTextContent().length() > 100) {
+                // ── Internet search (Google Custom Search API) ─────────────────
                 log.debug("[RealtimeCheck] Calling Google search for text ({} chars)", request.getTextContent().length());
                 List<Map<String, String>> searchResults = googleSearch.searchInternet(
                         request.getTextContent(), 3);
                 log.debug("[RealtimeCheck] Google returned {} results", searchResults.size());
 
-                maxSimilarity = textSimilarity.calculateInternetSimilarity(
+                double internetSimilarity = textSimilarity.calculateInternetSimilarity(
                         request.getTextContent(), searchResults);
+                log.info("[RealtimeCheck] Internet similarity={} threshold={}", internetSimilarity, internetSimilarityThreshold);
+                // Internet results use a higher threshold (0.85) because snippet-based corpus
+                // comparison is noisier than direct peer text comparison.
+                if (internetSimilarity >= internetSimilarityThreshold) {
+                    maxSimilarity = Math.max(maxSimilarity, internetSimilarity);
+                    log.info("[RealtimeCheck] Internet similarity exceeds threshold — including in score");
+                } else {
+                    log.debug("[RealtimeCheck] Internet similarity {} below threshold {} — not included in final score",
+                            internetSimilarity, internetSimilarityThreshold);
+                }
+
+                // ── Peer comparison (TF-IDF vs other students' answers) ────────
+                String questionId = request.getQuestionId() != null
+                        ? request.getQuestionId().toString() : null;
+
+                if (questionId != null && !questionId.isBlank()) {
+                    // Exclude by studentId — removes ALL of the student's answers across every
+                    // submission version so none of their own text inflates the similarity score.
+                    // Also pass submissionId as a secondary fallback for older Answer rows that
+                    // were saved before studentId was captured.
+                    String excludeStudentId = request.getStudentId();
+                    String excludeSubmissionId = request.getSubmissionId(); // may be null for old clients
+                    log.debug("[RealtimeCheck] Fetching peer answers for questionId={} excludeStudentId={} excludeSubmissionId={}",
+                            questionId, excludeStudentId, excludeSubmissionId);
+                    List<Map<String, String>> peerAnswers =
+                            submissionFetch.fetchPeerAnswersForQuestion(questionId, excludeStudentId, excludeSubmissionId);
+                    log.debug("[RealtimeCheck] Got {} peer answers", peerAnswers.size());
+
+                    for (Map<String, String> peer : peerAnswers) {
+                        String peerText = peer.get("content");
+                        if (peerText == null || peerText.isBlank()) continue;
+                        double peerSim = textSimilarity.calculateSimilarity(
+                                request.getTextContent(), peerText);
+                        if (peerSim > maxSimilarity) {
+                            log.debug("[RealtimeCheck] New max peer similarity={} submissionId={}",
+                                    peerSim, peer.get("submissionId"));
+                            maxSimilarity = peerSim;
+                        }
+                    }
+                    log.info("[RealtimeCheck] After peer comparison maxSimilarity={}", maxSimilarity);
+                } else {
+                    log.debug("[RealtimeCheck] No questionId — skipping peer comparison");
+                }
+
                 flagged = maxSimilarity > textSimilarityThreshold;
-                log.info("[RealtimeCheck] Similarity={} threshold={} flagged={}",
+                log.info("[RealtimeCheck] Final similarity={} threshold={} flagged={}",
                         maxSimilarity, textSimilarityThreshold, flagged);
             } else {
-                log.debug("[RealtimeCheck] Text <100 chars — skipping internet search");
+                log.debug("[RealtimeCheck] Text <100 chars — skipping internet search and peer comparison");
             }
 
             RealtimeCheck check = RealtimeCheck.builder()

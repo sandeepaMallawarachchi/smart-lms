@@ -2,9 +2,12 @@ package com.smartlms.submission_management_service.dto.response;
 
 import lombok.*;
 
+import java.util.List;
+
 /**
  * Response DTO returned from answer endpoints.
- * Maps the Answer entity fields to a JSON-serialisable shape.
+ * Maps the Answer entity fields to a JSON-serialisable shape,
+ * including persisted AI feedback and plagiarism results.
  */
 @Getter
 @Setter
@@ -38,4 +41,25 @@ public class AnswerResponse {
 
     /** ISO-8601 formatted timestamp of when the answer was first created. */
     private String createdAt;
+
+    // ── Persisted AI Feedback ────────────────────────────────────
+
+    private Double grammarScore;
+    private Double clarityScore;
+    private Double completenessScore;
+    private Double relevanceScore;
+    private List<String> strengths;
+    private List<String> improvements;
+    private List<String> suggestions;
+    /** ISO-8601 timestamp of when AI feedback was last saved. Null if never generated. */
+    private String feedbackSavedAt;
+
+    // ── Persisted Plagiarism Result ───────────────────────────────
+
+    /** Similarity score 0-100. Null if check has never been run. */
+    private Double similarityScore;
+    private String plagiarismSeverity;
+    private Boolean plagiarismFlagged;
+    /** ISO-8601 timestamp of when plagiarism was last checked. */
+    private String plagiarismCheckedAt;
 }

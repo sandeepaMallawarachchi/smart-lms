@@ -187,7 +187,6 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
                     <VersionTimeline
                         versions={versions ?? []}
                         loading={loading}
-                        error={error ?? undefined}
                         allowCompare
                         onCompareVersions={(vA, vB) => {
                             // vA and vB are full SubmissionVersion objects — extract .id

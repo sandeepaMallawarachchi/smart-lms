@@ -358,7 +358,7 @@ export default function StudentDashboardPage() {
                         </div>
                         <div className="p-4 bg-gray-50 border-t border-gray-200">
                             <button
-                                onClick={() => router.push('/submissions/student/assignments')}
+                                onClick={() => router.push('/submissions/student/my-submissions')}
                                 className="text-purple-600 hover:text-purple-700 font-medium text-sm flex items-center gap-2 cursor-pointer"
                             >
                                 View All Assignments <span>→</span>
@@ -458,7 +458,7 @@ export default function StudentDashboardPage() {
                                                 </div>
                                             </div>
                                             <button
-                                                onClick={() => router.push(`/submissions/student/my-submissions/${submission.id}`)}
+                                                onClick={() => router.push(`/submissions/student/feedback/${submission.id}`)}
                                                 className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium flex items-center gap-2 cursor-pointer"
                                             >
                                                 <Eye size={16}/> View

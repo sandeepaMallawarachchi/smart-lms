@@ -278,6 +278,7 @@ export interface AssignmentWithQuestions extends Assignment {
 /**
  * A student's typed text answer for one question.
  * Stored in submission-management-service via PUT /api/submissions/{id}/answers/{questionId}.
+ * Also carries persisted AI feedback and plagiarism results once generated.
  */
 export interface TextAnswer {
     id?: string;
@@ -289,6 +290,38 @@ export interface TextAnswer {
     characterCount: number;
     lastModified: string;     // ISO-8601
     createdAt?: string;       // ISO-8601
+
+    // Persisted AI feedback (null until first feedback is received and saved)
+    grammarScore?: number | null;
+    clarityScore?: number | null;
+    completenessScore?: number | null;
+    relevanceScore?: number | null;
+    strengths?: string[] | null;
+    improvements?: string[] | null;
+    suggestions?: string[] | null;
+    feedbackSavedAt?: string | null;   // ISO-8601
+
+    // Persisted plagiarism result (null until first check is run and saved)
+    similarityScore?: number | null;
+    plagiarismSeverity?: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+    plagiarismFlagged?: boolean | null;
+    plagiarismCheckedAt?: string | null;  // ISO-8601
+}
+
+/** Payload for PATCH /api/submissions/{id}/answers/{questionId}/analysis */
+export interface SaveAnswerAnalysisPayload {
+    // AI feedback (all optional — send only what you have)
+    grammarScore?: number;
+    clarityScore?: number;
+    completenessScore?: number;
+    relevanceScore?: number;
+    strengths?: string[];
+    improvements?: string[];
+    suggestions?: string[];
+    // Plagiarism (all optional)
+    similarityScore?: number;
+    plagiarismSeverity?: string;
+    plagiarismFlagged?: boolean;
 }
 
 /** Payload for PUT /api/submissions/{id}/answers/{questionId} */
@@ -297,6 +330,8 @@ export interface SaveAnswerPayload {
     answerText: string;
     wordCount: number;
     characterCount: number;
+    /** Student ID — stored on the Answer row so peer comparison can exclude all of a student's versions. */
+    studentId?: string;
 }
 
 /**

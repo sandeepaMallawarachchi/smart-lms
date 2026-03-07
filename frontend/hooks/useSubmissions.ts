@@ -349,11 +349,20 @@ export function useAssignments(params?: {
                 let data: Assignment[];
 
                 if (role === 'student') {
-                    // Student: fetch projects + tasks in parallel from student-specific endpoints
-                    const [projects, tasks] = await Promise.all([
+                    // Student: fetch projects + tasks in parallel from student-specific endpoints.
+                    // Use allSettled so one endpoint failing doesn't wipe out the other.
+                    const [projectsResult, tasksResult] = await Promise.allSettled([
                         projectsAndTasksService.getStudentProjects(),
                         projectsAndTasksService.getStudentTasks(),
                     ]);
+                    const projects = projectsResult.status === 'fulfilled' ? projectsResult.value : [];
+                    const tasks    = tasksResult.status    === 'fulfilled' ? tasksResult.value    : [];
+                    if (projectsResult.status === 'rejected') {
+                        console.error('[useAssignments] getStudentProjects failed:', projectsResult.reason);
+                    }
+                    if (tasksResult.status === 'rejected') {
+                        console.error('[useAssignments] getStudentTasks failed:', tasksResult.reason);
+                    }
                     data = [...projects, ...tasks];
 
                 } else if (role === 'lecture') {

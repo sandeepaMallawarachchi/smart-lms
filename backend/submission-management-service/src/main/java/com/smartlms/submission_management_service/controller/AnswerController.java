@@ -1,6 +1,7 @@
 package com.smartlms.submission_management_service.controller;
 
 import com.smartlms.submission_management_service.dto.request.SaveAnswerRequest;
+import com.smartlms.submission_management_service.dto.request.SaveAnswerAnalysisRequest;
 import com.smartlms.submission_management_service.dto.response.AnswerResponse;
 import com.smartlms.submission_management_service.dto.response.ApiResponse;
 import com.smartlms.submission_management_service.service.AnswerService;
@@ -51,6 +52,31 @@ public class AnswerController {
         ApiResponse<AnswerResponse> response = answerService.saveAnswer(submissionId, questionId, request);
 
         log.info("[AnswerController] PUT DONE — answerId={} success={}",
+                response.getData() != null ? response.getData().getId() : "null",
+                response.isSuccess());
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Persist AI feedback and/or plagiarism results for a specific answer.
+     *
+     * Called silently by the frontend after receiving live AI feedback or plagiarism results.
+     * Only saves if the answer has wordCount >= 1 (enforced in the service layer).
+     *
+     * PATCH /api/submissions/{submissionId}/answers/{questionId}/analysis
+     */
+    @PatchMapping("/{questionId}/analysis")
+    public ResponseEntity<ApiResponse<AnswerResponse>> saveAnalysis(
+            @PathVariable String submissionId,
+            @PathVariable String questionId,
+            @RequestBody SaveAnswerAnalysisRequest request) {
+
+        log.info("[AnswerController] PATCH /api/submissions/{}/answers/{}/analysis", submissionId, questionId);
+
+        ApiResponse<AnswerResponse> response = answerService.saveAnalysis(submissionId, questionId, request);
+
+        log.info("[AnswerController] PATCH analysis DONE — answerId={} success={}",
                 response.getData() != null ? response.getData().getId() : "null",
                 response.isSuccess());
 

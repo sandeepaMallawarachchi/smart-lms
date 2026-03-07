@@ -7,8 +7,8 @@
  * single text editor in the assignment answer page:
  *
  *  • Immediate text + word count state
- *  • Debounced AI feedback request  (3 s after typing stops)
- *  • Debounced plagiarism check     (3 s after typing stops)
+ *  • Debounced AI feedback request  (2 s after typing stops)
+ *  • Debounced plagiarism check     (2 s after typing stops)
  *  • Debounced auto-save            (5 s after typing stops, persists to backend)
  *
  * Debounce is implemented with plain setTimeout / useRef — no external library.
@@ -53,6 +53,10 @@ export interface UseAnswerEditorParams {
     initialText?: string;
     /** Expected word count — used in the AI feedback prompt. */
     expectedWordCount?: number;
+    /** Previously saved AI feedback for this answer (loaded from DB on page load). */
+    initialFeedback?: LiveFeedback | null;
+    /** Previously saved plagiarism result for this answer (loaded from DB on page load). */
+    initialPlagiarism?: LivePlagiarismResult | null;
 }
 
 // ─── Hook return type ──────────────────────────────────────────
@@ -81,16 +85,16 @@ export interface UseAnswerEditorReturn {
 // ─── Timing constants ──────────────────────────────────────────
 
 /** Milliseconds of inactivity after which AI feedback is requested. */
-const FEEDBACK_DEBOUNCE_MS = 3000;
+const FEEDBACK_DEBOUNCE_MS = 2000;
 
 /** Milliseconds of inactivity after which the plagiarism check is run. */
-const PLAGIARISM_DEBOUNCE_MS = 3000;
+const PLAGIARISM_DEBOUNCE_MS = 2000;
 
 /** Milliseconds of inactivity after which the text is auto-saved to the backend. */
 const AUTO_SAVE_DEBOUNCE_MS = 5000;
 
 /** Minimum character length to trigger AI feedback / plagiarism (matches backend config). */
-const MIN_TEXT_LENGTH = 50;
+const MIN_TEXT_LENGTH = 10;
 
 // ─── Hook ─────────────────────────────────────────────────────
 
@@ -102,18 +106,20 @@ export function useAnswerEditor({
     assignmentId,
     initialText = '',
     expectedWordCount,
+    initialFeedback = null,
+    initialPlagiarism = null,
 }: UseAnswerEditorParams): UseAnswerEditorReturn {
 
     // ── Core text state ────────────────────────────────────────
     const [answerText, setAnswerText]       = useState<string>(initialText);
     const [wordCount, setWordCount]         = useState<number>(countWords(initialText));
 
-    // ── AI feedback state ──────────────────────────────────────
-    const [liveFeedback, setLiveFeedback]         = useState<LiveFeedback | null>(null);
+    // ── AI feedback state — seed with saved value if available ─
+    const [liveFeedback, setLiveFeedback]         = useState<LiveFeedback | null>(initialFeedback);
     const [feedbackLoading, setFeedbackLoading]   = useState<boolean>(false);
 
-    // ── Plagiarism state ───────────────────────────────────────
-    const [plagiarismResult, setPlagiarismResult] = useState<LivePlagiarismResult | null>(null);
+    // ── Plagiarism state — seed with saved value if available ──
+    const [plagiarismResult, setPlagiarismResult] = useState<LivePlagiarismResult | null>(initialPlagiarism);
     const [plagiarismLoading, setPlagiarismLoading] = useState<boolean>(false);
 
     // ── Auto-save state ────────────────────────────────────────
@@ -136,7 +142,7 @@ export function useAnswerEditor({
 
     // ── Inner async helpers ────────────────────────────────────
 
-    /** Fire AI feedback request for the given text. */
+    /** Fire AI feedback request for the given text, then persist the result. */
     const requestFeedback = useCallback(async (text: string) => {
         if (!text || text.length < MIN_TEXT_LENGTH) {
             console.debug('[useAnswerEditor] Skipping AI feedback — text too short:', text.length, 'chars (min:', MIN_TEXT_LENGTH, ')');
@@ -157,15 +163,25 @@ export function useAnswerEditor({
                 '| completeness:', feedback.completenessScore,
                 '| relevance:', feedback.relevanceScore);
             setLiveFeedback(feedback);
+            // Persist silently — server guards wordCount >= 1
+            submissionService.saveAnswerAnalysis(submissionId, questionId, {
+                grammarScore:       feedback.grammarScore,
+                clarityScore:       feedback.clarityScore,
+                completenessScore:  feedback.completenessScore,
+                relevanceScore:     feedback.relevanceScore,
+                strengths:          feedback.strengths,
+                improvements:       feedback.improvements,
+                suggestions:        feedback.suggestions,
+            }).catch(err => console.warn('[useAnswerEditor] saveAnalysis(feedback) failed silently:', err));
         } catch (err) {
             console.warn('[useAnswerEditor] AI feedback FAILED for questionId:', questionId, '—', err);
             // Don't clear existing feedback — keep the last good result visible.
         } finally {
             setFeedbackLoading(false);
         }
-    }, [questionId, questionText, expectedWordCount]);
+    }, [submissionId, questionId, questionText, expectedWordCount]);
 
-    /** Fire plagiarism check for the given text. */
+    /** Fire plagiarism check for the given text, then persist the result. */
     const requestPlagiarismCheck = useCallback(async (text: string) => {
         if (!text || text.length < MIN_TEXT_LENGTH) {
             console.debug('[useAnswerEditor] Skipping plagiarism check — text too short:', text.length, 'chars (min:', MIN_TEXT_LENGTH, ')');
@@ -180,18 +196,25 @@ export function useAnswerEditor({
                 questionId,
                 textContent: text,
                 questionText,
+                submissionId: submissionId || undefined,
             });
             console.debug('[useAnswerEditor] Plagiarism result — questionId:', questionId,
                 '| severity:', result.severity,
                 '| score:', result.similarityScore, '%',
                 '| flagged:', result.flagged);
             setPlagiarismResult(result);
+            // Persist silently — server guards wordCount >= 1
+            submissionService.saveAnswerAnalysis(submissionId, questionId, {
+                similarityScore:    result.similarityScore,
+                plagiarismSeverity: result.severity,
+                plagiarismFlagged:  result.flagged,
+            }).catch(err => console.warn('[useAnswerEditor] saveAnalysis(plagiarism) failed silently:', err));
         } catch (err) {
             console.warn('[useAnswerEditor] Plagiarism check FAILED for questionId:', questionId, '—', err);
         } finally {
             setPlagiarismLoading(false);
         }
-    }, [questionId, studentId, questionText]);
+    }, [submissionId, questionId, studentId, questionText]);
 
     /** Auto-save the current text to the backend. */
     const autoSave = useCallback(async (text: string) => {
@@ -209,6 +232,7 @@ export function useAnswerEditor({
                 wordCount: words,
                 characterCount: text.length,
                 questionText,
+                studentId: studentId || undefined,
             });
             const savedAt = new Date();
             setLastSaved(savedAt);
@@ -233,14 +257,14 @@ export function useAnswerEditor({
         const words = countWords(newText);
         setWordCount(words);
 
-        // ── Reset and reschedule AI feedback (3 s debounce) ────
+        // ── Reset and reschedule AI feedback (2 s debounce) ────
         clearTimeout(feedbackTimer.current);
         if (newText.length >= MIN_TEXT_LENGTH) {
             feedbackTimer.current = setTimeout(() => requestFeedback(newText), FEEDBACK_DEBOUNCE_MS);
             console.debug('[useAnswerEditor] AI feedback timer scheduled (', FEEDBACK_DEBOUNCE_MS, 'ms) — questionId:', questionId, '| textLen:', newText.length);
         }
 
-        // ── Reset and reschedule plagiarism check (3 s debounce)
+        // ── Reset and reschedule plagiarism check (2 s debounce)
         clearTimeout(plagiarismTimer.current);
         if (newText.length >= MIN_TEXT_LENGTH) {
             plagiarismTimer.current = setTimeout(() => requestPlagiarismCheck(newText), PLAGIARISM_DEBOUNCE_MS);
@@ -264,28 +288,15 @@ export function useAnswerEditor({
         };
     }, [questionId]);
 
-    // ── Sync initialText + auto-trigger analysis on load ──────
+    // ── Sync initialText on load ───────────────────────────────
     // When the parent loads previously saved answers and updates initialText,
-    // sync the editor state AND kick off feedback + plagiarism so the student
-    // sees their prior results immediately without having to type anything.
+    // sync the editor text/wordCount.  Feedback and plagiarism state are already
+    // seeded from initialFeedback / initialPlagiarism — no need to re-call the APIs.
     useEffect(() => {
         if (initialText && answerText === '') {
             console.debug('[useAnswerEditor] Syncing initialText for questionId:', questionId, '| words:', countWords(initialText));
             setAnswerText(initialText);
             setWordCount(countWords(initialText));
-
-            // Stagger per-question requests slightly to avoid hammering the API
-            // when many questions load simultaneously (100 ms per question index).
-            if (initialText.length >= MIN_TEXT_LENGTH) {
-                const delay = 500;
-                console.debug('[useAnswerEditor] Pre-loading feedback + plagiarism for questionId:', questionId, '| delay:', delay, 'ms');
-                const feedbackId = setTimeout(() => requestFeedback(initialText), delay);
-                const plagiarismId = setTimeout(() => requestPlagiarismCheck(initialText), delay + 200);
-                return () => {
-                    clearTimeout(feedbackId);
-                    clearTimeout(plagiarismId);
-                };
-            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initialText]);

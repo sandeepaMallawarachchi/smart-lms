@@ -25,4 +25,7 @@ public class RealtimeCheckRequest {
 
     private String questionText;
     private String questionType;
+
+    /** Actual integer submission ID — used to exclude the student's own answer from peer comparison. */
+    private String submissionId;
 }

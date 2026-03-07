@@ -30,7 +30,7 @@ import { useState, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { submissionService, getAssignmentWithFallback } from '@/lib/api/submission-services';
 import { QuestionCard } from '@/components/submissions/QuestionCard';
-import type { AssignmentWithQuestions, TextAnswer } from '@/types/submission.types';
+import type { AssignmentWithQuestions, TextAnswer, LiveFeedback, LivePlagiarismResult } from '@/types/submission.types';
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -80,6 +80,43 @@ function countWords(text: string): number {
     return text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
 }
 
+/**
+ * Reconstruct a LiveFeedback object from a saved TextAnswer.
+ * Returns null if no feedback has been saved yet (all score fields are null).
+ */
+function feedbackFromAnswer(a: TextAnswer): LiveFeedback | null {
+    if (a.grammarScore == null && a.clarityScore == null &&
+        a.completenessScore == null && a.relevanceScore == null) {
+        return null;
+    }
+    return {
+        questionId:        a.questionId,
+        grammarScore:      a.grammarScore      ?? 0,
+        clarityScore:      a.clarityScore      ?? 0,
+        completenessScore: a.completenessScore ?? 0,
+        relevanceScore:    a.relevanceScore    ?? 0,
+        strengths:         a.strengths    ?? [],
+        improvements:      a.improvements ?? [],
+        suggestions:       a.suggestions  ?? [],
+        generatedAt:       a.feedbackSavedAt ?? new Date().toISOString(),
+    };
+}
+
+/**
+ * Reconstruct a LivePlagiarismResult from a saved TextAnswer.
+ * Returns null if no plagiarism check has been saved yet.
+ */
+function plagiarismFromAnswer(a: TextAnswer): LivePlagiarismResult | null {
+    if (a.similarityScore == null && a.plagiarismSeverity == null) return null;
+    return {
+        questionId:     a.questionId,
+        similarityScore: a.similarityScore ?? 0,
+        severity:        (a.plagiarismSeverity as 'LOW' | 'MEDIUM' | 'HIGH') ?? 'LOW',
+        flagged:         a.plagiarismFlagged ?? false,
+        checkedAt:       a.plagiarismCheckedAt ?? new Date().toISOString(),
+    };
+}
+
 // ─── Skeleton ─────────────────────────────────────────────────
 
 function PageSkeleton() {
@@ -118,6 +155,8 @@ export default function AnswerPage({
     const [submissionId, setSubmissionId]     = useState<string>('');
     const [savedAnswers, setSavedAnswers]     = useState<TextAnswer[]>([]);
     const [answerMap, setAnswerMap]           = useState<Record<string, string>>({});
+    const [feedbackMap, setFeedbackMap]       = useState<Record<string, LiveFeedback | null>>({});
+    const [plagiarismMap, setPlagiarismMap]   = useState<Record<string, LivePlagiarismResult | null>>({});
 
     // ── UI state ──────────────────────────────────────────────
     const [loading, setLoading]               = useState<boolean>(true);
@@ -160,17 +199,70 @@ export default function AnswerPage({
                     console.error('[AnswerPage] WARNING: draft.id is falsy — auto-save will be skipped! draft:', draft);
                 }
 
-                // 3. Pre-load saved answers
+                // 3. Pre-load saved answers (+ their persisted feedback/plagiarism)
                 try {
-                    const answers = await submissionService.getAnswers(draft.id);
-                    setSavedAnswers(answers);
-                    // Build a lookup map questionId → answerText for fast lookup in props
-                    const map: Record<string, string> = {};
-                    for (const a of answers) {
-                        map[a.questionId] = a.answerText;
+                    let answers = await submissionService.getAnswers(draft.id);
+
+                    // If this draft has no answers (e.g. student is editing a previously
+                    // submitted assignment — a new draft was just created), copy the answers
+                    // from the most recent SUBMITTED submission so the student can edit from
+                    // where they left off rather than starting from scratch.
+                    if (answers.length === 0) {
+                        try {
+                            const allSubs = await submissionService.getStudentSubmissions(sid);
+                            const prevSubmitted = allSubs
+                                .filter(s =>
+                                    s.assignmentId === assignmentId &&
+                                    (s.status === 'SUBMITTED' || s.status === 'GRADED') &&
+                                    s.id !== draft.id
+                                )
+                                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+                            if (prevSubmitted.length > 0) {
+                                const prevId = prevSubmitted[0].id;
+                                console.debug('[AnswerPage] New draft — copying answers from previous submission:', prevId);
+                                const prevAnswers = await submissionService.getAnswers(prevId);
+                                if (prevAnswers.length > 0) {
+                                    // Copy answers into the new draft (fire-and-forget saves)
+                                    await Promise.all(prevAnswers.map(a =>
+                                        submissionService.saveAnswer(draft.id, a.questionId, {
+                                            questionText:   a.questionText,
+                                            answerText:     a.answerText,
+                                            wordCount:      a.wordCount,
+                                            characterCount: a.characterCount,
+                                        }).catch(() => {/* silent — best effort */})
+                                    ));
+                                    // Use the previous answers for display (they carry scores)
+                                    answers = prevAnswers.map(a => ({ ...a, submissionId: draft.id }));
+                                    console.debug('[AnswerPage] Copied', prevAnswers.length, 'answers from previous submission into new draft', draft.id);
+                                }
+                            }
+                        } catch (copyErr) {
+                            // Non-fatal — student just starts with an empty draft
+                            console.debug('[AnswerPage] Could not copy previous answers:', copyErr);
+                        }
                     }
-                    setAnswerMap(map);
-                    console.debug('[AnswerPage] Pre-loaded', answers.length, 'saved answers for submissionId:', draft.id, '| questionIds:', answers.map(a => a.questionId));
+
+                    setSavedAnswers(answers);
+
+                    const textMap:  Record<string, string>                    = {};
+                    const fbMap:    Record<string, LiveFeedback | null>        = {};
+                    const plagMap:  Record<string, LivePlagiarismResult | null> = {};
+
+                    for (const a of answers) {
+                        textMap[a.questionId]  = a.answerText;
+                        fbMap[a.questionId]    = feedbackFromAnswer(a);
+                        plagMap[a.questionId]  = plagiarismFromAnswer(a);
+                    }
+
+                    setAnswerMap(textMap);
+                    setFeedbackMap(fbMap);
+                    setPlagiarismMap(plagMap);
+
+                    const withFeedback   = answers.filter(a => fbMap[a.questionId]   != null).length;
+                    const withPlagiarism = answers.filter(a => plagMap[a.questionId] != null).length;
+                    console.debug('[AnswerPage] Pre-loaded', answers.length, 'saved answers for submissionId:', draft.id,
+                        '| withSavedFeedback:', withFeedback, '| withSavedPlagiarism:', withPlagiarism);
                 } catch (ansErr) {
                     // No answers yet — that's fine
                     console.debug('[AnswerPage] No saved answers (or fetch failed) for submissionId:', draft.id, '—', ansErr);
@@ -285,6 +377,9 @@ export default function AnswerPage({
 
     const due = assignment?.dueDate ? dueDateLabel(assignment.dueDate) : null;
 
+    /** True when the deadline has passed — editing is locked. */
+    const isDeadlinePassed = due?.overdue === true;
+
     // ── Fallback if assignment has no questions ────────────────
     const hasQuestions = questions.length > 0;
 
@@ -307,6 +402,20 @@ export default function AnswerPage({
             {error && (
                 <div className="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
                     {error}
+                </div>
+            )}
+
+            {/* ── Deadline-passed notice ─────────────────────── */}
+            {isDeadlinePassed && (
+                <div className="mb-4 rounded-md bg-amber-50 border border-amber-300 px-4 py-3 text-sm text-amber-800 flex items-center gap-2">
+                    <svg className="h-4 w-4 shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                    </svg>
+                    <span>
+                        <span className="font-semibold">Deadline has passed.</span>
+                        {' '}Your answers are now read-only and cannot be edited.
+                    </span>
                 </div>
             )}
 
@@ -395,7 +504,9 @@ export default function AnswerPage({
                                 studentId={studentId}
                                 assignmentId={assignmentId}
                                 initialAnswer={answerMap[question.id] ?? ''}
-                                disabled={submitDone}
+                                initialFeedback={feedbackMap[question.id] ?? null}
+                                initialPlagiarism={plagiarismMap[question.id] ?? null}
+                                disabled={submitDone || isDeadlinePassed}
                                 onAnswerChange={handleAnswerChange}
                                 questionIndex={idx}
                             />
@@ -439,18 +550,24 @@ export default function AnswerPage({
                             </div>
                         </div>
 
-                        <button
-                            onClick={() => setShowConfirm(true)}
-                            disabled={!canSubmit || submitting}
-                            title={!canSubmit ? 'Answer all required questions to submit' : undefined}
-                            className={`rounded-xl px-7 py-2.5 text-sm font-bold text-white transition-all shadow-md ${
-                                canSubmit && !submitting
-                                    ? 'bg-purple-600 hover:bg-purple-700 active:bg-purple-800 cursor-pointer hover:shadow-lg'
-                                    : 'bg-gray-300 cursor-not-allowed shadow-none'
-                            }`}
-                        >
-                            {submitting ? 'Submitting…' : canSubmit ? 'Submit Assignment ✓' : 'Submit Assignment'}
-                        </button>
+                        {isDeadlinePassed ? (
+                            <span className="rounded-xl px-7 py-2.5 text-sm font-bold text-white bg-gray-400 cursor-not-allowed shadow-none">
+                                Deadline Passed
+                            </span>
+                        ) : (
+                            <button
+                                onClick={() => setShowConfirm(true)}
+                                disabled={!canSubmit || submitting}
+                                title={!canSubmit ? 'Answer all required questions to submit' : undefined}
+                                className={`rounded-xl px-7 py-2.5 text-sm font-bold text-white transition-all shadow-md ${
+                                    canSubmit && !submitting
+                                        ? 'bg-purple-600 hover:bg-purple-700 active:bg-purple-800 cursor-pointer hover:shadow-lg'
+                                        : 'bg-gray-300 cursor-not-allowed shadow-none'
+                                }`}
+                            >
+                                {submitting ? 'Submitting…' : canSubmit ? 'Submit Assignment ✓' : 'Submit Assignment'}
+                            </button>
+                        )}
                     </div>
                 </div>
             )}

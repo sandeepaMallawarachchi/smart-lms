@@ -6,6 +6,7 @@ import com.smartlms.submission_management_service.dto.response.SubmissionRespons
 import com.smartlms.submission_management_service.exception.ResourceNotFoundException;
 import com.smartlms.submission_management_service.model.Submission;
 import com.smartlms.submission_management_service.model.SubmissionStatus;
+import com.smartlms.submission_management_service.repository.AnswerRepository;
 import com.smartlms.submission_management_service.repository.SubmissionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +53,7 @@ public class SubmissionService {
      * Injected via constructor for better testability and immutability.
      */
     private final SubmissionRepository submissionRepository;
+    private final AnswerRepository answerRepository;
 
     /**
      * Creates a new submission in the system.
@@ -416,10 +418,18 @@ public class SubmissionService {
         Submission submission = submissionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found with ID: " + id));
 
-        // Validate: Cannot submit empty submission
-        if (submission.getFiles().isEmpty()) {
-            throw new IllegalStateException("Cannot submit without files");
+        // Validate: must have either uploaded files OR at least one text answer with content
+        boolean hasFiles   = !submission.getFiles().isEmpty();
+        boolean hasAnswers = answerRepository
+                .findBySubmissionIdOrderByQuestionId(String.valueOf(id))
+                .stream()
+                .anyMatch(a -> a.getWordCount() != null && a.getWordCount() >= 1);
+
+        if (!hasFiles && !hasAnswers) {
+            throw new IllegalStateException("Cannot submit without files or text answers");
         }
+
+        log.info("Submitting submission {} — hasFiles={} hasAnswers={}", id, hasFiles, hasAnswers);
 
         // Call helper method in Submission entity
         // This encapsulates the submission logic

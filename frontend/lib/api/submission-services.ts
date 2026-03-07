@@ -21,6 +21,7 @@ import type {
     PagedResponse,
     TextAnswer,
     SaveAnswerPayload,
+    SaveAnswerAnalysisPayload,
     LiveFeedback,
     LivePlagiarismResult,
 } from '@/types/submission.types';
@@ -294,6 +295,24 @@ export const submissionService = {
     },
 
     /**
+     * Persist AI feedback and/or plagiarism results for a specific answer.
+     * PATCH /api/submissions/{submissionId}/answers/{questionId}/analysis
+     * Silently skips if submissionId is empty (server also guards wordCount >= 1).
+     */
+    saveAnswerAnalysis(
+        submissionId: string,
+        questionId: string,
+        payload: SaveAnswerAnalysisPayload,
+    ): Promise<void> {
+        if (!submissionId) return Promise.resolve();
+        console.debug('[submissionService] saveAnswerAnalysis — submissionId:', submissionId, '| questionId:', questionId);
+        return apiRequest<void>(
+            `${SUBMISSION_API}/api/submissions/${submissionId}/answers/${questionId}/analysis`,
+            { method: 'PATCH', body: JSON.stringify(payload) }
+        );
+    },
+
+    /**
      * Get all saved answers for a submission.
      * GET /api/submissions/{submissionId}/answers
      */
@@ -525,7 +544,7 @@ export const versionService = {
     /** Get all versions for a submission */
     getVersions(submissionId: string): Promise<SubmissionVersion[]> {
         return apiRequest<SubmissionVersion[]>(
-            `${VERSION_API}/api/versions?submissionId=${encodeURIComponent(submissionId)}`
+            `${VERSION_API}/api/versions/submission/${encodeURIComponent(submissionId)}`
         );
     },
 
@@ -537,14 +556,18 @@ export const versionService = {
     /** Get the latest version of a submission */
     getLatestVersion(submissionId: string): Promise<SubmissionVersion> {
         return apiRequest<SubmissionVersion>(
-            `${VERSION_API}/api/versions/latest?submissionId=${encodeURIComponent(submissionId)}`
+            `${VERSION_API}/api/versions/submission/${encodeURIComponent(submissionId)}/latest`
         );
     },
 
     /** Compare two versions */
     compareVersions(versionAId: string, versionBId: string): Promise<VersionComparison> {
         return apiRequest<VersionComparison>(
-            `${VERSION_API}/api/versions/compare?v1=${encodeURIComponent(versionAId)}&v2=${encodeURIComponent(versionBId)}`
+            `${VERSION_API}/api/versions/diff`,
+            {
+                method: 'POST',
+                body: JSON.stringify({ sourceVersionId: Number(versionAId), targetVersionId: Number(versionBId) }),
+            }
         );
     },
 
@@ -704,8 +727,10 @@ export const plagiarismService = {
         questionId: string;
         textContent: string;
         questionText?: string;
+        /** Actual integer submission ID — sent so the backend can exclude the student's own answer from peer comparison. */
+        submissionId?: string;
     }): Promise<LivePlagiarismResult> {
-        console.debug('[plagiarismService] checkLiveSimilarity — questionId:', payload.questionId, '| textLen:', payload.textContent.length, '| sessionId:', payload.sessionId);
+        console.debug('[plagiarismService] checkLiveSimilarity — questionId:', payload.questionId, '| textLen:', payload.textContent.length, '| sessionId:', payload.sessionId, '| submissionId:', payload.submissionId);
         // The backend questionId field is a Long — parse string to number
         const backendPayload = {
             sessionId: payload.sessionId,
@@ -714,6 +739,7 @@ export const plagiarismService = {
             textContent: payload.textContent,
             questionText: payload.questionText ?? '',
             questionType: 'TEXT',
+            submissionId: payload.submissionId ?? null,
         };
 
         const res = await apiRequest<{

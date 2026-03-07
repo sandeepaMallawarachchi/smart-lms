@@ -6,6 +6,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Stores a student's typed text answer to a single question within a submission.
@@ -34,6 +35,11 @@ public class Answer {
      *  the submission ID type used in the Submission entity (Long mapped to String). */
     @Column(name = "submission_id", nullable = false)
     private String submissionId;
+
+    /** Student who wrote this answer. Stored so peer-comparison can exclude
+     *  ALL of a student's answers (across all their submission versions) at once. */
+    @Column(name = "student_id")
+    private String studentId;
 
     /** Identifier of the question this answer belongs to. Matches Question.id
      *  from the assignment service (managed by another team's component). */
@@ -69,4 +75,56 @@ public class Answer {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    // ── AI Feedback (persisted after live feedback is received) ──────────────
+
+    /** Grammar score 0-10 from the live AI feedback call. */
+    @Column(name = "grammar_score")
+    private Double grammarScore;
+
+    /** Clarity score 0-10. */
+    @Column(name = "clarity_score")
+    private Double clarityScore;
+
+    /** Completeness score 0-10. */
+    @Column(name = "completeness_score")
+    private Double completenessScore;
+
+    /** Relevance score 0-10. */
+    @Column(name = "relevance_score")
+    private Double relevanceScore;
+
+    /** Comma-separated list of strength bullet points from AI feedback. */
+    @Column(name = "ai_strengths", columnDefinition = "TEXT")
+    private String aiStrengths;
+
+    /** Comma-separated list of improvement bullet points from AI feedback. */
+    @Column(name = "ai_improvements", columnDefinition = "TEXT")
+    private String aiImprovements;
+
+    /** Comma-separated list of suggestion bullet points from AI feedback. */
+    @Column(name = "ai_suggestions", columnDefinition = "TEXT")
+    private String aiSuggestions;
+
+    /** When AI feedback was last saved for this answer. */
+    @Column(name = "feedback_saved_at")
+    private LocalDateTime feedbackSavedAt;
+
+    // ── Plagiarism result (persisted after realtime check) ────────────────────
+
+    /** Similarity score 0-100 (converted from 0.0-1.0 backend value). */
+    @Column(name = "similarity_score")
+    private Double similarityScore;
+
+    /** Severity bucket: LOW / MEDIUM / HIGH. */
+    @Column(name = "plagiarism_severity", length = 10)
+    private String plagiarismSeverity;
+
+    /** True when severity >= MEDIUM (or explicitly flagged by the backend). */
+    @Column(name = "plagiarism_flagged")
+    private Boolean plagiarismFlagged;
+
+    /** When the plagiarism result was last saved for this answer. */
+    @Column(name = "plagiarism_checked_at")
+    private LocalDateTime plagiarismCheckedAt;
 }

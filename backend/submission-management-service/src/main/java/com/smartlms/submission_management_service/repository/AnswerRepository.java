@@ -28,4 +28,11 @@ public interface AnswerRepository extends JpaRepository<Answer, Long> {
      * before deciding to INSERT vs UPDATE.
      */
     Optional<Answer> findBySubmissionIdAndQuestionId(String submissionId, String questionId);
+
+    /**
+     * Used by the integrity service for peer-comparison plagiarism detection.
+     * Returns all answers across all submissions for a given question,
+     * so they can be compared against the current student's answer via TF-IDF cosine similarity.
+     */
+    List<Answer> findByQuestionId(String questionId);
 }
