@@ -13,6 +13,7 @@ interface Subtask {
   id: string;
   title: string;
   description?: string;
+  marks?: number;
   completed?: boolean;
 }
 
@@ -20,6 +21,7 @@ interface MainTask {
   id: string;
   title: string;
   description?: string;
+  marks?: number;
   subtasks?: Subtask[];
   completed?: boolean;
 }
@@ -141,6 +143,30 @@ export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubt
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
+  const mergeProjectMarks = (progressMainTasks: MainTask[], sourceMainTasks: MainTask[]): MainTask[] => {
+    const sourceMap = new Map(sourceMainTasks.map((task) => [task.id, task]));
+    return progressMainTasks.map((task) => {
+      const sourceTask = sourceMap.get(task.id);
+      const sourceSubtaskMap = new Map((sourceTask?.subtasks || []).map((subtask) => [subtask.id, subtask]));
+      return {
+        ...task,
+        marks: typeof task.marks === 'number' ? task.marks : sourceTask?.marks,
+        subtasks: (task.subtasks || []).map((subtask) => ({
+          ...subtask,
+          marks: typeof subtask.marks === 'number' ? subtask.marks : sourceSubtaskMap.get(subtask.id)?.marks,
+        })),
+      };
+    });
+  };
+
+  const mergeTaskMarks = (progressSubtasks: Subtask[], sourceSubtasks: Subtask[]): Subtask[] => {
+    const sourceMap = new Map(sourceSubtasks.map((subtask) => [subtask.id, subtask]));
+    return progressSubtasks.map((subtask) => ({
+      ...subtask,
+      marks: typeof subtask.marks === 'number' ? subtask.marks : sourceMap.get(subtask.id)?.marks,
+    }));
+  };
+
   useEffect(() => {
     if (!item) return;
 
@@ -163,7 +189,8 @@ export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubt
 
           if (progressRes.ok) {
             const progressData = await progressRes.json();
-            setMainTasks(progressData.data.progress.mainTasks || project.mainTasks || []);
+            const progressMainTasks = progressData.data.progress.mainTasks || [];
+            setMainTasks(mergeProjectMarks(progressMainTasks, project.mainTasks || []));
           } else {
             setMainTasks(project.mainTasks || []);
           }
@@ -181,7 +208,8 @@ export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubt
 
           if (progressRes.ok) {
             const progressData = await progressRes.json();
-            setSubtasks(progressData.data.progress.subtasks || task.subtasks || []);
+            const progressSubtasks = progressData.data.progress.subtasks || [];
+            setSubtasks(mergeTaskMarks(progressSubtasks, task.subtasks || []));
           } else {
             setSubtasks(task.subtasks || []);
           }
@@ -388,7 +416,7 @@ export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubt
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 500, opacity: 0 }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed right-0 top-0 h-full w-full md:w-[500px] bg-white shadow-2xl z-50 overflow-y-auto"
+            className="fixed right-0 top-0 h-full w-full md:w-[640px] bg-white shadow-2xl z-50 overflow-y-auto overflow-x-hidden"
           >
             <div className="sticky top-0 bg-linear-to-r from-brand-blue to-brand-blue/80 text-white p-6 flex items-center justify-between">
               <div className="flex-1">
@@ -407,11 +435,11 @@ export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubt
               </motion.button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-6 overflow-x-hidden">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <p className="text-xs text-blue-600 font-semibold mb-2">ASSIGNED COURSE</p>
-                <p className="font-semibold text-gray-900">{item.item.course.courseName}</p>
-                <p className="text-sm text-gray-600">
+                <p className="font-semibold text-gray-900 break-words">{item.item.course.courseName}</p>
+                <p className="text-sm text-gray-600 break-words">
                   {item.item.course.courseCode} • Year {item.item.course.year}, Semester {item.item.course.semester}
                 </p>
               </div>
@@ -422,7 +450,7 @@ export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubt
                     <Calendar size={16} className="text-amber-600" />
                     <p className="text-sm font-semibold text-amber-900">DEADLINE</p>
                   </div>
-                  <p className="font-semibold text-amber-900">
+                  <p className="font-semibold text-amber-900 break-words">
                     {item.item.deadlineDate} • {item.item.deadlineTime}
                   </p>
                   <p className="text-sm text-amber-700 mt-1">
@@ -434,7 +462,7 @@ export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubt
               {isProject && project && (
                 <div>
                   <p className="text-xs font-semibold text-gray-600 mb-2">PROJECT TYPE</p>
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-sm font-medium text-gray-900 break-words">
                     {project.projectType === 'group' ? '👥 Group Project' : '👤 Individual Project'}
                   </p>
                 </div>
@@ -443,7 +471,7 @@ export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubt
               {item.item.description?.text && (
                 <div>
                   <p className="text-xs font-semibold text-gray-600 mb-2">DESCRIPTION</p>
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap break-words leading-relaxed">
                     {item.item.description.text}
                   </p>
                 </div>
@@ -463,17 +491,17 @@ export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubt
                             disabled={isSaving || item.status === 'todo'}
                             className={`mt-1 w-5 h-5 accent-green-600 ${item.status === 'todo' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                           />
-                          <div className="flex-1">
-                            <p className={`text-sm font-semibold ${mainTask.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
-                              {idx + 1}. {mainTask.title}
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-semibold break-words ${mainTask.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                              {idx + 1}. {mainTask.title} ({Number(mainTask.marks || 0)})
                             </p>
                             {mainTask.description && (
-                              <p className="text-xs text-gray-600 mt-1">{mainTask.description}</p>
+                              <p className="text-xs text-gray-600 mt-1 break-words">{mainTask.description}</p>
                             )}
                             {mainTask.subtasks && mainTask.subtasks.length > 0 && (
                               <div className="mt-3 pl-3 border-l-2 border-blue-300 space-y-2">
                                 {mainTask.subtasks.map((subtask) => (
-                                  <div key={subtask.id} className="flex items-start gap-2">
+                                  <div key={subtask.id} className="flex items-start gap-2 min-w-0">
                                     <input
                                       type="checkbox"
                                       checked={subtask.completed || false}
@@ -481,8 +509,8 @@ export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubt
                                       disabled={isSaving || item.status === 'todo'}
                                       className={`mt-0.5 w-4 h-4 accent-green-600 ${item.status === 'todo' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                                     />
-                                    <p className={`text-xs ${subtask.completed ? 'line-through text-gray-500' : 'text-gray-700'}`}>
-                                      • {subtask.title}
+                                    <p className={`text-xs break-words ${subtask.completed ? 'line-through text-gray-500' : 'text-gray-700'}`}>
+                                      • {subtask.title} ({Number(subtask.marks || 0)})
                                     </p>
                                   </div>
                                 ))}
@@ -509,12 +537,12 @@ export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubt
                           disabled={isSaving || item.status === 'todo'}
                           className={`mt-0.5 w-5 h-5 accent-green-600 ${item.status === 'todo' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                         />
-                        <div className="flex-1">
-                          <p className={`text-sm font-semibold ${subtask.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
-                            {idx + 1}. {subtask.title}
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-semibold break-words ${subtask.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                            {idx + 1}. {subtask.title} ({Number(subtask.marks || 0)})
                           </p>
                           {subtask.description && (
-                            <p className={`text-xs mt-1 ${subtask.completed ? 'line-through text-gray-500' : 'text-gray-600'}`}>
+                            <p className={`text-xs mt-1 break-words ${subtask.completed ? 'line-through text-gray-500' : 'text-gray-600'}`}>
                               {subtask.description}
                             </p>
                           )}
@@ -601,7 +629,7 @@ export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubt
               {item.item.specialNotes?.text && (
                 <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
                   <p className="text-xs font-semibold text-yellow-900 mb-2">⚠️ SPECIAL NOTES</p>
-                  <p className="text-sm text-yellow-800 whitespace-pre-wrap leading-relaxed">
+                  <p className="text-sm text-yellow-800 whitespace-pre-wrap break-words leading-relaxed">
                     {item.item.specialNotes.text}
                   </p>
                 </div>
