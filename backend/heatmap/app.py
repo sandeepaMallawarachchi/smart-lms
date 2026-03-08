@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import numpy as np
+import os
 
 from config import Config
 from src.data.loader import DataLoader
@@ -11,9 +12,10 @@ from src.models.anomaly import AnomalyDetector
 from src.utils.formatter import map_to_level, adaptive_thresholds
 
 app = Flask(__name__)
+cors_origins = [origin.strip() for origin in os.getenv('CORS_ORIGINS', '*').split(',') if origin.strip()]
 CORS(app, resources={
     r"/*": {
-        "origins": ["http://localhost:3000", "http://localhost:3001"],
+        "origins": cors_origins,
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True

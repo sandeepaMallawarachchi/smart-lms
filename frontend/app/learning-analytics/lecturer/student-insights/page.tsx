@@ -19,6 +19,8 @@ interface StudentInsight {
   engagement: number;
   avgScore: number;
   lateSubmissionCount: number;
+  confidence?: number;
+  predictionSource?: 'stored_prediction' | 'live_prediction' | 'none' | string;
 }
 
 interface LivePredictionStatus {
@@ -130,7 +132,7 @@ function LecturerStudentInsightsPageContent() {
     <div className="space-y-4">
       <div className="rounded-xl border border-slate-200 bg-white p-5">
         <h1 className="text-2xl font-bold text-slate-900">Student Insights</h1>
-        <p className="text-sm text-slate-600">Search and filter students based on academic risk and progress.</p>
+        <p className="text-sm text-slate-600">Search and filter students by estimated risk, completion, engagement, and score trends.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -178,7 +180,7 @@ function LecturerStudentInsightsPageContent() {
             <thead className="bg-slate-50 text-slate-600">
               <tr>
                 <th className="px-4 py-3 font-semibold">Student</th>
-                <th className="px-4 py-3 font-semibold">Risk</th>
+                <th className="px-4 py-3 font-semibold">Estimated Risk</th>
                 <th className="px-4 py-3 font-semibold">Completion</th>
                 <th className="px-4 py-3 font-semibold">Score</th>
                 <th className="px-4 py-3 font-semibold">Engagement</th>
@@ -187,7 +189,7 @@ function LecturerStudentInsightsPageContent() {
             </thead>
             <tbody>
               {students.length === 0 ? (
-                <tr><td className="px-4 py-4 text-slate-500" colSpan={6}>No students found for current filters.</td></tr>
+                <tr><td className="px-4 py-4 text-slate-500" colSpan={7}>No students found for current filters.</td></tr>
               ) : (
                 students.map((student) => (
                   <tr key={student.studentId} className="border-t border-slate-100">
@@ -196,7 +198,10 @@ function LecturerStudentInsightsPageContent() {
                       <p className="text-xs text-slate-500">{student.studentIdNumber} • {student.specialization}</p>
                     </td>
                     <td className="px-4 py-3 text-slate-700">
-                      {student.riskLevel.toUpperCase()} ({student.riskProbability}%)
+                      <p>{student.riskLevel.toUpperCase()} ({student.riskProbability}%)</p>
+                      {typeof student.confidence === 'number' && student.confidence > 0 && (
+                        <p className="text-xs text-slate-500">Model certainty: {student.confidence}%</p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-slate-700">{student.completionRate}%</td>
                     <td className="px-4 py-3 text-slate-700">{student.avgScore}%</td>

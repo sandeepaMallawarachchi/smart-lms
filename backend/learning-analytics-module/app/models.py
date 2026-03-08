@@ -246,11 +246,13 @@ class ModelPredictor:
             if self.model_degraded:
                 risk_prob = heuristic_risk_prob
                 confidence = round(float(0.5 + abs(risk_prob - 0.5)), 3)
+                prediction_mode = 'heuristic_fallback'
             else:
                 # Blend model + heuristic to reduce unstable extremes with sparse live data
                 risk_prob = (0.7 * model_risk_prob) + (0.3 * heuristic_risk_prob)
                 predicted_class = 1 if risk_prob >= current_app.config['RISK_THRESHOLD_MEDIUM'] else 0
                 confidence = round(float(probability[predicted_class]), 3)
+                prediction_mode = 'hybrid_model'
 
             prediction = 1 if risk_prob >= current_app.config['RISK_THRESHOLD_MEDIUM'] else 0
             risk_level = self._get_risk_level(risk_prob)
@@ -262,6 +264,7 @@ class ModelPredictor:
                 'risk_probability': round(float(risk_prob), 3),
                 'confidence': confidence,
                 'risk_level': risk_level,
+                'prediction_mode': prediction_mode,
                 'risk_factors': risk_factors,
                 'recommendations': recommendations
             }

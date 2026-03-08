@@ -45,6 +45,7 @@ interface HeatmapData {
 export default function ActivityHeatmap() {
   const CELL_SIZE = 20;
   const CELL_GAP = 4;
+  const configuredHeatmapUrl = process.env.NEXT_PUBLIC_HEATMAP_SERVICE_URL || '';
   const [data, setData] = useState<HeatmapData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,9 +97,17 @@ export default function ActivityHeatmap() {
         throw new Error('Student ID not found. Please log in again.');
       }
 
+      if (!configuredHeatmapUrl) {
+        throw new Error('Heatmap service URL is not configured.');
+      }
+      const normalizedHeatmapUrl = configuredHeatmapUrl.replace(/\/$/, '');
+      const heatmapUrl = /\/heatmap$/.test(normalizedHeatmapUrl)
+        ? normalizedHeatmapUrl
+        : `${normalizedHeatmapUrl}/heatmap`;
+
       console.log('✅ Fetching heatmap for studentId:', studentId);
 
-      const response = await fetch('http://localhost:5002/heatmap', {
+      const response = await fetch(heatmapUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

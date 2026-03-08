@@ -8,6 +8,59 @@ import {
     scheduleReminderJobsForStudentItem,
 } from '@/lib/projects-and-tasks/reminders/scheduler';
 
+type ProgressSubtask = {
+    id: string;
+    title: string;
+    description?: string;
+    marks?: number;
+    completed?: boolean;
+};
+
+type ProgressMainTask = {
+    id: string;
+    title: string;
+    description?: string;
+    marks?: number;
+    completed?: boolean;
+    subtasks?: ProgressSubtask[];
+};
+
+function applyProjectMarks(
+    progressMainTasks: ProgressMainTask[] = [],
+    sourceMainTasks: ProgressMainTask[] = []
+): ProgressMainTask[] {
+    const sourceMainMap = new Map(sourceMainTasks.map((task) => [task.id, task]));
+    const sourceMainByTitle = new Map(
+        sourceMainTasks.map((task) => [String(task.title || '').trim().toLowerCase(), task])
+    );
+
+    return progressMainTasks.map((task) => {
+        const sourceTask =
+            sourceMainMap.get(task.id) ||
+            sourceMainByTitle.get(String(task.title || '').trim().toLowerCase());
+        const sourceSubtaskMap = new Map((sourceTask?.subtasks || []).map((subtask) => [subtask.id, subtask]));
+        const sourceSubtaskByTitle = new Map(
+            (sourceTask?.subtasks || []).map((subtask) => [
+                String(subtask.title || '').trim().toLowerCase(),
+                subtask,
+            ])
+        );
+
+        return {
+            ...task,
+            marks: Number(sourceTask?.marks || 0),
+            subtasks: (task.subtasks || []).map((subtask) => ({
+                ...subtask,
+                marks: Number(
+                    sourceSubtaskMap.get(subtask.id)?.marks ||
+                    sourceSubtaskByTitle.get(String(subtask.title || '').trim().toLowerCase())?.marks ||
+                    0
+                ),
+            })),
+        };
+    });
+}
+
 export async function GET(request: NextRequest) {
     try {
         await connectDB();
@@ -54,11 +107,13 @@ export async function GET(request: NextRequest) {
                     id: task.id,
                     title: task.title,
                     description: task.description,
+                    marks: task.marks || 0,
                     completed: false,
                     subtasks: task.subtasks?.map((st: any) => ({
                         id: st.id,
                         title: st.title,
                         description: st.description,
+                        marks: st.marks || 0,
                         completed: false,
                     })),
                 })),
@@ -66,6 +121,11 @@ export async function GET(request: NextRequest) {
 
             await progress.save();
         }
+
+        progress.mainTasks = applyProjectMarks(
+            (progress.mainTasks || []) as ProgressMainTask[],
+            (visibleProject.mainTasks || []) as ProgressMainTask[]
+        ) as any;
 
         return successResponse('Project progress retrieved', { progress }, 200);
     } catch (error: any) {
@@ -121,11 +181,13 @@ export async function POST(request: NextRequest) {
                     id: task.id,
                     title: task.title,
                     description: task.description,
+                    marks: task.marks || 0,
                     completed: false,
                     subtasks: task.subtasks?.map((st: any) => ({
                         id: st.id,
                         title: st.title,
                         description: st.description,
+                        marks: st.marks || 0,
                         completed: false,
                     })),
                 })),
@@ -135,7 +197,10 @@ export async function POST(request: NextRequest) {
                 progress.status = status;
             }
             if (mainTasks) {
-                progress.mainTasks = mainTasks;
+                progress.mainTasks = applyProjectMarks(
+                    mainTasks as ProgressMainTask[],
+                    (visibleProject.mainTasks || []) as ProgressMainTask[]
+                ) as any;
 
                 const allTasksCompleted = mainTasks.every((task: any) => task.completed);
                 if (allTasksCompleted && mainTasks.length > 0) {
@@ -143,6 +208,11 @@ export async function POST(request: NextRequest) {
                 }
             }
         }
+
+        progress.mainTasks = applyProjectMarks(
+            (progress.mainTasks || []) as ProgressMainTask[],
+            (visibleProject.mainTasks || []) as ProgressMainTask[]
+        ) as any;
 
         await progress.save();
 

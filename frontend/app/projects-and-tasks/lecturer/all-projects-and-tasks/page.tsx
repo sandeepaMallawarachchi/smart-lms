@@ -15,12 +15,14 @@ interface Subtask {
   id: string;
   title: string;
   description?: string;
+  marks?: number;
 }
 
 interface MainTask {
   id: string;
   title: string;
   description?: string;
+  marks?: number;
   subtasks?: Subtask[];
 }
 
@@ -787,13 +789,16 @@ const handleSaveEdit = async (updatedData: any) => {
                                             className="bg-white p-4 rounded-lg border-2 border-blue-200 hover:border-blue-400 transition-colors shadow-sm"
                                           >
                                             <p className="text-sm font-bold text-blue-900">📌 {task.title}</p>
+                                            <p className="text-xs font-semibold text-amber-700 mt-1">
+                                              Marks: {Number(task.marks || 0)}
+                                            </p>
                                             {task.description && <p className="text-xs text-gray-600 mt-1 italic">{task.description}</p>}
                                             {subtasks.length > 0 && (
                                               <div className="ml-4 space-y-1 mt-2 p-2 bg-blue-50 rounded">
                                                 <p className="text-xs font-semibold text-blue-800 mb-1">Sub-components:</p>
                                                 {subtasks.map((subtask, stIdx) => (
                                                   <p key={subtask.id} className="text-xs text-blue-700">
-                                                    {String.fromCharCode(97 + stIdx)}) {subtask.title}
+                                                    {String.fromCharCode(97 + stIdx)}) {subtask.title} ({Number(subtask.marks || 0)} marks)
                                                   </p>
                                                 ))}
                                               </div>
@@ -1093,7 +1098,7 @@ const handleSaveEdit = async (updatedData: any) => {
                                     <div className="space-y-1 ml-2">
                                       {subtasks.map((subtask, idx) => (
                                         <p key={subtask.id} className="text-sm text-green-900 font-medium">
-                                          {idx + 1}. {subtask.title}
+                                          {idx + 1}. {subtask.title} ({Number(subtask.marks || 0)} marks)
                                         </p>
                                       ))}
                                     </div>
