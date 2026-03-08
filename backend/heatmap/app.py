@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import numpy as np
+import os
 
 from config import Config
 from src.data.loader import DataLoader
