@@ -8,6 +8,69 @@ import CourseGroup from '@/model/CourseGroup';
 
 type ProjectWithGroupsLite = { assignedGroupIds?: string[] } & Record<string, unknown>;
 type GroupLite = { _id: { toString(): string } } & Record<string, unknown>;
+type IncomingSubtask = { id?: string; title?: string; description?: string; marks?: number | string };
+type IncomingMainTask = {
+  id?: string;
+  title?: string;
+  description?: string;
+  marks?: number | string;
+  subtasks?: IncomingSubtask[];
+};
+
+function normalizeProjectMainTasks(mainTasks: unknown): { ok: true; value: IncomingMainTask[] } | { ok: false; message: string } {
+  if (!Array.isArray(mainTasks)) {
+    return { ok: false, message: 'Main tasks must be an array' };
+  }
+
+  const normalized: IncomingMainTask[] = [];
+  let totalMainMarks = 0;
+
+  for (const rawTask of mainTasks) {
+    const task = (rawTask || {}) as IncomingMainTask;
+    const marks = Number(task.marks ?? 0);
+    if (!Number.isFinite(marks) || marks < 0 || marks > 100) {
+      return { ok: false, message: 'Each main task mark must be between 0 and 100' };
+    }
+
+    totalMainMarks += marks;
+    if (totalMainMarks > 100) {
+      return { ok: false, message: 'Total main task marks cannot exceed 100' };
+    }
+
+    const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+    let subtaskTotal = 0;
+    const normalizedSubtasks: IncomingSubtask[] = [];
+
+    for (const rawSubtask of subtasks) {
+      const subtask = (rawSubtask || {}) as IncomingSubtask;
+      const subtaskMarks = Number(subtask.marks ?? 0);
+      if (!Number.isFinite(subtaskMarks) || subtaskMarks < 0) {
+        return { ok: false, message: 'Each subtask mark must be zero or a positive number' };
+      }
+      subtaskTotal += subtaskMarks;
+      normalizedSubtasks.push({
+        id: String(subtask.id || ''),
+        title: String(subtask.title || ''),
+        description: String(subtask.description || ''),
+        marks: subtaskMarks,
+      });
+    }
+
+    if (subtaskTotal > marks) {
+      return { ok: false, message: `Subtask marks cannot exceed main task marks for "${String(task.title || 'Untitled task')}"` };
+    }
+
+    normalized.push({
+      id: String(task.id || ''),
+      title: String(task.title || ''),
+      description: String(task.description || ''),
+      marks,
+      subtasks: normalizedSubtasks,
+    });
+  }
+
+  return { ok: true, value: normalized };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +93,7 @@ export async function POST(request: NextRequest) {
     const specialNotes = JSON.parse(
       (formData.get('specialNotes') as string) || '{"html":"","text":""}'
     );
-    const mainTasks = JSON.parse((formData.get('mainTasks') as string) || '[]');
+    const mainTasksRaw = JSON.parse((formData.get('mainTasks') as string) || '[]');
     const assignedGroupIds = JSON.parse((formData.get('assignedGroupIds') as string) || '[]');
 
     // Validation
@@ -61,6 +124,15 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const normalizedMainTasksResult = normalizeProjectMainTasks(mainTasksRaw);
+    if (!normalizedMainTasksResult.ok) {
+      return NextResponse.json(
+        { message: normalizedMainTasksResult.message },
+        { status: 400 }
+      );
+    }
+    const mainTasks = normalizedMainTasksResult.value;
 
     const normalizedAssignedGroupIds = Array.isArray(assignedGroupIds)
       ? [...new Set(assignedGroupIds.map((id: string) => id.toString()))]
