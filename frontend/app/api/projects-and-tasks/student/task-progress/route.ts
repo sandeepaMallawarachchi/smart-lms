@@ -8,6 +8,32 @@ import {
     scheduleReminderJobsForStudentItem,
 } from '@/lib/projects-and-tasks/reminders/scheduler';
 
+type ProgressSubtask = {
+    id: string;
+    title: string;
+    description?: string;
+    marks?: number;
+    completed?: boolean;
+};
+
+function applyTaskMarks(
+    progressSubtasks: ProgressSubtask[] = [],
+    sourceSubtasks: ProgressSubtask[] = []
+): ProgressSubtask[] {
+    const sourceMap = new Map(sourceSubtasks.map((subtask) => [subtask.id, subtask]));
+    const sourceByTitle = new Map(
+        sourceSubtasks.map((subtask) => [String(subtask.title || '').trim().toLowerCase(), subtask])
+    );
+    return progressSubtasks.map((subtask) => ({
+        ...subtask,
+        marks: Number(
+            sourceMap.get(subtask.id)?.marks ||
+            sourceByTitle.get(String(subtask.title || '').trim().toLowerCase())?.marks ||
+            0
+        ),
+    }));
+}
+
 export async function GET(request: NextRequest) {
     try {
         await connectDB();
@@ -54,12 +80,18 @@ export async function GET(request: NextRequest) {
                     id: st.id,
                     title: st.title,
                     description: st.description,
+                    marks: st.marks || 0,
                     completed: false,
                 })),
             });
 
             await progress.save();
         }
+
+        progress.subtasks = applyTaskMarks(
+            (progress.subtasks || []) as ProgressSubtask[],
+            (visibleTask.subtasks || []) as ProgressSubtask[]
+        ) as any;
 
         return successResponse('Task progress retrieved', { progress }, 200);
     } catch (error: any) {
@@ -115,6 +147,7 @@ export async function POST(request: NextRequest) {
                     id: st.id,
                     title: st.title,
                     description: st.description,
+                    marks: st.marks || 0,
                     completed: false,
                 })),
             });
@@ -123,7 +156,10 @@ export async function POST(request: NextRequest) {
                 progress.status = status;
             }
             if (subtasks) {
-                progress.subtasks = subtasks;
+                progress.subtasks = applyTaskMarks(
+                    subtasks as ProgressSubtask[],
+                    (visibleTask.subtasks || []) as ProgressSubtask[]
+                ) as any;
 
                 const allSubtasksCompleted = subtasks.every((st: any) => st.completed);
                 if (allSubtasksCompleted && subtasks.length > 0) {
@@ -131,6 +167,11 @@ export async function POST(request: NextRequest) {
                 }
             }
         }
+
+        progress.subtasks = applyTaskMarks(
+            (progress.subtasks || []) as ProgressSubtask[],
+            (visibleTask.subtasks || []) as ProgressSubtask[]
+        ) as any;
 
         await progress.save();
 
