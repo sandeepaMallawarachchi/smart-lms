@@ -181,7 +181,7 @@ export default function StudentDashboard() {
               : 'No completion data yet. Complete a task to begin tracking progress.';
           const riskText =
             riskLevel === 'high'
-              ? 'You are currently at high risk. Prioritize overdue items this week.'
+              ? `Your risk is high because the model includes engagement, late work, and score trends in addition to completion (${completionRate.toFixed(1)}%).`
               : riskLevel === 'medium'
               ? 'You are at medium risk. Small improvements can lift your standing.'
               : riskLevel === 'low'

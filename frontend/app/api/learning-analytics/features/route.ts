@@ -56,12 +56,44 @@ const mapGender = (gender?: string | null) => {
   return 'M';
 };
 
-const calcDaysEarly = (submittedAt?: string | null, dueDate?: string | null) => {
+const parseDueDateTime = (dueDate?: string | null, dueTime?: string | null) => {
+  if (!dueDate) return null;
+  const time = (dueTime && dueTime.trim()) ? dueTime.trim() : '23:59';
+  const candidate = new Date(`${dueDate}T${time}:00`);
+  if (Number.isNaN(candidate.getTime())) return null;
+  return candidate;
+};
+
+const calcDaysEarly = (submittedAt?: string | null, dueDate?: string | null, dueTime?: string | null) => {
   if (!submittedAt || !dueDate) return null;
   const submitted = new Date(submittedAt).getTime();
-  const due = new Date(dueDate).getTime();
+  const dueDateTime = parseDueDateTime(dueDate, dueTime);
+  if (!dueDateTime) return null;
+  const due = dueDateTime.getTime();
   if (!Number.isFinite(submitted) || !Number.isFinite(due)) return null;
   return (due - submitted) / DAY_MS;
+};
+
+const projectPossibleMarks = (project: any) => {
+  const mainTasks = Array.isArray(project?.mainTasks) ? project.mainTasks : [];
+  let total = 0;
+  for (const mainTask of mainTasks) {
+    total += safeNumber(Number(mainTask?.marks), 0);
+    const subtasks = Array.isArray(mainTask?.subtasks) ? mainTask.subtasks : [];
+    for (const subtask of subtasks) {
+      total += safeNumber(Number(subtask?.marks), 0);
+    }
+  }
+  return total;
+};
+
+const taskPossibleMarks = (task: any) => {
+  const subtasks = Array.isArray(task?.subtasks) ? task.subtasks : [];
+  let total = 0;
+  for (const subtask of subtasks) {
+    total += safeNumber(Number(subtask?.marks), 0);
+  }
+  return total;
 };
 
 export async function GET(request: NextRequest) {
@@ -108,32 +140,77 @@ export async function GET(request: NextRequest) {
 
     const projectMap = new Map(projects.map((p) => [p._id.toString(), p]));
     const taskMap = new Map(tasks.map((t) => [t._id.toString(), t]));
+    const projectMarksMap = new Map(projects.map((p) => [p._id.toString(), projectPossibleMarks(p)]));
+    const taskMarksMap = new Map(tasks.map((t) => [t._id.toString(), taskPossibleMarks(t)]));
 
     const progressDates: Date[] = [];
     let completedProjects = 0;
     let completedTasks = 0;
     let lateTaskOrProjectCount = 0;
+    let totalPossibleCompletedMarks = 0;
+    let totalEarnedCompletedMarks = 0;
+    const completionScores: Array<{ score: number; completedAt: Date }> = [];
+    const daysEarlyValues: number[] = [];
+    let worstDelay = 0;
 
     for (const p of projectProgress) {
+      const project = projectMap.get(p.projectId);
+      if (!project) continue;
       if (p.updatedAt) progressDates.push(new Date(p.updatedAt));
       if (p.status === 'done') {
         completedProjects++;
-        const project = projectMap.get(p.projectId);
+        const possibleMarks = safeNumber(projectMarksMap.get(p.projectId), 0);
+        let daysEarly: number | null = null;
         if (project?.deadlineDate && p.updatedAt) {
-          const delayDays = calcDaysEarly(p.updatedAt.toISOString(), project.deadlineDate);
-          if (delayDays !== null && delayDays < 0) lateTaskOrProjectCount++;
+          daysEarly = calcDaysEarly(p.updatedAt.toISOString(), project.deadlineDate, project.deadlineTime);
+          if (daysEarly !== null) {
+            daysEarlyValues.push(daysEarly);
+            if (daysEarly < 0) {
+              lateTaskOrProjectCount++;
+              worstDelay = Math.min(worstDelay, daysEarly);
+            }
+          }
+        }
+
+        if (possibleMarks > 0 && p.updatedAt) {
+          totalPossibleCompletedMarks += possibleMarks;
+          const earnedMarks = daysEarly === null || daysEarly >= 0 ? possibleMarks : 0;
+          totalEarnedCompletedMarks += earnedMarks;
+          completionScores.push({
+            score: (earnedMarks / possibleMarks) * 100,
+            completedAt: new Date(p.updatedAt),
+          });
         }
       }
     }
 
     for (const t of taskProgress) {
+      const task = taskMap.get(t.taskId);
+      if (!task) continue;
       if (t.updatedAt) progressDates.push(new Date(t.updatedAt));
       if (t.status === 'done') {
         completedTasks++;
-        const task = taskMap.get(t.taskId);
+        const possibleMarks = safeNumber(taskMarksMap.get(t.taskId), 0);
+        let daysEarly: number | null = null;
         if (task?.deadlineDate && t.updatedAt) {
-          const delayDays = calcDaysEarly(t.updatedAt.toISOString(), task.deadlineDate);
-          if (delayDays !== null && delayDays < 0) lateTaskOrProjectCount++;
+          daysEarly = calcDaysEarly(t.updatedAt.toISOString(), task.deadlineDate, task.deadlineTime);
+          if (daysEarly !== null) {
+            daysEarlyValues.push(daysEarly);
+            if (daysEarly < 0) {
+              lateTaskOrProjectCount++;
+              worstDelay = Math.min(worstDelay, daysEarly);
+            }
+          }
+        }
+
+        if (possibleMarks > 0 && t.updatedAt) {
+          totalPossibleCompletedMarks += possibleMarks;
+          const earnedMarks = daysEarly === null || daysEarly >= 0 ? possibleMarks : 0;
+          totalEarnedCompletedMarks += earnedMarks;
+          completionScores.push({
+            score: (earnedMarks / possibleMarks) * 100,
+            completedAt: new Date(t.updatedAt),
+          });
         }
       }
     }
@@ -190,16 +267,19 @@ export async function GET(request: NextRequest) {
 
     const engagementRegularity = avgClicksPerDay > 0 ? clicksStd / avgClicksPerDay : 0;
 
-    const avgScore = 0;
-    const scoreStd = 0;
-    const minScore = 0;
-    const maxScore = 0;
-    const firstScore = 0;
-    const scoreImprovement = 0;
+    completionScores.sort((a, b) => a.completedAt.getTime() - b.completedAt.getTime());
+    const scoreValues = completionScores.map((entry) => entry.score);
+    const avgScore = totalPossibleCompletedMarks > 0
+      ? (totalEarnedCompletedMarks / totalPossibleCompletedMarks) * 100
+      : 0;
+    const scoreStd = stdDev(scoreValues);
+    const minScore = scoreValues.length > 0 ? Math.min(...scoreValues) : 0;
+    const maxScore = scoreValues.length > 0 ? Math.max(...scoreValues) : 0;
+    const firstScore = scoreValues.length > 0 ? scoreValues[0] : 0;
+    const scoreImprovement = scoreValues.length > 1 ? scoreValues[scoreValues.length - 1] - scoreValues[0] : 0;
     const completionRate = taskCompletionRate;
-    const avgDaysEarly = 0;
-    const timingConsistency = 0;
-    const worstDelay = 0;
+    const avgDaysEarly = mean(daysEarlyValues);
+    const timingConsistency = stdDev(daysEarlyValues);
     const lateSubmissionCount = lateTaskOrProjectCount;
     const numOfPrevAttempts = 0;
 

@@ -38,6 +38,7 @@ interface PredictionResponse {
         confidence: number;
         risk_level: string;
         risk_probability: number;
+        prediction_mode?: 'hybrid_model' | 'heuristic_fallback';
         recommendations: {
             explanation: string;
             motivation: string;
@@ -320,6 +321,40 @@ export default function FullReportPage() {
     }
 
     const riskColors = getRiskColor(prediction?.prediction.risk_level || 'low');
+    const riskProbability = ((prediction?.prediction.risk_probability || 0) * 100);
+    const confidenceLevel = ((prediction?.prediction.confidence || 0) * 100);
+    const predictionMode = prediction?.prediction.prediction_mode;
+    const isHeuristicMode = predictionMode === 'heuristic_fallback';
+    const hasProgressVsRiskMismatch =
+        (inputData?.completion_rate ?? 0) >= 0.4 &&
+        (prediction?.prediction.risk_level || '').toLowerCase() === 'high';
+
+    const riskDrivers = [
+        {
+            label: 'Completion Rate',
+            value: `${((inputData?.completion_rate ?? 0) * 100).toFixed(1)}%`,
+            impact: (inputData?.completion_rate ?? 0) < 0.7 ? 'High impact' : 'Low impact',
+            active: (inputData?.completion_rate ?? 0) < 0.7,
+        },
+        {
+            label: 'Late Submissions',
+            value: `${inputData?.late_submission_count ?? 0}`,
+            impact: (inputData?.late_submission_count ?? 0) > 2 ? 'High impact' : 'Low impact',
+            active: (inputData?.late_submission_count ?? 0) > 2,
+        },
+        {
+            label: 'Engagement',
+            value: `${(inputData?.total_clicks ?? 0).toLocaleString()} clicks`,
+            impact: (inputData?.total_clicks ?? 0) < 50 ? 'High impact' : 'Low impact',
+            active: (inputData?.total_clicks ?? 0) < 50,
+        },
+        {
+            label: 'Average Score',
+            value: `${(inputData?.avg_score ?? 0).toFixed(1)}%`,
+            impact: (inputData?.avg_score ?? 0) < 50 ? 'High impact' : 'Low impact',
+            active: (inputData?.avg_score ?? 0) < 50,
+        },
+    ];
 
     return (
         <div className="max-w-7xl mx-auto">
@@ -406,18 +441,32 @@ export default function FullReportPage() {
                                 </p>
                             </div>
                             <div>
-                                <p className="text-sm text-gray-600 mb-1">Risk Probability</p>
+                                <p className="text-sm text-gray-600 mb-1">Estimated Risk</p>
                                 <p className="text-2xl font-bold text-gray-900">
-                                    {((prediction?.prediction.risk_probability || 0) * 100).toFixed(1)}%
+                                    {riskProbability.toFixed(1)}%
                                 </p>
                             </div>
                             <div>
-                                <p className="text-sm text-gray-600 mb-1">Confidence Level</p>
-                                <p className="text-2xl font-bold text-gray-900">
-                                    {((prediction?.prediction.confidence || 0) * 100).toFixed(1)}%
-                                </p>
+                                {isHeuristicMode ? (
+                                    <>
+                                        <p className="text-sm text-gray-600 mb-1">Assessment Basis</p>
+                                        <p className="text-lg font-bold text-gray-900">Activity + Progress Signals</p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="text-sm text-gray-600 mb-1">Model Certainty</p>
+                                        <p className="text-2xl font-bold text-gray-900">
+                                            {confidenceLevel.toFixed(1)}%
+                                        </p>
+                                    </>
+                                )}
                             </div>
                         </div>
+                        {hasProgressVsRiskMismatch && (
+                            <p className="mt-4 text-sm text-gray-700">
+                                You have moderate completion, but risk remains high due to low engagement, low average score, and late submissions.
+                            </p>
+                        )}
                     </div>
                 </div>
             </div>
@@ -469,6 +518,24 @@ export default function FullReportPage() {
 
                 {/* Right Column - Stats & Insights */}
                 <div className="space-y-6">
+                    {/* Why This Risk */}
+                    <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
+                        <h3 className="text-xl font-bold text-gray-900 mb-4">Why This Risk Level?</h3>
+                        <div className="space-y-3">
+                            {riskDrivers.map((driver) => (
+                                <div key={driver.label} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                                    <div>
+                                        <p className="text-sm font-semibold text-gray-900">{driver.label}</p>
+                                        <p className="text-xs text-gray-600">{driver.value}</p>
+                                    </div>
+                                    <span className={`text-xs font-bold ${driver.active ? 'text-red-600' : 'text-green-600'}`}>
+                                        {driver.impact}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* Performance Metrics */}
                     <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
                         <h3 className="text-xl font-bold text-gray-900 mb-4">Performance Metrics</h3>

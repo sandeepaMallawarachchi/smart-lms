@@ -296,33 +296,64 @@ Format your response as a numbered list with clear, concise points."""
 
         project_map = {str(p["_id"]): p for p in projects}
         task_map = {str(t["_id"]): t for t in tasks}
+        project_marks_map = {str(p["_id"]): self._project_possible_marks(p) for p in projects}
+        task_marks_map = {str(t["_id"]): self._task_possible_marks(t) for t in tasks}
 
         progress_dates = []
         completed_projects = 0
         completed_tasks = 0
         late_count = 0
+        total_possible_completed_marks = 0.0
+        total_earned_completed_marks = 0.0
+        completion_score_events = []
+        days_early_values = []
+        worst_delay = 0.0
 
         for p in project_progress:
+            project = project_map.get(p.get("projectId"))
+            if not project:
+                continue
             if p.get("updatedAt"):
                 progress_dates.append(p["updatedAt"])
             if p.get("status") == "done":
                 completed_projects += 1
-                project = project_map.get(p.get("projectId"))
+                possible_marks = float(project_marks_map.get(p.get("projectId"), 0) or 0)
+                days_early = None
                 if project and project.get("deadlineDate") and p.get("updatedAt"):
-                    delay_days = self._days_early(p["updatedAt"], project["deadlineDate"])
-                    if delay_days is not None and delay_days < 0:
-                        late_count += 1
+                    days_early = self._days_early(p["updatedAt"], project["deadlineDate"], project.get("deadlineTime"))
+                    if days_early is not None:
+                        days_early_values.append(days_early)
+                        if days_early < 0:
+                            late_count += 1
+                            worst_delay = min(worst_delay, days_early)
+                if possible_marks > 0 and p.get("updatedAt"):
+                    total_possible_completed_marks += possible_marks
+                    earned_marks = possible_marks if (days_early is None or days_early >= 0) else 0.0
+                    total_earned_completed_marks += earned_marks
+                    completion_score_events.append((p.get("updatedAt"), (earned_marks / possible_marks) * 100.0))
 
         for t in task_progress:
+            task = task_map.get(t.get("taskId"))
+            if not task:
+                continue
             if t.get("updatedAt"):
                 progress_dates.append(t["updatedAt"])
             if t.get("status") == "done":
                 completed_tasks += 1
-                task = task_map.get(t.get("taskId"))
+                possible_marks = float(task_marks_map.get(t.get("taskId"), 0) or 0)
+                days_early = None
                 if task and task.get("deadlineDate") and t.get("updatedAt"):
-                    delay_days = self._days_early(t["updatedAt"], task["deadlineDate"])
-                    if delay_days is not None and delay_days < 0:
-                        late_count += 1
+                    days_early = self._days_early(t["updatedAt"], task["deadlineDate"], task.get("deadlineTime"))
+                    if days_early is not None:
+                        days_early_values.append(days_early)
+                        if days_early < 0:
+                            late_count += 1
+                            worst_delay = min(worst_delay, days_early)
+                if possible_marks > 0 and t.get("updatedAt"):
+                    total_possible_completed_marks += possible_marks
+                    earned_marks = possible_marks if (days_early is None or days_early >= 0) else 0.0
+                    total_earned_completed_marks += earned_marks
+                    completion_score_events.append((t.get("updatedAt"), (earned_marks / possible_marks) * 100.0))
 
         total_items = len(projects) + len(tasks)
         completion_rate = (completed_projects + completed_tasks) / total_items if total_items > 0 else 0
@@ -360,8 +391,17 @@ Format your response as a numbered list with clear, concise points."""
             pass
 
         engagement_regularity = clicks_std / avg_clicks_per_day if avg_clicks_per_day else 0
+        completion_score_events.sort(key=lambda item: item[0] if isinstance(item[0], datetime) else datetime.min)
+        completion_scores = [float(item[1]) for item in completion_score_events]
+        avg_score = (total_earned_completed_marks / total_possible_completed_marks * 100.0) if total_possible_completed_marks > 0 else 0.0
+        score_std = float(np.std(completion_scores)) if completion_scores else 0.0
+        min_score = float(min(completion_scores)) if completion_scores else 0.0
+        max_score = float(max(completion_scores)) if completion_scores else 0.0
+        first_score = float(completion_scores[0]) if completion_scores else 0.0
+        score_improvement = float(completion_scores[-1] - completion_scores[0]) if len(completion_scores) > 1 else 0.0
+        avg_days_early = float(sum(days_early_values) / len(days_early_values)) if days_early_values else 0.0
+        timing_consistency = float(np.std(days_early_values)) if days_early_values else 0.0
 
-        # Scores and timing from submissions are disabled for now
         return {
             "student_id": student.get("studentIdNumber", student_id),
             "total_clicks": total_clicks,
@@ -372,16 +412,16 @@ Format your response as a numbered list with clear, concise points."""
             "study_span_days": study_span_days,
             "engagement_regularity": engagement_regularity,
             "pre_course_clicks": 0,
-            "avg_score": 0,
-            "score_std": 0,
-            "min_score": 0,
-            "max_score": 0,
+            "avg_score": avg_score,
+            "score_std": score_std,
+            "min_score": min_score,
+            "max_score": max_score,
             "completion_rate": completion_rate,
-            "first_score": 0,
-            "score_improvement": 0,
-            "avg_days_early": 0,
-            "timing_consistency": 0,
-            "worst_delay": 0,
+            "first_score": first_score,
+            "score_improvement": score_improvement,
+            "avg_days_early": avg_days_early,
+            "timing_consistency": timing_consistency,
+            "worst_delay": worst_delay,
             "late_submission_count": late_count,
             "num_of_prev_attempts": 0,
             "studied_credits": studied_credits,
@@ -393,11 +433,26 @@ Format your response as a numbered list with clear, concise points."""
             "disability": "N"
         }
 
-    def _days_early(self, submitted_at, due_date_str):
+    def _project_possible_marks(self, project):
+        total = 0.0
+        for main_task in project.get("mainTasks", []) or []:
+            total += float(main_task.get("marks", 0) or 0)
+            for subtask in main_task.get("subtasks", []) or []:
+                total += float(subtask.get("marks", 0) or 0)
+        return total
+
+    def _task_possible_marks(self, task):
+        total = 0.0
+        for subtask in task.get("subtasks", []) or []:
+            total += float(subtask.get("marks", 0) or 0)
+        return total
+
+    def _days_early(self, submitted_at, due_date_str, due_time_str=None):
         try:
-            due = datetime.strptime(due_date_str, "%Y-%m-%d")
+            due_time = str(due_time_str or "23:59").strip()
+            due = datetime.strptime(f"{due_date_str} {due_time}", "%Y-%m-%d %H:%M")
             submitted = submitted_at if isinstance(submitted_at, datetime) else datetime.fromisoformat(str(submitted_at))
-            return (due - submitted).days
+            return (due - submitted).total_seconds() / 86400
         except Exception:
             return None
     
@@ -513,8 +568,10 @@ What would you like to know about?"""
                     "name": s.get("name"),
                     "riskLevel": s.get("riskLevel"),
                     "riskProbability": s.get("riskProbability"),
+                    "confidence": s.get("confidence", 0),
                     "completionRate": s.get("completionRate"),
                     "engagement": s.get("engagement"),
+                    "predictionSource": s.get("predictionSource", "none"),
                     "recommendation": recommendation_text,
                 })
 
