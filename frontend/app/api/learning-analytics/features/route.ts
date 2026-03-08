@@ -154,7 +154,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Heatmap service for activity metrics (proxy for VLE clicks)
-    const heatmapUrl = process.env.HEATMAP_SERVICE_URL || 'http://localhost:5002/heatmap';
+    const configuredHeatmapUrl = process.env.HEATMAP_SERVICE_URL;
+    if (!configuredHeatmapUrl) {
+      return serverErrorResponse('HEATMAP_SERVICE_URL is not configured');
+    }
+    const normalizedHeatmapUrl = configuredHeatmapUrl.replace(/\/$/, '');
+    const heatmapUrl = /\/heatmap$/.test(normalizedHeatmapUrl)
+      ? normalizedHeatmapUrl
+      : `${normalizedHeatmapUrl}/heatmap`;
     let heatmapData: HeatmapResponse | null = null;
     try {
       const heatmapRes = await fetch(heatmapUrl, {
