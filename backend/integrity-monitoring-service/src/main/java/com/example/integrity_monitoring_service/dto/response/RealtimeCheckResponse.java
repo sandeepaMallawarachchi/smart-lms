@@ -3,6 +3,7 @@ package com.example.integrity_monitoring_service.dto.response;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -19,4 +20,7 @@ public class RealtimeCheckResponse {
     private String warningMessage;
     private Integer textLength;
     private LocalDateTime checkedAt;
+
+    /** Internet sources where similar content was found (populated when similarity >= threshold). */
+    private List<InternetMatchResponse> internetMatches;
 }

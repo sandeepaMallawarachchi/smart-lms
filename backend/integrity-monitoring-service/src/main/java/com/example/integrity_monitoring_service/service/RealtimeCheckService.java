@@ -2,6 +2,7 @@ package com.example.integrity_monitoring_service.service;
 
 import com.example.integrity_monitoring_service.dto.request.RealtimeCheckRequest;
 import com.example.integrity_monitoring_service.dto.response.ApiResponse;
+import com.example.integrity_monitoring_service.dto.response.InternetMatchResponse;
 import com.example.integrity_monitoring_service.dto.response.RealtimeCheckResponse;
 import com.example.integrity_monitoring_service.model.RealtimeCheck;
 import com.example.integrity_monitoring_service.repository.RealtimeCheckRepository;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -63,7 +65,7 @@ public class RealtimeCheckService {
                 log.info("[RealtimeCheck] Skipped — text too short ({} < {} chars)",
                         request.getTextContent().length(), minTextLength);
                 return ApiResponse.success("Text too short for checking",
-                        buildResponse(request, 0.0, false));
+                        buildResponse(request, 0.0, false, List.of()));
             }
 
             // Check if plagiarism check needed for this question
@@ -74,11 +76,12 @@ public class RealtimeCheckService {
             if (!checkNeeded) {
                 log.info("[RealtimeCheck] Skipped — question type does not require plagiarism check");
                 return ApiResponse.success("Plagiarism check not needed for this question type",
-                        buildResponse(request, 0.0, false));
+                        buildResponse(request, 0.0, false, List.of()));
             }
 
             double maxSimilarity = 0.0;
             boolean flagged = false;
+            List<InternetMatchResponse> internetMatches = new ArrayList<>();
 
             if (request.getTextContent().length() > 100) {
                 // ── Internet search (Google Custom Search API) ─────────────────
@@ -90,11 +93,30 @@ public class RealtimeCheckService {
                 double internetSimilarity = textSimilarity.calculateInternetSimilarity(
                         request.getTextContent(), searchResults);
                 log.info("[RealtimeCheck] Internet similarity={} threshold={}", internetSimilarity, internetSimilarityThreshold);
-                // Internet results use a higher threshold (0.85) because snippet-based corpus
-                // comparison is noisier than direct peer text comparison.
+                // Internet results require minimum similarity before being included in the final
+                // score. Snippet-based TF-IDF naturally tops out ~0.55 even for exact copy-paste,
+                // so the threshold is kept low (0.30) to avoid discarding real plagiarism.
                 if (internetSimilarity >= internetSimilarityThreshold) {
                     maxSimilarity = Math.max(maxSimilarity, internetSimilarity);
                     log.info("[RealtimeCheck] Internet similarity exceeds threshold — including in score");
+
+                    // Collect per-source scores to send back in the response
+                    List<Double> perSnippet = textSimilarity.calculatePerSnippetSimilarities(
+                            request.getTextContent(), searchResults);
+                    for (int i = 0; i < searchResults.size(); i++) {
+                        double score = i < perSnippet.size() ? perSnippet.get(i) : 0.0;
+                        if (score >= internetSimilarityThreshold) {
+                            Map<String, String> sr = searchResults.get(i);
+                            internetMatches.add(InternetMatchResponse.builder()
+                                    .url(sr.getOrDefault("url", ""))
+                                    .title(sr.getOrDefault("title", ""))
+                                    .snippet(sr.getOrDefault("snippet", ""))
+                                    .similarityScore(Math.round(score * 1000.0) / 10.0)  // → 0-100, 1 dp
+                                    .sourceDomain(sr.getOrDefault("domain", ""))
+                                    .build());
+                            log.debug("[RealtimeCheck] Matched source: domain={} score={}", sr.get("domain"), score);
+                        }
+                    }
                 } else {
                     log.debug("[RealtimeCheck] Internet similarity {} below threshold {} — not included in final score",
                             internetSimilarity, internetSimilarityThreshold);
@@ -153,7 +175,7 @@ public class RealtimeCheckService {
             realtimeCheckRepository.save(check);
             log.debug("[RealtimeCheck] Saved record id={}", check.getId());
 
-            RealtimeCheckResponse response = buildResponse(request, maxSimilarity, flagged);
+            RealtimeCheckResponse response = buildResponse(request, maxSimilarity, flagged, internetMatches);
 
             if (flagged) {
                 log.warn("[RealtimeCheck] FLAGGED — sending WebSocket warning to session={}",
@@ -176,7 +198,8 @@ public class RealtimeCheckService {
     private RealtimeCheckResponse buildResponse(
             RealtimeCheckRequest request,
             double similarity,
-            boolean flagged) {
+            boolean flagged,
+            List<InternetMatchResponse> internetMatches) {
 
         String warningMessage = null;
         if (flagged) {
@@ -196,6 +219,7 @@ public class RealtimeCheckService {
                 .warningMessage(warningMessage)
                 .textLength(request.getTextContent().length())
                 .checkedAt(LocalDateTime.now())
+                .internetMatches(internetMatches)
                 .build();
     }
 

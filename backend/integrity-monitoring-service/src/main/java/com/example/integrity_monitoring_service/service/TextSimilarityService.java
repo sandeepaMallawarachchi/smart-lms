@@ -167,4 +167,22 @@ public class TextSimilarityService {
                 corpusSim, maxSnippetSim, finalSim);
         return finalSim;
     }
+
+    /**
+     * Return the TF-IDF cosine similarity score for each individual search result.
+     * Used to annotate matched sources in the real-time check response.
+     *
+     * Each entry in the returned list corresponds (by index) to the entry in searchResults.
+     */
+    public List<Double> calculatePerSnippetSimilarities(String studentText, List<Map<String, String>> searchResults) {
+        List<Double> scores = new ArrayList<>();
+        for (Map<String, String> result : searchResults) {
+            String snippet = result.getOrDefault("snippet", "");
+            String title   = result.getOrDefault("title", "");
+            // Score against snippet + title combined for better signal
+            String combined = title + ". " + snippet;
+            scores.add(combined.isBlank() ? 0.0 : calculateSimilarity(studentText, combined));
+        }
+        return scores;
+    }
 }
