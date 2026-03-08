@@ -248,7 +248,6 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
           href: '/learning-analytics/lecturer/class-performance',
           subsections: [
             { id: 'overview', label: 'Overview', href: '/learning-analytics/lecturer/class-performance?view=overview' },
-            { id: 'risk-distribution', label: 'Risk Distribution', href: '/learning-analytics/lecturer/class-performance?view=distribution' },
             { id: 'trends', label: 'Trend Monitor', href: '/learning-analytics/lecturer/class-performance?view=trends' },
           ],
         },
