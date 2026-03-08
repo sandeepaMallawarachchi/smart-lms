@@ -10,6 +10,7 @@ import {
     RefreshCw,
     Search,
     Shield,
+    TrendingDown,
     Users,
 } from 'lucide-react';
 import { useAllSubmissions } from '@/hooks/useSubmissions';
@@ -25,13 +26,36 @@ function avg(nums: number[]): number {
 
 type PerformanceStatus = 'excellent' | 'good' | 'average' | 'at-risk' | 'critical';
 
-function getStatus(avgGrade: number, plagiarism: number): PerformanceStatus {
-    if (plagiarism > 25) return 'at-risk';
+/** Detect a consistent downward grade trend over the last 3+ graded submissions. */
+function hasDownwardTrend(subs: Submission[]): boolean {
+    const graded = subs
+        .filter((s) => s.grade != null && s.submittedAt)
+        .sort((a, b) => new Date(a.submittedAt!).getTime() - new Date(b.submittedAt!).getTime());
+    if (graded.length < 3) return false;
+    const recent = graded.slice(-3);
+    return recent[0].grade! > recent[1].grade! && recent[1].grade! > recent[2].grade!;
+}
+
+/**
+ * Classify risk using the full criteria from requirements §12:
+ *   HIGH  if avgGrade < 50, OR failed ≥ 2, OR missed ≥ 2, OR plagiarism > 50%
+ *   MEDIUM if avgGrade < 65, OR failed = 1, OR missed = 1, OR downward trend, OR plagiarism > 25%
+ *   Then map to PerformanceStatus for display.
+ */
+function classifyStatus(
+    avgGrade: number,
+    avgPlagiarism: number,
+    failedCount: number,
+    missedCount: number,
+    downTrend: boolean,
+): PerformanceStatus {
+    const isHigh = avgGrade < 50 || failedCount >= 2 || missedCount >= 2 || avgPlagiarism > 50;
+    if (isHigh) return avgGrade < 40 ? 'critical' : 'at-risk';
+    const isMedium = avgGrade < 65 || failedCount >= 1 || missedCount >= 1 || downTrend || avgPlagiarism > 25;
+    if (isMedium) return 'at-risk';
     if (avgGrade >= 85) return 'excellent';
     if (avgGrade >= 75) return 'good';
-    if (avgGrade >= 60) return 'average';
-    if (avgGrade >= 45) return 'at-risk';
-    return 'critical';
+    return 'average';
 }
 
 const STATUS_COLORS: Record<PerformanceStatus, string> = {
@@ -53,6 +77,9 @@ interface StudentSummary {
     averagePlagiarism: number;
     averageAiScore: number;
     lateCount: number;
+    failedCount: number;
+    missedCount: number;
+    downwardTrend: boolean;
     status: PerformanceStatus;
     flagged: boolean;
     lastActive: string | null;
@@ -108,6 +135,24 @@ export default function LecturerStudentInsightsPage() {
             const lateCount = subs.filter((s) => s.isLate).length;
             const avgGrade = avg(grades);
             const avgPlagiarism = avg(plagiarismScores);
+
+            // Failed: grade < 60% of totalMarks (or grade < 60 if no totalMarks)
+            const failedCount = subs.filter((s) => {
+                if (s.grade == null) return false;
+                const max = s.totalMarks ?? 100;
+                return (s.grade / max) * 100 < 60;
+            }).length;
+
+            // Missed: submission is in DRAFT status and the due date has already passed
+            const now = Date.now();
+            const missedCount = subs.filter((s) => {
+                const isPastDeadline = s.dueDate && new Date(s.dueDate).getTime() < now;
+                const notSubmitted = s.status === 'DRAFT';
+                return isPastDeadline && notSubmitted;
+            }).length;
+
+            const downwardTrend = hasDownwardTrend(subs);
+
             const lastActive = subs
                 .map((s) => s.submittedAt ?? s.createdAt)
                 .filter(Boolean)
@@ -124,7 +169,10 @@ export default function LecturerStudentInsightsPage() {
                 averagePlagiarism: avgPlagiarism,
                 averageAiScore: avg(aiScores),
                 lateCount,
-                status: getStatus(avgGrade, avgPlagiarism),
+                failedCount,
+                missedCount,
+                downwardTrend,
+                status: classifyStatus(avgGrade, avgPlagiarism, failedCount, missedCount, downwardTrend),
                 flagged: avgPlagiarism > 25 || subs.some((s) => (s.plagiarismScore ?? 0) > 30),
                 lastActive,
             };
@@ -357,6 +405,30 @@ export default function LecturerStudentInsightsPage() {
                                             </div>
                                         </div>
                                     </div>
+
+                                    {/* Risk indicators row */}
+                                    {(student.failedCount > 0 || student.missedCount > 0 || student.downwardTrend) && (
+                                        <div className="flex flex-wrap gap-2 mt-3">
+                                            {student.failedCount > 0 && (
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+                                                    <AlertTriangle size={11} />
+                                                    {student.failedCount} Failed
+                                                </span>
+                                            )}
+                                            {student.missedCount > 0 && (
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200">
+                                                    <Clock size={11} />
+                                                    {student.missedCount} Missed
+                                                </span>
+                                            )}
+                                            {student.downwardTrend && (
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200">
+                                                    <TrendingDown size={11} />
+                                                    Declining Trend
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {student.lastActive && (
                                         <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">

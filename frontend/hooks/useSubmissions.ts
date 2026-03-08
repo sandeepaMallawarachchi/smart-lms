@@ -73,8 +73,22 @@ export function useAllSubmissions(params?: {
                 const raw = await submissionService.getAllSubmissions(
                     assignmentId || status ? { assignmentId, status } : undefined
                 );
-                // Handle both paged and array responses
-                const data = Array.isArray(raw) ? raw : (raw as { content: Submission[] }).content;
+                // Handle ApiResponse<List>, paged, and direct array responses
+                let data: Submission[];
+                if (Array.isArray(raw)) {
+                    data = raw;
+                } else {
+                    const obj = raw as unknown as Record<string, unknown>;
+                    // ApiResponse<List> → { data: Submission[] }
+                    if (Array.isArray(obj.data)) {
+                        data = obj.data as Submission[];
+                    } else if (obj.data && typeof obj.data === 'object') {
+                        // Paged inside ApiResponse → { data: { content: Submission[] } }
+                        data = ((obj.data as Record<string, unknown>).content as Submission[]) ?? [];
+                    } else {
+                        data = (obj.content as Submission[]) ?? [];
+                    }
+                }
                 if (!cancelled) setState({ data, loading: false, error: null });
             } catch (err) {
                 if (!cancelled) setState({

@@ -62,4 +62,12 @@ public class AnswerResponse {
     private Boolean plagiarismFlagged;
     /** ISO-8601 timestamp of when plagiarism was last checked. */
     private String plagiarismCheckedAt;
+
+    // ── Lecturer per-question grading ─────────────────────────────────────────
+
+    /** Numeric mark assigned by the lecturer for this specific question. */
+    private Double lecturerMark;
+
+    /** Targeted feedback from the lecturer for this specific question. */
+    private String lecturerFeedbackText;
 }

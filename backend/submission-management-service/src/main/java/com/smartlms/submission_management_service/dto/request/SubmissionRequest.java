@@ -38,4 +38,12 @@ public class SubmissionRequest {
     private LocalDateTime dueDate;
 
     private Double maxGrade;
+
+    private String studentEmail;
+
+    private String studentRegistrationId;
+
+    private String moduleCode;
+
+    private String moduleName;
 }

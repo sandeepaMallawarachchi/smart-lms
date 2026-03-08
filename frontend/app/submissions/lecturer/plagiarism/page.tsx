@@ -171,7 +171,7 @@ function ReportCard({
                                                 <p className="text-sm font-medium text-gray-900 truncate">
                                                     {m.source}
                                                 </p>
-                                                <p className="text-xs text-gray-600">{m.matchType}</p>
+                                                <p className="text-xs text-gray-600">{m.type}</p>
                                             </div>
                                             <span className="text-xl font-bold text-red-600 ml-4 shrink-0">
                                                 {m.percentage}%

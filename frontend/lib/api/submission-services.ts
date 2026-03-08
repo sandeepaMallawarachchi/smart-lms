@@ -123,8 +123,13 @@ export const submissionService = {
     },
 
     /** Get a single submission by ID */
-    getSubmission(id: string): Promise<Submission> {
-        return apiRequest<Submission>(`${SUBMISSION_API}/api/submissions/${id}`);
+    async getSubmission(id: string): Promise<Submission> {
+        const res = await apiRequest<unknown>(`${SUBMISSION_API}/api/submissions/${id}`);
+        if (res && typeof res === 'object') {
+            const obj = res as Record<string, unknown>;
+            if (obj.data && typeof obj.data === 'object') return obj.data as Submission;
+        }
+        return res as Submission;
     },
 
     /** Create a new submission (returns submission with an ID) */
@@ -143,11 +148,17 @@ export const submissionService = {
         });
     },
 
-    /** Officially submit (change status to SUBMITTED) */
-    submitSubmission(id: string): Promise<Submission> {
-        return apiRequest<Submission>(`${SUBMISSION_API}/api/submissions/${id}/submit`, {
+    /** Officially submit (change status to SUBMITTED), returns the updated Submission with the new versionNumber. */
+    async submitSubmission(id: string): Promise<Submission> {
+        // Backend wraps in ApiResponse<Submission> → { data: Submission }
+        const res = await apiRequest<unknown>(`${SUBMISSION_API}/api/submissions/${id}/submit`, {
             method: 'POST',
         });
+        if (res && typeof res === 'object') {
+            const obj = res as Record<string, unknown>;
+            if (obj.data && typeof obj.data === 'object') return obj.data as Submission;
+        }
+        return res as Submission;
     },
 
     /** Delete a draft submission */
@@ -243,13 +254,24 @@ export const submissionService = {
 
         console.debug('[submissionService] getOrCreateDraftSubmission — found', list.length, 'submissions; statuses:', list.map(s => s.status));
 
+        // Versioning continuity rule: reuse the SAME submission across all resubmissions.
+        // Priority: DRAFT > SUBMITTED / LATE (student may edit & resubmit) > GRADED (allow viewing).
+        // We never create a second submission for the same student+assignment pair.
         const draft = list.find((s) => s.status === 'DRAFT');
         if (draft) {
             console.debug('[submissionService] getOrCreateDraftSubmission — reusing existing DRAFT id:', draft.id);
             return draft;
         }
+        const priorSubmission = list.find((s) =>
+            s.status === 'SUBMITTED' || s.status === 'LATE' ||
+            s.status === 'GRADED'   || s.status === 'PENDING_REVIEW' || s.status === 'FLAGGED'
+        );
+        if (priorSubmission) {
+            console.debug('[submissionService] getOrCreateDraftSubmission — reusing existing submission id:', priorSubmission.id, 'status:', priorSubmission.status);
+            return priorSubmission;
+        }
 
-        console.debug('[submissionService] getOrCreateDraftSubmission — no DRAFT found, creating new submission');
+        console.debug('[submissionService] getOrCreateDraftSubmission — no submission found, creating new one');
 
         // Create new draft — backend returns ApiResponse<Submission> → { data: Submission }
         const created = await apiRequest<unknown>(`${SUBMISSION_API}/api/submissions`, {
@@ -347,6 +369,7 @@ interface _RawSubtask {
     id: string;
     title: string;
     description?: string;
+    marks?: number;
     completed?: boolean;
 }
 
@@ -354,6 +377,7 @@ interface _RawMainTask {
     id: string;
     title: string;
     description?: string;
+    marks?: number;
     subtasks?: _RawSubtask[];
     completed?: boolean;
 }
@@ -419,6 +443,7 @@ function _mapMainTasksToQuestions(projectId: string, mainTasks: _RawMainTask[]):
         description:  mt.description,
         order:        i + 1,
         isRequired:   true,
+        maxPoints:    mt.marks ?? 5,
     }));
 }
 
@@ -431,6 +456,7 @@ function _mapSubtasksToQuestions(taskId: string, subtasks: _RawSubtask[]): Quest
         description:  st.description,
         order:        i + 1,
         isRequired:   true,
+        maxPoints:    st.marks ?? 5,
     }));
 }
 
@@ -588,6 +614,35 @@ export const versionService = {
             method: 'POST',
             body: formData,
         });
+    },
+
+    /** Create an immutable text-answer snapshot after a successful submission. */
+    createTextSnapshot(payload: {
+        submissionId: number;
+        studentId: string;
+        commitMessage?: string;
+        totalWordCount: number;
+        overallGrade?: number;
+        maxGrade?: number;
+        answers: Array<{
+            questionId: string;
+            questionText?: string;
+            answerText: string;
+            wordCount: number;
+            grammarScore?: number;
+            clarityScore?: number;
+            completenessScore?: number;
+            relevanceScore?: number;
+            similarityScore?: number;
+            plagiarismSeverity?: string;
+            projectedGrade?: number;
+            maxPoints?: number;
+        }>;
+    }): Promise<SubmissionVersion> {
+        return apiRequest<SubmissionVersion>(
+            `${VERSION_API}/api/versions/text-snapshot`,
+            { method: 'POST', body: JSON.stringify(payload) }
+        );
     },
 
     /** Download a specific version as ZIP */

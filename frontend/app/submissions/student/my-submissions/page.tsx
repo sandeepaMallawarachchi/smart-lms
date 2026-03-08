@@ -284,9 +284,9 @@ function AssignmentCard({
                     ) : item.status === 'submitted' && !item.isOverdue ? (
                         <button
                             onClick={() => router.push(`/submissions/student/answer/${item.assignmentId}`)}
-                            className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-colors cursor-pointer shadow-sm"
+                            className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-colors cursor-pointer shadow-sm"
                         >
-                            Edit Answers <ChevronRight size={14} />
+                            Edit / Resubmit <ChevronRight size={14} />
                         </button>
                     ) : (
                         /* Graded, overdue-submitted, or late — read-only view */

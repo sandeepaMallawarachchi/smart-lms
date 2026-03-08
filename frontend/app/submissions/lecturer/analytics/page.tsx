@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     AlertTriangle,
@@ -18,7 +18,8 @@ import {
     Users,
 } from 'lucide-react';
 import { useAllSubmissions, useAssignments } from '@/hooks/useSubmissions';
-import type { Submission } from '@/types/submission.types';
+import { submissionService } from '@/lib/api/submission-services';
+import type { Submission, TextAnswer } from '@/types/submission.types';
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -215,6 +216,48 @@ export default function LecturerAnalyticsPage() {
             .sort((a, b) => a.averageGrade - b.averageGrade)
             .slice(0, 5);
     }, [submissions]);
+
+    // ── Per-question analytics: fetch answers for all graded submissions
+    const [allAnswers, setAllAnswers] = useState<TextAnswer[]>([]);
+    const [answersLoading, setAnswersLoading] = useState(false);
+
+    useEffect(() => {
+        const graded = (rawSubmissions ?? []).filter((s) => s.status === 'GRADED');
+        if (graded.length === 0) return;
+        setAnswersLoading(true);
+        Promise.all(graded.map((s) => submissionService.getAnswers(s.id).catch(() => [] as TextAnswer[])))
+            .then((results) => setAllAnswers(results.flat()))
+            .finally(() => setAnswersLoading(false));
+    }, [rawSubmissions]);
+
+    const questionAnalytics = useMemo(() => {
+        const map = new Map<string, {
+            questionText: string;
+            entries: TextAnswer[];
+        }>();
+        allAnswers.forEach((a) => {
+            if (!map.has(a.questionId)) {
+                map.set(a.questionId, { questionText: a.questionText ?? a.questionId, entries: [] });
+            }
+            map.get(a.questionId)!.entries.push(a);
+        });
+        return Array.from(map.entries()).map(([qId, { questionText, entries }]) => {
+            const numWith = (field: keyof TextAnswer) =>
+                entries.filter((e) => e[field] != null).map((e) => e[field] as number);
+            return {
+                questionId: qId,
+                questionText,
+                responses: entries.length,
+                avgWordCount: avg(entries.map((e) => e.wordCount ?? 0)),
+                avgGrammar: avg(numWith('grammarScore')),
+                avgClarity: avg(numWith('clarityScore')),
+                avgCompleteness: avg(numWith('completenessScore')),
+                avgRelevance: avg(numWith('relevanceScore')),
+                avgSimilarity: avg(numWith('similarityScore')),
+                flaggedCount: entries.filter((e) => e.plagiarismFlagged).length,
+            };
+        }).sort((a, b) => b.responses - a.responses);
+    }, [allAnswers]);
 
     const handleRefresh = () => {
         refetchSubs();
@@ -608,6 +651,78 @@ export default function LecturerAnalyticsPage() {
                     </button>
                 </div>
             </div>
+
+            {/* Per-Question Analytics */}
+            {(answersLoading || questionAnalytics.length > 0) && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+                    <h2 className="text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+                        <FileText className="text-purple-600" size={24} />
+                        Per-Question Analytics
+                    </h2>
+                    <p className="text-sm text-gray-500 mb-6">AI score averages across all graded text submissions</p>
+
+                    {answersLoading ? (
+                        <div className="space-y-4 animate-pulse">
+                            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16" />)}
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-gray-200">
+                                        <th className="text-left py-3 px-3 font-semibold text-gray-700">Question</th>
+                                        <th className="text-center py-3 px-3 font-semibold text-gray-700">Responses</th>
+                                        <th className="text-center py-3 px-3 font-semibold text-gray-700">Avg Words</th>
+                                        <th className="text-center py-3 px-3 font-semibold text-gray-700">Grammar</th>
+                                        <th className="text-center py-3 px-3 font-semibold text-gray-700">Clarity</th>
+                                        <th className="text-center py-3 px-3 font-semibold text-gray-700">Completeness</th>
+                                        <th className="text-center py-3 px-3 font-semibold text-gray-700">Relevance</th>
+                                        <th className="text-center py-3 px-3 font-semibold text-gray-700">Similarity</th>
+                                        <th className="text-center py-3 px-3 font-semibold text-gray-700">Flagged</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {questionAnalytics.map((q) => {
+                                        const aiAvg = avg([q.avgGrammar, q.avgClarity, q.avgCompleteness, q.avgRelevance].filter((v) => v > 0));
+                                        const scoreColor = (v: number) =>
+                                            v === 0 ? 'text-gray-400' : v >= 75 ? 'text-green-600 font-bold' : v >= 55 ? 'text-amber-600 font-bold' : 'text-red-600 font-bold';
+                                        return (
+                                            <tr key={q.questionId} className="border-b border-gray-100 hover:bg-gray-50">
+                                                <td className="py-3 px-3 max-w-[220px]">
+                                                    <p className="truncate text-gray-800 font-medium" title={q.questionText}>
+                                                        {q.questionText.length > 60 ? q.questionText.slice(0, 60) + '…' : q.questionText}
+                                                    </p>
+                                                    {aiAvg > 0 && (
+                                                        <span className={`text-xs ${scoreColor(aiAvg)}`}>Overall AI avg: {aiAvg}%</span>
+                                                    )}
+                                                </td>
+                                                <td className="text-center py-3 px-3 font-medium text-gray-900">{q.responses}</td>
+                                                <td className="text-center py-3 px-3 text-gray-600">{q.avgWordCount > 0 ? q.avgWordCount : '–'}</td>
+                                                <td className={`text-center py-3 px-3 ${scoreColor(q.avgGrammar)}`}>{q.avgGrammar > 0 ? `${q.avgGrammar}%` : '–'}</td>
+                                                <td className={`text-center py-3 px-3 ${scoreColor(q.avgClarity)}`}>{q.avgClarity > 0 ? `${q.avgClarity}%` : '–'}</td>
+                                                <td className={`text-center py-3 px-3 ${scoreColor(q.avgCompleteness)}`}>{q.avgCompleteness > 0 ? `${q.avgCompleteness}%` : '–'}</td>
+                                                <td className={`text-center py-3 px-3 ${scoreColor(q.avgRelevance)}`}>{q.avgRelevance > 0 ? `${q.avgRelevance}%` : '–'}</td>
+                                                <td className={`text-center py-3 px-3 ${q.avgSimilarity > 25 ? 'text-red-600 font-bold' : q.avgSimilarity > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                                                    {q.avgSimilarity > 0 ? `${q.avgSimilarity}%` : '–'}
+                                                </td>
+                                                <td className="text-center py-3 px-3">
+                                                    {q.flaggedCount > 0 ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                                                            <Shield size={10} /> {q.flaggedCount}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-green-500 text-xs">✓</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Summary */}
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg shadow-lg p-8 text-white">

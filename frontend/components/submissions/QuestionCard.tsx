@@ -30,11 +30,69 @@
  *  All console.debug calls are prefixed with "[QuestionCard]".
  */
 
+import { useEffect } from 'react';
 import { useAnswerEditor } from '@/hooks/useAnswerEditor';
 import { RichTextEditor } from './RichTextEditor';
 import { LiveFeedbackPanel } from './LiveFeedbackPanel';
 import { PlagiarismWarning } from './PlagiarismWarning';
 import type { Question, LiveFeedback, LivePlagiarismResult } from '@/types/submission.types';
+
+// ─── Grade Calculation ────────────────────────────────────────
+
+/**
+ * Compute a projected grade (0 – maxPoints) from live AI scores + plagiarism.
+ *
+ * Relevance is treated as a MULTIPLIER, not an additive weight.
+ * Rationale: a grammatically correct but off-topic answer deserves near-zero
+ * marks regardless of how well written it is.
+ *
+ * Step 1 — Content quality score (grammar 20%, clarity 30%, completeness 50%)
+ * Step 2 — Multiply by relevance factor (relevanceScore / 10)
+ *           → relevance 0/10 → 0 marks; relevance 10/10 → full content score
+ * Step 3 — Apply plagiarism penalty
+ * Step 4 — Apply word-count penalty (if below 75% of target)
+ */
+function calcProjectedGrade(
+    feedback: LiveFeedback | null,
+    plagiarism: LivePlagiarismResult | null,
+    wordCount: number,
+    expectedWordCount: number | undefined,
+    maxPoints: number,
+): number | null {
+    if (!feedback) return null;
+
+    // Content quality: grammar, clarity, completeness (each 0-10)
+    const contentScore =
+        (feedback.grammarScore      * 0.20 +
+         feedback.clarityScore      * 0.30 +
+         feedback.completenessScore * 0.50) / 10;   // → 0.0 – 1.0
+
+    // Relevance multiplier (0-10 → 0.0-1.0)
+    // An irrelevant answer gets a near-zero score regardless of writing quality.
+    const relevanceFactor = feedback.relevanceScore / 10;
+
+    // Base score after relevance gate
+    const base = contentScore * relevanceFactor;
+
+    // Plagiarism penalty
+    const simPct = plagiarism?.similarityScore ?? 0;   // 0-100
+    let plagPenalty = 0;
+    if      (simPct >= 70) plagPenalty = 0.60;
+    else if (simPct >= 50) plagPenalty = 0.50;
+    else if (simPct >= 30) plagPenalty = 0.30;
+    else if (simPct >= 15) plagPenalty = 0.10;
+
+    // Word count penalty
+    let wcPenalty = 0;
+    if (expectedWordCount && expectedWordCount > 0) {
+        const ratio = wordCount / expectedWordCount;
+        if      (ratio < 0.50) wcPenalty = 0.25;
+        else if (ratio < 0.75) wcPenalty = 0.10;
+    }
+
+    const adjusted = Math.max(0, base - plagPenalty - wcPenalty);
+    return Math.round(adjusted * maxPoints * 10) / 10;
+}
 
 // ─── Props ────────────────────────────────────────────────────
 
@@ -43,6 +101,8 @@ export interface QuestionCardProps {
     submissionId: string;
     studentId: string;
     assignmentId: string;
+    /** Assignment-level description passed to AI for context (combined with question text). */
+    assignmentDescription?: string;
     /** Pre-loaded text from a previous auto-save, or empty string. */
     initialAnswer?: string;
     /** Saved AI feedback loaded from DB — shown immediately without re-calling the API. */
@@ -53,6 +113,8 @@ export interface QuestionCardProps {
     disabled?: boolean;
     /** Fired on every keystroke so the parent page can track overall progress. */
     onAnswerChange: (questionId: string, text: string) => void;
+    /** Fired whenever the projected grade changes (null = no feedback yet). */
+    onGradeChange?: (questionId: string, grade: number | null) => void;
     /** 0-based index for display order. */
     questionIndex: number;
 }
@@ -64,17 +126,25 @@ export function QuestionCard({
     submissionId,
     studentId,
     assignmentId,
+    assignmentDescription,
     initialAnswer = '',
     initialFeedback = null,
     initialPlagiarism = null,
     disabled = false,
     onAnswerChange,
+    onGradeChange,
     questionIndex,
 }: QuestionCardProps) {
 
     console.debug('[QuestionCard] render — questionId:', question.id, '| index:', questionIndex, '| submissionId:', submissionId, '| initialAnswer.length:', (initialAnswer ?? '').length, '| hasSavedFeedback:', !!initialFeedback, '| hasSavedPlagiarism:', !!initialPlagiarism);
 
     // ── Hook: all debounced behaviour ─────────────────────────
+    // Build the prompt sent to the AI: include assignment description (if any) so the
+    // model has full context when scoring relevance.
+    const questionPrompt = assignmentDescription
+        ? `${assignmentDescription}\n\n${question.text}`
+        : question.text;
+
     const {
         answerText,
         liveFeedback,
@@ -87,7 +157,7 @@ export function QuestionCard({
     } = useAnswerEditor({
         submissionId,
         questionId: question.id,
-        questionText: question.text,
+        questionText: questionPrompt,
         studentId,
         assignmentId,
         initialText: initialAnswer,
@@ -95,6 +165,23 @@ export function QuestionCard({
         initialFeedback,
         initialPlagiarism,
     });
+
+    // Projected grade — recalculate whenever feedback/plagiarism/text changes.
+    const maxPoints = question.maxPoints ?? 10;
+    const wordCount = answerText.trim() === '' ? 0 : answerText.trim().split(/\s+/).length;
+    const projectedGrade = calcProjectedGrade(
+        liveFeedback,
+        plagiarismResult,
+        wordCount,
+        question.expectedWordCount,
+        maxPoints,
+    );
+
+    // Notify parent whenever projected grade changes.
+    useEffect(() => {
+        onGradeChange?.(question.id, projectedGrade);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [projectedGrade]);
 
     // Propagate text to parent for progress tracking.
     const handleTextChange = (newText: string) => {
@@ -200,6 +287,35 @@ export function QuestionCard({
                                 feedback={liveFeedback}
                                 loading={feedbackLoading}
                             />
+
+                            {/* Projected grade badge */}
+                            {projectedGrade !== null && (
+                                <div className={`rounded-lg border px-4 py-3 text-center ${
+                                    projectedGrade / maxPoints >= 0.75
+                                        ? 'bg-green-50 border-green-200'
+                                        : projectedGrade / maxPoints >= 0.50
+                                        ? 'bg-amber-50 border-amber-200'
+                                        : 'bg-red-50 border-red-200'
+                                }`}>
+                                    <p className="text-xs font-medium text-gray-500 mb-0.5">Projected Grade</p>
+                                    <p className={`text-xl font-bold ${
+                                        projectedGrade / maxPoints >= 0.75
+                                            ? 'text-green-700'
+                                            : projectedGrade / maxPoints >= 0.50
+                                            ? 'text-amber-700'
+                                            : 'text-red-700'
+                                    }`}>
+                                        {projectedGrade} <span className="text-sm font-normal text-gray-400">/ {maxPoints}</span>
+                                    </p>
+                                    <p className="text-xs text-gray-400 mt-0.5">Instructor may adjust</p>
+                                </div>
+                            )}
+                            {feedbackLoading && !liveFeedback && (
+                                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-center animate-pulse">
+                                    <p className="text-xs text-gray-400">Calculating grade…</p>
+                                </div>
+                            )}
+
                             {disabled && liveFeedback && (
                                 <p className="text-xs text-gray-400 text-center">
                                     AI feedback from your last submission

@@ -169,6 +169,15 @@ public class AnswerService {
                     questionId, request.getSimilarityScore(), request.getPlagiarismSeverity(), request.getPlagiarismFlagged());
         }
 
+        // ── Lecturer per-question marks ───────────────────────────────────────
+        if (request.getLecturerMark() != null) {
+            answer.setLecturerMark(request.getLecturerMark());
+            log.info("[AnswerService] saveAnalysis — lecturer mark={} saved for questionId={}", request.getLecturerMark(), questionId);
+        }
+        if (request.getLecturerFeedbackText() != null) {
+            answer.setLecturerFeedbackText(request.getLecturerFeedbackText());
+        }
+
         Answer saved = answerRepository.save(answer);
         log.info("[AnswerService] saveAnalysis DONE — answerId={} questionId={}", saved.getId(), questionId);
         return ApiResponse.success("Analysis saved", toResponse(saved));
@@ -243,6 +252,9 @@ public class AnswerService {
                 .plagiarismSeverity(a.getPlagiarismSeverity())
                 .plagiarismFlagged(a.getPlagiarismFlagged())
                 .plagiarismCheckedAt(a.getPlagiarismCheckedAt() != null ? a.getPlagiarismCheckedAt().toString() : null)
+                // Lecturer per-question grading
+                .lecturerMark(a.getLecturerMark())
+                .lecturerFeedbackText(a.getLecturerFeedbackText())
                 .build();
     }
 

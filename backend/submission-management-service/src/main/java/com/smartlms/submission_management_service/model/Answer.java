@@ -127,4 +127,14 @@ public class Answer {
     /** When the plagiarism result was last saved for this answer. */
     @Column(name = "plagiarism_checked_at")
     private LocalDateTime plagiarismCheckedAt;
+
+    // ── Lecturer per-question grading ─────────────────────────────────────────
+
+    /** Numeric mark assigned by the lecturer for this specific question. */
+    @Column(name = "lecturer_mark")
+    private Double lecturerMark;
+
+    /** Targeted feedback from the lecturer for this specific question. */
+    @Column(name = "lecturer_feedback_text", columnDefinition = "TEXT")
+    private String lecturerFeedbackText;
 }

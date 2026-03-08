@@ -52,6 +52,7 @@ export interface Submission {
     title?: string;
     comments?: string;
     files: SubmissionFile[];
+    versionNumber?: number;
     currentVersionNumber: number;
     totalVersions: number;
     grade?: number;
@@ -73,9 +74,18 @@ export interface Submission {
 // Create / update payloads
 export interface CreateSubmissionPayload {
     studentId: string;
+    studentName?: string;
+    studentEmail?: string;
+    studentRegistrationId?: string;
     assignmentId: string;
+    assignmentTitle?: string;
+    moduleCode?: string;
+    moduleName?: string;
     comments?: string;
     title?: string;
+    submissionType?: string;
+    dueDate?: string;
+    maxGrade?: number;
 }
 
 export interface UpdateSubmissionPayload {
@@ -265,6 +275,7 @@ export interface Question {
     expectedWordCount?: number;
     maxWordCount?: number;
     isRequired?: boolean;     // If true, submission blocked until answered
+    maxPoints?: number;       // Maximum marks for this question (default 10)
 }
 
 // Extend the existing Assignment interface to carry its questions.
@@ -306,6 +317,10 @@ export interface TextAnswer {
     plagiarismSeverity?: 'LOW' | 'MEDIUM' | 'HIGH' | null;
     plagiarismFlagged?: boolean | null;
     plagiarismCheckedAt?: string | null;  // ISO-8601
+
+    // Lecturer per-question grading (populated after lecturer grades)
+    lecturerMark?: number | null;
+    lecturerFeedbackText?: string | null;
 }
 
 /** Payload for PATCH /api/submissions/{id}/answers/{questionId}/analysis */
@@ -322,6 +337,9 @@ export interface SaveAnswerAnalysisPayload {
     similarityScore?: number;
     plagiarismSeverity?: string;
     plagiarismFlagged?: boolean;
+    // Lecturer per-question grading (all optional)
+    lecturerMark?: number;
+    lecturerFeedbackText?: string;
 }
 
 /** Payload for PUT /api/submissions/{id}/answers/{questionId} */

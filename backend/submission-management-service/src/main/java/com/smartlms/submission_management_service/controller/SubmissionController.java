@@ -3,6 +3,7 @@ package com.smartlms.submission_management_service.controller;
 import java.util.List;
 
 import com.smartlms.submission_management_service.dto.FileInfoDTO;
+import com.smartlms.submission_management_service.dto.request.GradeRequest;
 import com.smartlms.submission_management_service.dto.request.SubmissionRequest;
 import com.smartlms.submission_management_service.dto.response.ApiResponse;
 import com.smartlms.submission_management_service.dto.response.SubmissionResponse;
@@ -180,12 +181,14 @@ public class SubmissionController {
     public ResponseEntity<ApiResponse<List<SubmissionResponse>>> getAllSubmissions(
             @RequestParam(required = false) String studentId,
             @RequestParam(required = false) String assignmentId) {
-        log.info("GET /api/submissions - Fetching submissions");
+        log.info("GET /api/submissions - studentId={} assignmentId={}", studentId, assignmentId);
 
         List<SubmissionResponse> submissions;
 
-        // Priority: studentId > assignmentId > all
-        if (studentId != null) {
+        // Support both params together (used by getOrCreateDraftSubmission on the frontend)
+        if (studentId != null && assignmentId != null) {
+            submissions = submissionService.getSubmissionsByStudentIdAndAssignmentId(studentId, assignmentId);
+        } else if (studentId != null) {
             submissions = submissionService.getSubmissionsByStudentId(studentId);
         } else if (assignmentId != null) {
             submissions = submissionService.getSubmissionsByAssignmentId(assignmentId);
@@ -335,10 +338,9 @@ public class SubmissionController {
     @PostMapping("/{id}/grade")
     public ResponseEntity<ApiResponse<SubmissionResponse>> gradeSubmission(
             @PathVariable Long id,
-            @RequestParam Double grade,
-            @RequestParam(required = false) String feedback) {
+            @RequestBody GradeRequest request) {
         log.info("POST /api/submissions/{}/grade - Grading submission", id);
-        SubmissionResponse response = submissionService.gradeSubmission(id, grade, feedback);
+        SubmissionResponse response = submissionService.gradeSubmission(id, request);
         return ResponseEntity.ok(ApiResponse.success("Submission graded successfully", response));
     }
 

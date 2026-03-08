@@ -6,5 +6,9 @@ public enum SubmissionStatus {
     UNDER_REVIEW,
     GRADED,
     RETURNED,
-    RESUBMITTED
+    RESUBMITTED,
+    // Additional statuses used by frontend
+    LATE,
+    PENDING_REVIEW,
+    FLAGGED
 }

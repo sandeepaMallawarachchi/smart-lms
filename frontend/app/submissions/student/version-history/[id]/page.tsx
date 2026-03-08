@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import VersionTimeline from '@/components/submissions/VersionTimeline';
 import DiffViewer from '@/components/submissions/DiffViewer';
+import { TextDiffViewer } from '@/components/submissions/TextDiffViewer';
 import { useVersions, useVersionComparison, useDownloadVersion } from '@/hooks/useVersions';
 import { useSubmission } from '@/hooks/useSubmissions';
 
@@ -201,46 +202,64 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
             </div>
 
             {/* Diff Viewer — shown after user triggers comparison */}
-            {compareAId && compareBId && (
-                <div className="bg-white rounded-lg shadow-lg border border-gray-200 mb-8">
-                    <div className="p-6 border-b border-gray-200">
-                        <h2 className="text-xl font-bold text-gray-900">Version Comparison</h2>
-                    </div>
-                    <div className="p-6">
-                        {/* Change summary chips */}
-                        {comparison && (
-                            <div className="grid grid-cols-3 gap-4 mb-6">
-                                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-center">
-                                    <div className="text-xs text-gray-500 mb-1">Word Count Change</div>
-                                    <div className={`text-xl font-bold ${comparison.wordCountChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {comparison.wordCountChange >= 0 ? '+' : ''}{comparison.wordCountChange}
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-center">
-                                    <div className="text-xs text-gray-500 mb-1">AI Score Change</div>
-                                    <div className={`text-xl font-bold ${comparison.aiScoreChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {comparison.aiScoreChange >= 0 ? '+' : ''}{comparison.aiScoreChange}
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-center">
-                                    <div className="text-xs text-gray-500 mb-1">Plagiarism Change</div>
-                                    <div className={`text-xl font-bold ${comparison.plagiarismChange <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {comparison.plagiarismChange >= 0 ? '+' : ''}{comparison.plagiarismChange}%
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+            {compareAId && compareBId && (() => {
+                const verA = versions?.find((v) => v.id === compareAId);
+                const verB = versions?.find((v) => v.id === compareBId);
+                // Sort so the older version is always A
+                const [sortedA, sortedB] = (verA && verB && verA.versionNumber > verB.versionNumber)
+                    ? [verB, verA] : [verA, verB];
 
-                        <DiffViewer
-                            diffs={comparison?.diffs ?? []}
-                            versionA={comparison?.versionA}
-                            versionB={comparison?.versionB}
-                            loading={compLoading}
-                            error={compError ?? undefined}
-                        />
+                const isTextSnapshot = (v: typeof verA) => {
+                    const meta = (v as unknown as { metadata?: Record<string, unknown> })?.metadata;
+                    return meta?.['type'] === 'TEXT_SUBMISSION';
+                };
+                const bothText = sortedA && sortedB && isTextSnapshot(sortedA) && isTextSnapshot(sortedB);
+
+                return (
+                    <div className="bg-white rounded-lg shadow-lg border border-gray-200 mb-8">
+                        <div className="p-6 border-b border-gray-200">
+                            <h2 className="text-xl font-bold text-gray-900">Version Comparison</h2>
+                        </div>
+                        <div className="p-6">
+                            {bothText ? (
+                                <TextDiffViewer versionA={sortedA!} versionB={sortedB!} />
+                            ) : (
+                                <>
+                                    {comparison && (
+                                        <div className="grid grid-cols-3 gap-4 mb-6">
+                                            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-center">
+                                                <div className="text-xs text-gray-500 mb-1">Word Count Change</div>
+                                                <div className={`text-xl font-bold ${comparison.wordCountChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                    {comparison.wordCountChange >= 0 ? '+' : ''}{comparison.wordCountChange}
+                                                </div>
+                                            </div>
+                                            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-center">
+                                                <div className="text-xs text-gray-500 mb-1">AI Score Change</div>
+                                                <div className={`text-xl font-bold ${comparison.aiScoreChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                    {comparison.aiScoreChange >= 0 ? '+' : ''}{comparison.aiScoreChange}
+                                                </div>
+                                            </div>
+                                            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-center">
+                                                <div className="text-xs text-gray-500 mb-1">Plagiarism Change</div>
+                                                <div className={`text-xl font-bold ${comparison.plagiarismChange <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                    {comparison.plagiarismChange >= 0 ? '+' : ''}{comparison.plagiarismChange}%
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <DiffViewer
+                                        diffs={comparison?.diffs ?? []}
+                                        versionA={comparison?.versionA?.versionNumber}
+                                        versionB={comparison?.versionB?.versionNumber}
+                                        loading={compLoading}
+                                        error={compError ?? undefined}
+                                    />
+                                </>
+                            )}
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* Score Progression Chart */}
             {sortedAsc.length > 0 && (

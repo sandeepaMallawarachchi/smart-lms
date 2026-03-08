@@ -129,21 +129,17 @@ function FeedbackBlock({
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Score (out of 100):
+                        Score (out of {questionMarks}):
                     </label>
                     <input
                         type="number"
                         value={tempScore ?? ''}
                         onChange={e => setTempScore(Number(e.target.value))}
                         min={0}
-                        max={100}
+                        max={questionMarks}
+                        step={0.5}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                     />
-                    {tempScore != null && (
-                        <p className="text-xs text-gray-500 mt-1">
-                            ≈ {Math.round((tempScore / 100) * questionMarks)} / {questionMarks} marks
-                        </p>
-                    )}
                 </div>
                 <div className="flex gap-2">
                     <button
@@ -180,10 +176,7 @@ function FeedbackBlock({
                         </span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="text-xl font-bold text-gray-900">{displayScore}/100</span>
-                        <span className="text-sm text-gray-600">
-                            ({Math.round((displayScore / 100) * questionMarks)}/{questionMarks})
-                        </span>
+                        <span className="text-xl font-bold text-gray-900">{displayScore}/{questionMarks}</span>
                     </div>
                 </div>
                 <p className="text-sm text-gray-700">{displayFeedback}</p>
@@ -275,29 +268,48 @@ export default function LecturerGradingInterfacePage({
     const getTextAnswer = (questionId: string): string | undefined =>
         textAnswers.find((a) => a.questionId === questionId)?.answerText;
 
-    // Initialise per-question answer entries when API questions arrive.
+    // Initialise per-question answer entries when API questions or text answers arrive.
     useEffect(() => {
         if (!apiQuestions) return;
         const overallFeedback = feedback?.overallAssessment ?? 'AI feedback not yet available.';
         setAnswers((prev) => {
             const next = { ...prev };
             for (const q of apiQuestions) {
+                const maxMarks = q.maxPoints ?? 10;
+                // Compute AI score from per-question text-answer AI component scores (0-10 each → scale to maxMarks)
+                const ta = textAnswers.find(t => t.questionId === q.id);
+                let aiScore = 0;
+                if (ta) {
+                    const components = [ta.grammarScore, ta.clarityScore, ta.completenessScore, ta.relevanceScore]
+                        .filter((s): s is number => s != null);
+                    if (components.length > 0) {
+                        const avg = components.reduce((s, v) => s + v, 0) / components.length; // 0-10
+                        aiScore = Math.round((avg / 10) * maxMarks * 10) / 10;
+                    }
+                }
+                // Only initialise — don't overwrite lecturer edits
                 if (!next[q.id]) {
                     next[q.id] = {
                         questionId: q.id,
-                        text: '',
-                        wordCount: 0,
+                        text: ta?.answerText ?? '',
+                        wordCount: ta?.wordCount ?? 0,
                         aiFeedback: overallFeedback,
-                        aiScore: feedback ? 80 : 0,
-                        lecturerFeedback: '',
-                        maxMarks: 100,
+                        aiScore,
+                        lecturerFeedback: ta?.lecturerFeedbackText ?? '',
+                        lecturerScore: ta?.lecturerMark ?? undefined,
+                        maxMarks,
                     };
+                } else {
+                    // Update aiScore if we now have real text-answer data
+                    if (ta && next[q.id].aiScore === 0 && aiScore > 0) {
+                        next[q.id] = { ...next[q.id], aiScore };
+                    }
                 }
             }
             return next;
         });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [apiQuestions]);
+    }, [apiQuestions, textAnswers]);
 
     // Show AI overall assessment in overall comment when feedback arrives
     useEffect(() => {
@@ -320,6 +332,14 @@ export default function LecturerGradingInterfacePage({
             [key]: { ...prev[key], lecturerFeedback: tempFeedback, lecturerScore: tempScore },
         }));
         setEditingKey(null);
+
+        // Persist lecturer mark + feedback to the Answer row immediately
+        if (submission?.id) {
+            submissionService.saveAnswerAnalysis(submission.id, key, {
+                lecturerMark: tempScore,
+                lecturerFeedbackText: tempFeedback || undefined,
+            }).catch(() => {/* silent — main grade submit will persist questionMarksJson anyway */});
+        }
     };
 
     const handleRegenerate = async (key: string) => {
@@ -339,8 +359,7 @@ export default function LecturerGradingInterfacePage({
         let scored = 0;
         let maxTotal = 0;
         Object.values(answers).forEach(a => {
-            const pct = (a.lecturerScore ?? a.aiScore) / 100;
-            scored += a.maxMarks * pct;
+            scored   += a.lecturerScore ?? a.aiScore ?? 0;
             maxTotal += a.maxMarks;
         });
         const percentage = maxTotal > 0 ? Math.round((scored / maxTotal) * 100) : 0;
@@ -351,8 +370,9 @@ export default function LecturerGradingInterfacePage({
         if (!confirm('Submit this grade? The student will be notified.')) return;
 
         const grade = calculateGrade();
+        // questionScores: actual marks (not percentage)
         const questionScores = Object.fromEntries(
-            Object.entries(answers).map(([k, a]) => [k, a.lecturerScore ?? a.aiScore])
+            Object.entries(answers).map(([k, a]) => [k, a.lecturerScore ?? a.aiScore ?? 0])
         );
 
         const result = await gradeSubmission(submissionId, {
@@ -510,14 +530,15 @@ export default function LecturerGradingInterfacePage({
                         .sort((a, b) => a.order - b.order)
                         .map((question, idx) => {
                             const key = question.id;
+                            const maxMarks = question.maxPoints ?? 10;
                             const answer = answers[key] ?? {
                                 questionId: key,
                                 text: '',
                                 wordCount: 0,
                                 aiFeedback: feedback?.overallAssessment ?? 'AI feedback not yet available.',
-                                aiScore: feedback ? 80 : 0,
+                                aiScore: 0,
                                 lecturerFeedback: '',
-                                maxMarks: 100,
+                                maxMarks,
                             };
 
                             return (
@@ -526,6 +547,7 @@ export default function LecturerGradingInterfacePage({
                                         <div className="flex-1">
                                             <h3 className="text-lg font-bold text-gray-900 mb-1">
                                                 Question {idx + 1}
+                                                <span className="ml-2 text-sm font-normal text-gray-500">({maxMarks} marks)</span>
                                             </h3>
                                             <p className="text-gray-700">{question.text}</p>
                                         </div>
@@ -534,7 +556,7 @@ export default function LecturerGradingInterfacePage({
                                     <FeedbackBlock
                                         questionKey={key}
                                         answer={answer}
-                                        questionMarks={100}
+                                        questionMarks={maxMarks}
                                         isEditing={editingKey === key}
                                         isGenerating={isGeneratingAI}
                                         onEdit={() => handleEditFeedback(key)}

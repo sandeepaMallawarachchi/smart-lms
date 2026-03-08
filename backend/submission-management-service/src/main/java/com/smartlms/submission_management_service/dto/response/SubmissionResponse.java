@@ -22,8 +22,12 @@ public class SubmissionResponse {
     private String description;
     private String studentId;
     private String studentName;
+    private String studentEmail;
+    private String studentRegistrationId;
     private String assignmentId;
     private String assignmentTitle;
+    private String moduleCode;
+    private String moduleName;
     private SubmissionStatus status;
     private SubmissionType submissionType;
     private LocalDateTime dueDate;
@@ -33,8 +37,18 @@ public class SubmissionResponse {
     private String feedbackText;
     private Boolean isLate;
     private Integer versionNumber;
+    private Integer currentVersionNumber;
+    private Integer totalVersions;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<FileInfoDTO> files;
     private Integer fileCount;
+
+    // Aggregate AI / plagiarism metrics (computed from Answer rows on submit)
+    private Double aiScore;
+    private Double plagiarismScore;
+    private Integer totalWordCount;
+
+    // Per-question marks JSON: {"questionId": mark, ...}
+    private String questionMarksJson;
 }

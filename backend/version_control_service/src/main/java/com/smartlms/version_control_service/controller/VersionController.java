@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.smartlms.version_control_service.dto.request.DiffRequest;
+import com.smartlms.version_control_service.dto.request.TextSnapshotRequest;
 import com.smartlms.version_control_service.dto.request.VersionCreateRequest;
 import com.smartlms.version_control_service.dto.response.ApiResponse;
 import com.smartlms.version_control_service.dto.response.DiffResponse;
@@ -64,6 +65,22 @@ public class VersionController {
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Version created successfully", response));
+    }
+
+    /**
+     * Create an immutable text-answer snapshot for a text-based submission.
+     * Called by the frontend after submitSubmission() succeeds (fire-and-forget).
+     *
+     * POST /api/versions/text-snapshot
+     */
+    @PostMapping("/text-snapshot")
+    public ResponseEntity<ApiResponse<VersionResponse>> createTextSnapshot(
+            @RequestBody TextSnapshotRequest request) {
+        log.info("POST /api/versions/text-snapshot — submissionId={} studentId={}",
+                request.getSubmissionId(), request.getStudentId());
+        VersionResponse response = versionControlService.createTextSnapshot(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Text snapshot created", response));
     }
 
     @GetMapping("/{id}")

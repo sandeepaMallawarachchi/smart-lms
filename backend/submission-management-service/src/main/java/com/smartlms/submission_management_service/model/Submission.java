@@ -47,11 +47,23 @@ public class Submission {
     @Column(name = "student_name", nullable = false)
     private String studentName;
 
+    @Column(name = "student_email", length = 200)
+    private String studentEmail;
+
+    @Column(name = "student_registration_id", length = 100)
+    private String studentRegistrationId;
+
     @Column(name = "assignment_id")
     private String assignmentId;
 
     @Column(name = "assignment_title")
     private String assignmentTitle;
+
+    @Column(name = "module_code", length = 50)
+    private String moduleCode;
+
+    @Column(name = "module_name", length = 200)
+    private String moduleName;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -93,9 +105,36 @@ public class Submission {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    /** Version number of this submission (incremented each time student resubmits). */
     @Column(name = "version_number")
     @Builder.Default
     private Integer versionNumber = 1;
+
+    /** Total versions created across all submissions for same assignment+student. */
+    @Column(name = "total_versions")
+    @Builder.Default
+    private Integer totalVersions = 0;
+
+    // ── Aggregate metrics (computed from Answer rows on submit) ───────────────
+
+    /** Overall AI quality score 0-100 (weighted average of per-question AI scores). */
+    @Column(name = "ai_score")
+    private Double aiScore;
+
+    /** Highest plagiarism similarity score 0-100 across all answers. */
+    @Column(name = "plagiarism_score")
+    private Double plagiarismScore;
+
+    /** Total word count across all text answers. */
+    @Column(name = "total_word_count")
+    private Integer totalWordCount;
+
+    /**
+     * Per-question lecturer marks stored as JSON: {"questionId": mark, ...}
+     * Populated when lecturer grades each question individually.
+     */
+    @Column(name = "question_marks_json", columnDefinition = "TEXT")
+    private String questionMarksJson;
 
     // Helper methods
     public void addFile(SubmissionFile file) {
@@ -109,10 +148,12 @@ public class Submission {
     }
 
     public void submit() {
+        this.versionNumber = (this.versionNumber != null ? this.versionNumber : 0) + 1;
         this.status = SubmissionStatus.SUBMITTED;
         this.submittedAt = LocalDateTime.now();
         if (this.dueDate != null && this.submittedAt.isAfter(this.dueDate)) {
             this.isLate = true;
+            this.status = SubmissionStatus.LATE;
         }
     }
 }

@@ -1,8 +1,12 @@
 package com.smartlms.submission_management_service.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartlms.submission_management_service.dto.FileInfoDTO;
+import com.smartlms.submission_management_service.dto.request.GradeRequest;
 import com.smartlms.submission_management_service.dto.request.SubmissionRequest;
 import com.smartlms.submission_management_service.dto.response.SubmissionResponse;
+import com.smartlms.submission_management_service.model.Answer;
 import com.smartlms.submission_management_service.exception.ResourceNotFoundException;
 import com.smartlms.submission_management_service.model.Submission;
 import com.smartlms.submission_management_service.model.SubmissionStatus;
@@ -14,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -54,6 +59,7 @@ public class SubmissionService {
      */
     private final SubmissionRepository submissionRepository;
     private final AnswerRepository answerRepository;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * Creates a new submission in the system.
@@ -105,8 +111,12 @@ public class SubmissionService {
                 .description(request.getDescription())
                 .studentId(request.getStudentId())
                 .studentName(request.getStudentName())
+                .studentEmail(request.getStudentEmail())
+                .studentRegistrationId(request.getStudentRegistrationId())
                 .assignmentId(request.getAssignmentId())
                 .assignmentTitle(request.getAssignmentTitle())
+                .moduleCode(request.getModuleCode())
+                .moduleName(request.getModuleName())
                 .submissionType(request.getSubmissionType())
                 .status(SubmissionStatus.DRAFT)  // Always start as DRAFT
                 .dueDate(request.getDueDate())
@@ -257,6 +267,14 @@ public class SubmissionService {
      *     submissionService.getSubmissionsByAssignmentId("JAVA-001");
      * // Returns all submissions for assignment JAVA-001
      */
+    @Transactional(readOnly = true)
+    public List<SubmissionResponse> getSubmissionsByStudentIdAndAssignmentId(String studentId, String assignmentId) {
+        log.info("Fetching submissions for student: {} and assignment: {}", studentId, assignmentId);
+        return submissionRepository.findByStudentIdAndAssignmentId(studentId, assignmentId).stream()
+                .map(this::convertToResponse)
+                .collect(Collectors.toList());
+    }
+
     @Transactional(readOnly = true)
     public List<SubmissionResponse> getSubmissionsByAssignmentId(String assignmentId) {
         log.info("Fetching submissions for assignment: {}", assignmentId);
@@ -429,17 +447,60 @@ public class SubmissionService {
             throw new IllegalStateException("Cannot submit without files or text answers");
         }
 
+        // Hard deadline enforcement: block resubmission after deadline for already-submitted work.
+        // (Initial submission is allowed late — isLate flag is set automatically.)
+        if (submission.getDueDate() != null
+                && java.time.LocalDateTime.now().isAfter(submission.getDueDate())
+                && submission.getStatus() == SubmissionStatus.SUBMITTED) {
+            throw new IllegalStateException("Deadline has passed — resubmission is no longer allowed");
+        }
+
         log.info("Submitting submission {} — hasFiles={} hasAnswers={}", id, hasFiles, hasAnswers);
 
         // Call helper method in Submission entity
-        // This encapsulates the submission logic
-        submission.submit();  // Sets status, submittedAt, isLate
+        submission.submit();  // Sets status, submittedAt, isLate, increments versionNumber
+
+        // ── Compute aggregate metrics from Answer rows ────────────────────────
+        List<Answer> answers = answerRepository.findBySubmissionIdOrderByQuestionId(String.valueOf(id));
+        if (!answers.isEmpty()) {
+            // AI score: weighted average of (grammar+clarity+completeness+relevance)/4 per answer, scaled 0-100
+            double totalAi = answers.stream()
+                    .filter(a -> a.getGrammarScore() != null || a.getClarityScore() != null
+                            || a.getCompletenessScore() != null || a.getRelevanceScore() != null)
+                    .mapToDouble(a -> {
+                        double sum = 0; int cnt = 0;
+                        if (a.getGrammarScore()      != null) { sum += a.getGrammarScore();      cnt++; }
+                        if (a.getClarityScore()      != null) { sum += a.getClarityScore();      cnt++; }
+                        if (a.getCompletenessScore() != null) { sum += a.getCompletenessScore(); cnt++; }
+                        if (a.getRelevanceScore()    != null) { sum += a.getRelevanceScore();    cnt++; }
+                        return cnt > 0 ? (sum / cnt) * 10.0 : 0; // scale 0-10 → 0-100
+                    })
+                    .average().orElse(0);
+            submission.setAiScore(Math.round(totalAi * 10.0) / 10.0);
+
+            // Plagiarism score: highest similarity score across all answers
+            double maxPlag = answers.stream()
+                    .filter(a -> a.getSimilarityScore() != null)
+                    .mapToDouble(Answer::getSimilarityScore)
+                    .max().orElse(0);
+            submission.setPlagiarismScore(maxPlag);
+
+            // Total word count
+            int totalWords = answers.stream()
+                    .filter(a -> a.getWordCount() != null)
+                    .mapToInt(Answer::getWordCount)
+                    .sum();
+            submission.setTotalWordCount(totalWords);
+        }
+
+        // Increment totalVersions counter
+        int prev = submission.getTotalVersions() != null ? submission.getTotalVersions() : 0;
+        submission.setTotalVersions(prev + 1);
 
         Submission submittedSubmission = submissionRepository.save(submission);
-        log.info("Submission submitted successfully: {}", id);
-
-        // TODO: Publish Kafka event for async processing
-        // publishSubmissionEvent(submittedSubmission);
+        log.info("Submission submitted successfully: {} versionNumber={} aiScore={} plagiarismScore={}",
+                id, submittedSubmission.getVersionNumber(),
+                submittedSubmission.getAiScore(), submittedSubmission.getPlagiarismScore());
 
         return convertToResponse(submittedSubmission);
     }
@@ -492,27 +553,43 @@ public class SubmissionService {
      * // graded.getStatus() == GRADED
      */
     @Transactional
-    public SubmissionResponse gradeSubmission(Long id, Double grade, String feedback) {
+    public SubmissionResponse gradeSubmission(Long id, GradeRequest request) {
         log.info("Grading submission with ID: {}", id);
 
         Submission submission = submissionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found with ID: " + id));
 
+        Double grade = request.getGrade();
+
         // Validate: Grade cannot exceed maximum
-        if (submission.getMaxGrade() != null && grade > submission.getMaxGrade()) {
+        if (grade != null && submission.getMaxGrade() != null && grade > submission.getMaxGrade()) {
             throw new IllegalArgumentException("Grade cannot exceed maximum grade");
         }
 
         // Apply grade and feedback
-        submission.setGrade(grade);
-        submission.setFeedbackText(feedback);
+        if (grade != null) submission.setGrade(grade);
+        if (request.getLecturerFeedback() != null) submission.setFeedbackText(request.getLecturerFeedback());
         submission.setStatus(SubmissionStatus.GRADED);
 
-        Submission gradedSubmission = submissionRepository.save(submission);
-        log.info("Submission graded successfully: {}", id);
+        // Persist per-question marks as JSON
+        if (request.getQuestionScores() != null && !request.getQuestionScores().isEmpty()) {
+            try {
+                submission.setQuestionMarksJson(objectMapper.writeValueAsString(request.getQuestionScores()));
+                // Also persist each mark to the individual Answer rows
+                Map<String, Double> scores = request.getQuestionScores();
+                scores.forEach((questionId, mark) ->
+                        answerRepository.findBySubmissionIdAndQuestionId(String.valueOf(id), questionId)
+                                .ifPresent(answer -> {
+                                    answer.setLecturerMark(mark);
+                                    answerRepository.save(answer);
+                                }));
+            } catch (JsonProcessingException e) {
+                log.warn("Failed to serialise questionScores to JSON for submission {}: {}", id, e.getMessage());
+            }
+        }
 
-        // TODO: Publish notification event
-        // notificationService.notifyGraded(gradedSubmission);
+        Submission gradedSubmission = submissionRepository.save(submission);
+        log.info("Submission graded successfully: {} grade={}", id, grade);
 
         return convertToResponse(gradedSubmission);
     }
@@ -587,8 +664,12 @@ public class SubmissionService {
                 .description(submission.getDescription())
                 .studentId(submission.getStudentId())
                 .studentName(submission.getStudentName())
+                .studentEmail(submission.getStudentEmail())
+                .studentRegistrationId(submission.getStudentRegistrationId())
                 .assignmentId(submission.getAssignmentId())
                 .assignmentTitle(submission.getAssignmentTitle())
+                .moduleCode(submission.getModuleCode())
+                .moduleName(submission.getModuleName())
                 .status(submission.getStatus())
                 .submissionType(submission.getSubmissionType())
                 .dueDate(submission.getDueDate())
@@ -598,10 +679,16 @@ public class SubmissionService {
                 .feedbackText(submission.getFeedbackText())
                 .isLate(submission.getIsLate())
                 .versionNumber(submission.getVersionNumber())
+                .currentVersionNumber(submission.getVersionNumber())
+                .totalVersions(submission.getTotalVersions())
                 .createdAt(submission.getCreatedAt())
                 .updatedAt(submission.getUpdatedAt())
                 .files(files)
-                .fileCount(files.size())  // Derived field
+                .fileCount(files.size())
+                .aiScore(submission.getAiScore())
+                .plagiarismScore(submission.getPlagiarismScore())
+                .totalWordCount(submission.getTotalWordCount())
+                .questionMarksJson(submission.getQuestionMarksJson())
                 .build();
     }
 }

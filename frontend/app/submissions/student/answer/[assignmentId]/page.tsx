@@ -28,7 +28,7 @@
 
 import { useState, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { submissionService, getAssignmentWithFallback } from '@/lib/api/submission-services';
+import { submissionService, versionService, getAssignmentWithFallback } from '@/lib/api/submission-services';
 import { QuestionCard } from '@/components/submissions/QuestionCard';
 import type { AssignmentWithQuestions, TextAnswer, LiveFeedback, LivePlagiarismResult } from '@/types/submission.types';
 
@@ -157,6 +157,7 @@ export default function AnswerPage({
     const [answerMap, setAnswerMap]           = useState<Record<string, string>>({});
     const [feedbackMap, setFeedbackMap]       = useState<Record<string, LiveFeedback | null>>({});
     const [plagiarismMap, setPlagiarismMap]   = useState<Record<string, LivePlagiarismResult | null>>({});
+    const [gradeMap, setGradeMap]             = useState<Record<string, number | null>>({});
 
     // ── UI state ──────────────────────────────────────────────
     const [loading, setLoading]               = useState<boolean>(true);
@@ -186,7 +187,32 @@ export default function AnswerPage({
                 setAssignment(asg);
                 console.debug('[AnswerPage] Assignment loaded — title:', asg.title, '| questions:', asg.questions?.length ?? 0, '| type:', asg.assignmentType ?? '(none)', '| dueDate:', asg.dueDate ?? '(none)');
 
-                // 2. Get or create draft submission
+                // 2. Deadline guard: if the assignment deadline has passed, only allow
+                //    access if the student has already submitted. Otherwise redirect to
+                //    my-submissions (deadline enforcement per requirements §8).
+                if (asg.dueDate) {
+                    const deadlineMs = new Date(asg.dueDate).getTime();
+                    if (deadlineMs < Date.now()) {
+                        // Check whether the student already submitted this assignment
+                        let hasSubmitted = false;
+                        try {
+                            const allSubs = await submissionService.getStudentSubmissions(sid);
+                            hasSubmitted = allSubs.some(
+                                (s) => s.assignmentId === assignmentId &&
+                                       (s.status === 'SUBMITTED' || s.status === 'GRADED')
+                            );
+                        } catch { /* non-fatal — default to redirect */ }
+
+                        if (!hasSubmitted) {
+                            console.debug('[AnswerPage] Deadline passed & no submission — redirecting (404 equivalent)');
+                            router.replace('/submissions/student/my-submissions');
+                            return;
+                        }
+                        console.debug('[AnswerPage] Deadline passed but student has a submission — allowing read-only view');
+                    }
+                }
+
+                // 3. Get or create draft submission
                 const draft = await submissionService.getOrCreateDraftSubmission(
                     assignmentId,
                     sid,
@@ -286,6 +312,10 @@ export default function AnswerPage({
         setAnswerMap((prev) => ({ ...prev, [questionId]: text }));
     }, []);
 
+    const handleGradeChange = useCallback((questionId: string, grade: number | null) => {
+        setGradeMap((prev) => ({ ...prev, [questionId]: grade }));
+    }, []);
+
     // ── Derived values ────────────────────────────────────────
 
     const questions = assignment?.questions ?? [];
@@ -316,10 +346,57 @@ export default function AnswerPage({
         console.debug('[AnswerPage] handleSubmit — submissionId:', submissionId, '| answeredCount:', answeredCount, '/', questions.length, '| totalWords:', totalWords);
         setSubmitting(true);
         try {
-            await submissionService.submitSubmission(submissionId);
+            // Backend increments versionNumber on each submitSubmission call
+            const submittedResult = await submissionService.submitSubmission(submissionId);
+            const versionNumber = submittedResult?.versionNumber ?? submittedResult?.currentVersionNumber ?? 1;
             setSubmitDone(true);
             setShowConfirm(false);
-            console.debug('[AnswerPage] Submit SUCCESS — submissionId:', submissionId);
+            console.debug('[AnswerPage] Submit SUCCESS — submissionId:', submissionId, '| versionNumber:', versionNumber);
+
+            // Fire-and-forget: create an immutable text snapshot in version_control_service.
+            // This runs after the submission succeeds and does not block the UX.
+            (async () => {
+                try {
+                    const answerSnapshots = questions.map((q) => {
+                        const fb = feedbackMap[q.id];
+                        const pl = plagiarismMap[q.id];
+                        const grade = gradeMap[q.id];
+                        const text = answerMap[q.id] ?? '';
+                        return {
+                            questionId:        q.id,
+                            questionText:      q.text,
+                            answerText:        text,
+                            wordCount:         countWords(text),
+                            grammarScore:      fb?.grammarScore,
+                            clarityScore:      fb?.clarityScore,
+                            completenessScore: fb?.completenessScore,
+                            relevanceScore:    fb?.relevanceScore,
+                            similarityScore:   pl?.similarityScore,
+                            plagiarismSeverity: pl?.severity,
+                            projectedGrade:    grade ?? undefined,
+                            maxPoints:         q.maxPoints ?? 10,
+                        };
+                    });
+
+                    const totalMax    = questions.reduce((s, q) => s + (q.maxPoints ?? 10), 0);
+                    const totalEarned = questions.reduce((s, q) => s + (gradeMap[q.id] ?? 0), 0);
+
+                    await versionService.createTextSnapshot({
+                        submissionId:   Number(submissionId),
+                        studentId,
+                        commitMessage:  `${assignment?.title ?? 'Submission'} — v${versionNumber}`,
+                        totalWordCount: totalWords,
+                        overallGrade:   Math.round(totalEarned * 10) / 10,
+                        maxGrade:       totalMax,
+                        answers:        answerSnapshots,
+                    });
+                    console.debug('[AnswerPage] Text snapshot created for submissionId:', submissionId, '| version:', versionNumber);
+                } catch (snapErr) {
+                    // Non-fatal — submission already succeeded
+                    console.warn('[AnswerPage] Text snapshot failed (non-fatal):', snapErr);
+                }
+            })();
+
             // Short delay so the user sees the success state before redirect.
             setTimeout(() => {
                 router.push('/submissions/student/my-submissions');
@@ -503,11 +580,13 @@ export default function AnswerPage({
                                 submissionId={submissionId}
                                 studentId={studentId}
                                 assignmentId={assignmentId}
+                                assignmentDescription={assignment?.description ?? undefined}
                                 initialAnswer={answerMap[question.id] ?? ''}
                                 initialFeedback={feedbackMap[question.id] ?? null}
                                 initialPlagiarism={plagiarismMap[question.id] ?? null}
                                 disabled={submitDone || isDeadlinePassed}
                                 onAnswerChange={handleAnswerChange}
+                                onGradeChange={handleGradeChange}
                                 questionIndex={idx}
                             />
                         ))}
@@ -572,34 +651,106 @@ export default function AnswerPage({
                 </div>
             )}
 
-            {/* ── Confirmation modal ────────────────────────── */}
-            {showConfirm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-                    <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-2">Submit assignment?</h3>
-                        <p className="text-sm text-gray-600 mb-6">
-                            Once submitted, you will not be able to edit your answers.
-                            Make sure all your answers are complete.
-                        </p>
-                        <div className="flex gap-3 justify-end">
-                            <button
-                                onClick={() => setShowConfirm(false)}
-                                disabled={submitting}
-                                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer"
-                            >
-                                Go Back
-                            </button>
-                            <button
-                                onClick={handleSubmit}
-                                disabled={submitting}
-                                className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:bg-gray-300 cursor-pointer"
-                            >
-                                {submitting ? 'Submitting…' : 'Yes, Submit'}
-                            </button>
+            {/* ── Submission summary modal ──────────────────── */}
+            {showConfirm && (() => {
+                const gradedQuestions = questions.filter(q => gradeMap[q.id] != null);
+                const totalEarned = gradedQuestions.reduce((s, q) => s + (gradeMap[q.id] ?? 0), 0);
+                const totalMax    = questions.reduce((s, q) => s + (q.maxPoints ?? 10), 0);
+                const hasGrades   = gradedQuestions.length > 0;
+                return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                        <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+                            <h3 className="text-lg font-bold text-gray-900 mb-1">Submit assignment?</h3>
+                            <p className="text-sm text-gray-500 mb-5">
+                                Once submitted your answers are locked. Review your projected scores below.
+                            </p>
+
+                            {/* Per-question grade table */}
+                            {hasGrades && (
+                                <div className="mb-5 rounded-lg border border-gray-200 overflow-hidden">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-gray-50 border-b border-gray-200">
+                                            <tr>
+                                                <th className="text-left px-4 py-2 font-medium text-gray-600">Question</th>
+                                                <th className="text-right px-4 py-2 font-medium text-gray-600">Projected</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {questions
+                                                .slice()
+                                                .sort((a, b) => a.order - b.order)
+                                                .map((q, i) => {
+                                                    const g = gradeMap[q.id];
+                                                    const mp = q.maxPoints ?? 10;
+                                                    const pct = g != null ? g / mp : null;
+                                                    return (
+                                                        <tr key={q.id} className="border-b border-gray-100 last:border-0">
+                                                            <td className="px-4 py-2 text-gray-700 truncate max-w-[260px]">
+                                                                <span className="text-xs font-semibold text-purple-600 mr-1">Q{i + 1}</span>
+                                                                {q.text.length > 60 ? q.text.slice(0, 60) + '…' : q.text}
+                                                            </td>
+                                                            <td className="px-4 py-2 text-right font-semibold whitespace-nowrap">
+                                                                {g != null ? (
+                                                                    <span className={
+                                                                        pct! >= 0.75 ? 'text-green-600'
+                                                                        : pct! >= 0.50 ? 'text-amber-600'
+                                                                        : 'text-red-600'
+                                                                    }>
+                                                                        {g} / {mp}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-gray-400 font-normal">–</span>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                        </tbody>
+                                        {hasGrades && (
+                                            <tfoot className="bg-purple-50 border-t border-purple-200">
+                                                <tr>
+                                                    <td className="px-4 py-2 font-semibold text-purple-800">Total (projected)</td>
+                                                    <td className="px-4 py-2 text-right font-bold text-purple-800">
+                                                        {Math.round(totalEarned * 10) / 10} / {totalMax}
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        )}
+                                    </table>
+                                </div>
+                            )}
+
+                            {!hasGrades && (
+                                <div className="mb-5 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-700">
+                                    AI feedback has not loaded yet — projected grades are unavailable.
+                                    You can still submit.
+                                </div>
+                            )}
+
+                            <p className="text-xs text-gray-400 mb-5">
+                                These are AI-projected grades. Your instructor may adjust them during review.
+                            </p>
+
+                            <div className="flex gap-3 justify-end">
+                                <button
+                                    onClick={() => setShowConfirm(false)}
+                                    disabled={submitting}
+                                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer"
+                                >
+                                    Go Back
+                                </button>
+                                <button
+                                    onClick={handleSubmit}
+                                    disabled={submitting}
+                                    className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:bg-gray-300 cursor-pointer"
+                                >
+                                    {submitting ? 'Submitting…' : 'Confirm & Submit'}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
         </div>
     );
 }

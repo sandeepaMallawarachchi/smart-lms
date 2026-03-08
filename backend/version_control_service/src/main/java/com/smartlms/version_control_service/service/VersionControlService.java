@@ -2,6 +2,7 @@ package com.smartlms.version_control_service.service;
 
 
 import com.smartlms.version_control_service.config.VersionControlProperties;
+import com.smartlms.version_control_service.dto.request.TextSnapshotRequest;
 import com.smartlms.version_control_service.dto.request.VersionCreateRequest;
 import com.smartlms.version_control_service.dto.response.FileInfoResponse;
 import com.smartlms.version_control_service.dto.response.VersionResponse;
@@ -11,6 +12,7 @@ import com.smartlms.version_control_service.model.FileBlob;
 import com.smartlms.version_control_service.model.StorageType;
 import com.smartlms.version_control_service.model.SubmissionVersion;
 import com.smartlms.version_control_service.model.VersionFile;
+import com.smartlms.version_control_service.model.VersionTriggerType;
 import com.smartlms.version_control_service.repository.FileBlobRepository;
 import com.smartlms.version_control_service.repository.SubmissionVersionRepository;
 import com.smartlms.version_control_service.repository.VersionFileRepository;
@@ -108,6 +110,91 @@ public class VersionControlService {
         log.info("Version created: {} for submission: {}", nextVersionNumber, request.getSubmissionId());
 
         return convertToResponse(savedVersion);
+    }
+
+    /**
+     * Create an immutable text-answer snapshot for a text-based submission.
+     *
+     * Unlike createVersion() (which processes uploaded files), this method stores
+     * all answer content inside the SubmissionVersion.metadata JSONB field.
+     * No VersionFile or FileBlob entries are created.
+     *
+     * Called by the frontend immediately after submitSubmission() succeeds.
+     */
+    @Transactional
+    public VersionResponse createTextSnapshot(TextSnapshotRequest request) {
+        log.info("[TextSnapshot] Creating text snapshot for submissionId={} studentId={}",
+                request.getSubmissionId(), request.getStudentId());
+
+        Integer nextVersionNumber = versionRepository
+                .findMaxVersionNumberBySubmissionId(request.getSubmissionId()) + 1;
+
+        Long parentVersionId = versionRepository
+                .findLatestVersionBySubmissionId(request.getSubmissionId())
+                .map(SubmissionVersion::getId)
+                .orElse(null);
+
+        // Build metadata map — stores full answer snapshots in JSONB
+        java.util.Map<String, Object> metadata = new java.util.HashMap<>();
+        metadata.put("type", "TEXT_SUBMISSION");
+        metadata.put("overallGrade", request.getOverallGrade());
+        metadata.put("maxGrade", request.getMaxGrade());
+        metadata.put("totalWordCount", request.getTotalWordCount());
+        metadata.put("snapshotVersion", "1");
+
+        if (request.getAnswers() != null) {
+            java.util.List<java.util.Map<String, Object>> answerMaps = new java.util.ArrayList<>();
+            for (TextSnapshotRequest.AnswerSnapshot a : request.getAnswers()) {
+                java.util.Map<String, Object> m = new java.util.HashMap<>();
+                m.put("questionId",          a.getQuestionId());
+                m.put("questionText",        a.getQuestionText());
+                m.put("answerText",          a.getAnswerText());
+                m.put("wordCount",           a.getWordCount());
+                m.put("grammarScore",        a.getGrammarScore());
+                m.put("clarityScore",        a.getClarityScore());
+                m.put("completenessScore",   a.getCompletenessScore());
+                m.put("relevanceScore",      a.getRelevanceScore());
+                m.put("similarityScore",     a.getSimilarityScore());
+                m.put("plagiarismSeverity",  a.getPlagiarismSeverity());
+                m.put("projectedGrade",      a.getProjectedGrade());
+                m.put("maxPoints",           a.getMaxPoints());
+                answerMaps.add(m);
+            }
+            metadata.put("answers", answerMaps);
+        }
+
+        String changesSummary = String.format(
+                "Text submission v%d — %d answers, %d words, grade %.1f/%s",
+                nextVersionNumber,
+                request.getAnswers() != null ? request.getAnswers().size() : 0,
+                request.getTotalWordCount() != null ? request.getTotalWordCount() : 0,
+                request.getOverallGrade() != null ? request.getOverallGrade() : 0.0,
+                request.getMaxGrade() != null ? String.valueOf(request.getMaxGrade().intValue()) : "?"
+        );
+
+        SubmissionVersion version = SubmissionVersion.builder()
+                .submissionId(request.getSubmissionId())
+                .versionNumber(nextVersionNumber)
+                .parentVersionId(parentVersionId)
+                .commitMessage(request.getCommitMessage() != null
+                        ? request.getCommitMessage()
+                        : "Text submission v" + nextVersionNumber)
+                .triggerType(VersionTriggerType.SUBMISSION)
+                .createdBy(request.getStudentId())
+                .metadata(metadata)
+                .changesSummary(changesSummary)
+                .totalFiles(0)
+                .totalSizeBytes(0L)
+                .isSnapshot(true)
+                .build();
+
+        version.setCommitHash(generateCommitHash(version));
+
+        SubmissionVersion saved = versionRepository.save(version);
+        log.info("[TextSnapshot] Created version id={} number={} for submissionId={}",
+                saved.getId(), saved.getVersionNumber(), request.getSubmissionId());
+
+        return convertToResponse(saved);
     }
 
     @Transactional(readOnly = true)
