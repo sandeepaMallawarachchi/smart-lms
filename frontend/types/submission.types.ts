@@ -375,6 +375,14 @@ export interface LiveFeedback {
  *   0.40-0.70 → MEDIUM
  *   ≥ 0.70  → HIGH
  */
+export interface InternetMatch {
+    title: string;
+    url: string;
+    snippet: string;
+    similarityScore: number;    // 0-100
+    sourceDomain?: string;
+}
+
 export interface LivePlagiarismResult {
     questionId: string;
     similarityScore: number;    // 0-100 (converted from 0.0-1.0 backend value)
@@ -382,6 +390,7 @@ export interface LivePlagiarismResult {
     flagged: boolean;
     matchedText?: string;       // excerpt of matched content
     checkedAt: string;          // ISO-8601
+    internetMatches?: InternetMatch[];  // sources where similar content was found
 }
 
 // ─── Hook state shapes ─────────────────────────────────────────

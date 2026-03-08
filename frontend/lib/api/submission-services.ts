@@ -802,6 +802,13 @@ export const plagiarismService = {
                 similarityScore?: number;
                 flagged?: boolean;
                 warningMessage?: string;
+                internetMatches?: {
+                    title?: string;
+                    url?: string;
+                    snippet?: string;
+                    similarityScore?: number;
+                    sourceDomain?: string;
+                }[];
             };
         }>(`${PLAGIARISM_API}/api/integrity/realtime/check`, {
             method: 'POST',
@@ -822,6 +829,13 @@ export const plagiarismService = {
             flagged: raw.flagged ?? normalised >= 70,
             matchedText: raw.warningMessage,
             checkedAt: new Date().toISOString(),
+            internetMatches: (raw.internetMatches ?? []).map(m => ({
+                title:           m.title ?? '',
+                url:             m.url ?? '',
+                snippet:         m.snippet ?? '',
+                similarityScore: m.similarityScore ?? 0,
+                sourceDomain:    m.sourceDomain,
+            })),
         };
 
         console.debug('[plagiarismService] checkLiveSimilarity — rawScore:', rawScore, '| normalised:', result.similarityScore, '%', '| severity:', severity, '| flagged:', result.flagged);
