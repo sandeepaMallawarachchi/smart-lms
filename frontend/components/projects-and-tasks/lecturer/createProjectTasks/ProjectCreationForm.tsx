@@ -11,12 +11,14 @@ interface Subtask {
   id: string;
   title: string;
   description?: string;
+  marks?: number;
 }
 
 interface MainTask {
   id: string;
   title: string;
   description?: string;
+  marks?: number;
   subtasks?: Subtask[];
 }
 
@@ -58,7 +60,9 @@ export default function ProjectCreationForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskMarks, setNewTaskMarks] = useState<string>('');
   const [newSubtaskTitle, setNewSubtaskTitle] = useState<{ [key: string]: string }>({});
+  const [newSubtaskMarks, setNewSubtaskMarks] = useState<{ [key: string]: string }>({});
   const [expandedTasks, setExpandedTasks] = useState<{ [key: string]: boolean }>({});
   const [courseGroups, setCourseGroups] = useState<CourseGroup[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
@@ -130,6 +134,30 @@ export default function ProjectCreationForm({
       newErrors.deadlineDate = 'Deadline date is required';
     }
 
+    const totalMainMarks = formState.mainTasks.reduce(
+      (sum, task) => sum + Number(task.marks || 0),
+      0
+    );
+    if (totalMainMarks > 100) {
+      newErrors.mainTaskMarks = 'Total main task marks cannot exceed 100';
+    }
+
+    for (const task of formState.mainTasks) {
+      const mainMarks = Number(task.marks || 0);
+      if (mainMarks < 0 || mainMarks > 100) {
+        newErrors.mainTaskMarks = 'Each main task mark must be between 0 and 100';
+        break;
+      }
+      const subtaskTotal = (task.subtasks || []).reduce(
+        (sum, subtask) => sum + Number(subtask.marks || 0),
+        0
+      );
+      if (subtaskTotal > mainMarks) {
+        newErrors.mainTaskMarks = `Subtask marks exceed main task marks for "${task.title}"`;
+        break;
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -190,8 +218,9 @@ export default function ProjectCreationForm({
 
       toast.success('Project created successfully!');
       onSuccess?.();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to create project');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to create project';
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -204,10 +233,26 @@ export default function ProjectCreationForm({
       return;
     }
 
+    const parsedMarks = Number(newTaskMarks);
+    if (!Number.isFinite(parsedMarks) || parsedMarks <= 0) {
+      toast.error('Enter valid marks for the main task');
+      return;
+    }
+
+    const existingMainMarks = formState.mainTasks.reduce(
+      (sum, task) => sum + Number(task.marks || 0),
+      0
+    );
+    if (existingMainMarks + parsedMarks > 100) {
+      toast.error('Total main task marks cannot exceed 100');
+      return;
+    }
+
     const newTask: MainTask = {
       id: Date.now().toString(),
       title: newTaskTitle,
       description: '',
+      marks: parsedMarks,
       subtasks: [],
     };
 
@@ -217,6 +262,7 @@ export default function ProjectCreationForm({
     });
 
     setNewTaskTitle('');
+    setNewTaskMarks('');
     toast.success('Main task added');
   };
 
@@ -228,10 +274,28 @@ export default function ProjectCreationForm({
       return;
     }
 
+    const parsedMarks = Number(newSubtaskMarks[mainTaskId]);
+    if (!Number.isFinite(parsedMarks) || parsedMarks <= 0) {
+      toast.error('Enter valid marks for the subtask');
+      return;
+    }
+
+    const parentTask = formState.mainTasks.find((task) => task.id === mainTaskId);
+    const parentMarks = Number(parentTask?.marks || 0);
+    const currentSubtaskMarks = (parentTask?.subtasks || []).reduce(
+      (sum, st) => sum + Number(st.marks || 0),
+      0
+    );
+    if (currentSubtaskMarks + parsedMarks > parentMarks) {
+      toast.error('Subtask marks cannot exceed the selected main task marks');
+      return;
+    }
+
     const newSubtask: Subtask = {
       id: Date.now().toString(),
       title: subtaskTitle,
       description: '',
+      marks: parsedMarks,
     };
 
     setFormState({
@@ -249,6 +313,10 @@ export default function ProjectCreationForm({
 
     setNewSubtaskTitle({
       ...newSubtaskTitle,
+      [mainTaskId]: '',
+    });
+    setNewSubtaskMarks({
+      ...newSubtaskMarks,
       [mainTaskId]: '',
     });
 
@@ -288,6 +356,8 @@ export default function ProjectCreationForm({
   const getSubtasks = (task: MainTask): Subtask[] => {
     return (task.subtasks && Array.isArray(task.subtasks)) ? task.subtasks : [];
   };
+  const getMainTaskMarksTotal = (): number =>
+    formState.mainTasks.reduce((sum, task) => sum + Number(task.marks || 0), 0);
 
   // File handlers
   const handleFileChange = (
@@ -513,9 +583,14 @@ export default function ProjectCreationForm({
 
       {/* Main Tasks with Nested Subtasks */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <label className="block text-sm font-semibold text-gray-900 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <label className="block text-sm font-semibold text-gray-900">
           Main Tasks (Optional) - with Subtasks
-        </label>
+          </label>
+          <span className="text-xs font-semibold text-gray-700">
+            Total Main Marks: {getMainTaskMarksTotal()}/100
+          </span>
+        </div>
 
         {/* Existing Main Tasks */}
         {formState.mainTasks.length > 0 && (
@@ -544,6 +619,9 @@ export default function ProjectCreationForm({
                         <ChevronRight size={18} className="text-gray-600" />
                       )}
                       <span className="font-semibold text-gray-900">{task.title}</span>
+                      <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded">
+                        {Number(task.marks || 0)} marks
+                      </span>
                       {subtaskCount > 0 && (
                         <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded ml-auto">
                           {subtaskCount} subtasks
@@ -574,6 +652,9 @@ export default function ProjectCreationForm({
                               <div className="flex items-center gap-3 flex-1">
                                 <div className="w-2 h-2 bg-brand-blue rounded-full"></div>
                                 <span className="font-medium text-gray-900">{subtask.title}</span>
+                                <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded">
+                                  {Number(subtask.marks || 0)} marks
+                                </span>
                               </div>
                               <button
                                 type="button"
@@ -607,6 +688,21 @@ export default function ProjectCreationForm({
                           placeholder="Add subtask..."
                           className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue"
                         />
+                        <input
+                          type="number"
+                          min={0}
+                          max={Number(task.marks || 0)}
+                          step="0.5"
+                          value={newSubtaskMarks[task.id] || ''}
+                          onChange={(e) =>
+                            setNewSubtaskMarks({
+                              ...newSubtaskMarks,
+                              [task.id]: e.target.value,
+                            })
+                          }
+                          placeholder="Marks"
+                          className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue"
+                        />
                         <button
                           type="button"
                           onClick={() => addSubtask(task.id)}
@@ -638,6 +734,16 @@ export default function ProjectCreationForm({
             }}
             placeholder="Enter main task title..."
             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue"
+          />
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step="0.5"
+            value={newTaskMarks}
+            onChange={(e) => setNewTaskMarks(e.target.value)}
+            placeholder="Marks"
+            className="w-28 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue"
           />
           <button
             type="button"
