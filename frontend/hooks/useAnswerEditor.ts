@@ -132,6 +132,14 @@ export function useAnswerEditor({
     const plagiarismTimer  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const autoSaveTimer    = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+    // ── Pending analysis refs ──────────────────────────────────
+    // AI feedback and plagiarism results received BEFORE the answer row was created
+    // (feedback fires at 2s, auto-save fires at 5s — row may not exist yet).
+    // After auto-save creates the row, we flush these immediately so they're
+    // persisted and available on the next "continue writing" session.
+    const pendingFeedbackRef   = useRef<LiveFeedback | null>(null);
+    const pendingPlagiarismRef = useRef<LivePlagiarismResult | null>(null);
+
     // Stable session ID for the plagiarism realtime endpoint (stays constant for
     // the lifetime of this question editor to let the backend correlate requests).
     const sessionId = useRef<string>(
@@ -163,6 +171,8 @@ export function useAnswerEditor({
                 '| completeness:', feedback.completenessScore,
                 '| relevance:', feedback.relevanceScore);
             setLiveFeedback(feedback);
+            // Track latest feedback so auto-save can flush it if the row didn't exist yet
+            pendingFeedbackRef.current = feedback;
             // Persist silently — server guards wordCount >= 1
             submissionService.saveAnswerAnalysis(submissionId, questionId, {
                 grammarScore:       feedback.grammarScore,
@@ -172,7 +182,11 @@ export function useAnswerEditor({
                 strengths:          feedback.strengths,
                 improvements:       feedback.improvements,
                 suggestions:        feedback.suggestions,
-            }).catch(err => console.warn('[useAnswerEditor] saveAnalysis(feedback) failed silently:', err));
+            }).then(() => {
+                // Saved successfully — no need for deferred flush
+                pendingFeedbackRef.current = null;
+                console.debug('[useAnswerEditor] AI feedback saved immediately for questionId:', questionId);
+            }).catch(err => console.warn('[useAnswerEditor] saveAnalysis(feedback) deferred (row not yet created?):', err));
         } catch (err) {
             console.warn('[useAnswerEditor] AI feedback FAILED for questionId:', questionId, '—', err);
             // Don't clear existing feedback — keep the last good result visible.
@@ -203,12 +217,18 @@ export function useAnswerEditor({
                 '| score:', result.similarityScore, '%',
                 '| flagged:', result.flagged);
             setPlagiarismResult(result);
+            // Track latest result so auto-save can flush it if the row didn't exist yet
+            pendingPlagiarismRef.current = result;
             // Persist silently — server guards wordCount >= 1
             submissionService.saveAnswerAnalysis(submissionId, questionId, {
                 similarityScore:    result.similarityScore,
                 plagiarismSeverity: result.severity,
                 plagiarismFlagged:  result.flagged,
-            }).catch(err => console.warn('[useAnswerEditor] saveAnalysis(plagiarism) failed silently:', err));
+            }).then(() => {
+                // Saved successfully — no need for deferred flush
+                pendingPlagiarismRef.current = null;
+                console.debug('[useAnswerEditor] Plagiarism result saved immediately for questionId:', questionId);
+            }).catch(err => console.warn('[useAnswerEditor] saveAnalysis(plagiarism) deferred (row not yet created?):', err));
         } catch (err) {
             console.warn('[useAnswerEditor] Plagiarism check FAILED for questionId:', questionId, '—', err);
         } finally {
@@ -237,6 +257,36 @@ export function useAnswerEditor({
             const savedAt = new Date();
             setLastSaved(savedAt);
             console.debug('[useAnswerEditor] Auto-save DONE at', savedAt.toLocaleTimeString(), '— submissionId:', submissionId, '| questionId:', questionId);
+
+            // ── Flush deferred analysis ────────────────────────
+            // If feedback/plagiarism arrived before this auto-save created the row,
+            // the saveAnalysis call was a no-op. Now that the row exists, persist them.
+            const fb = pendingFeedbackRef.current;
+            const pl = pendingPlagiarismRef.current;
+            if (fb || pl) {
+                console.debug('[useAnswerEditor] Flushing deferred analysis for questionId:', questionId,
+                    '| hasFeedback:', !!fb, '| hasPlagiarism:', !!pl);
+                submissionService.saveAnswerAnalysis(submissionId, questionId, {
+                    ...(fb && {
+                        grammarScore:       fb.grammarScore,
+                        clarityScore:       fb.clarityScore,
+                        completenessScore:  fb.completenessScore,
+                        relevanceScore:     fb.relevanceScore,
+                        strengths:          fb.strengths,
+                        improvements:       fb.improvements,
+                        suggestions:        fb.suggestions,
+                    }),
+                    ...(pl && {
+                        similarityScore:    pl.similarityScore,
+                        plagiarismSeverity: pl.severity,
+                        plagiarismFlagged:  pl.flagged,
+                    }),
+                }).then(() => {
+                    pendingFeedbackRef.current   = null;
+                    pendingPlagiarismRef.current = null;
+                    console.debug('[useAnswerEditor] Deferred analysis flush DONE for questionId:', questionId);
+                }).catch(err => console.warn('[useAnswerEditor] Deferred analysis flush FAILED:', err));
+            }
         } catch (err) {
             console.warn('[useAnswerEditor] Auto-save FAILED for submissionId:', submissionId, '| questionId:', questionId, '—', err);
         } finally {
@@ -300,6 +350,35 @@ export function useAnswerEditor({
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initialText]);
+
+    // ── Generate feedback on mount for pre-loaded text without feedback ─────
+    // If the student returns to a partially answered assignment and their
+    // previous answer had no saved feedback (e.g. analysis was skipped because
+    // the answer row didn't exist yet when it first arrived), fire fresh
+    // feedback and plagiarism requests immediately so the panels fill in
+    // without the student having to retype anything.
+    useEffect(() => {
+        if (
+            initialText &&
+            initialText.length >= MIN_TEXT_LENGTH &&
+            !initialFeedback
+        ) {
+            console.debug('[useAnswerEditor] Firing initial feedback on mount — questionId:', questionId,
+                '| textLen:', initialText.length, '| reason: no saved feedback');
+            requestFeedback(initialText);
+        }
+        if (
+            initialText &&
+            initialText.length >= MIN_TEXT_LENGTH &&
+            !initialPlagiarism
+        ) {
+            console.debug('[useAnswerEditor] Firing initial plagiarism on mount — questionId:', questionId,
+                '| textLen:', initialText.length, '| reason: no saved plagiarism result');
+            requestPlagiarismCheck(initialText);
+        }
+        // Run only once on mount; requestFeedback/requestPlagiarismCheck are stable callbacks
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return {
         answerText,
