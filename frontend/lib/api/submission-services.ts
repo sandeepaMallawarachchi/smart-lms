@@ -802,12 +802,19 @@ export const plagiarismService = {
                 similarityScore?: number;
                 flagged?: boolean;
                 warningMessage?: string;
+                internetSimilarityScore?: number;
+                peerSimilarityScore?: number;
+                riskScore?: number;
+                riskLevel?: string;
                 internetMatches?: {
                     title?: string;
                     url?: string;
                     snippet?: string;
                     similarityScore?: number;
                     sourceDomain?: string;
+                    sourceCategory?: string;
+                    confidenceLevel?: string;
+                    matchedStudentText?: string;
                 }[];
             };
         }>(`${PLAGIARISM_API}/api/integrity/realtime/check`, {
@@ -822,6 +829,11 @@ export const plagiarismService = {
         const severity: LivePlagiarismResult['severity'] =
             normalised >= 70 ? 'HIGH' : normalised >= 40 ? 'MEDIUM' : 'LOW';
 
+        const normScore = (v?: number) => {
+            if (v == null) return undefined;
+            return v <= 1.0 ? Math.round(v * 1000) / 10 : Math.round(v * 10) / 10;
+        };
+
         const result: LivePlagiarismResult = {
             questionId: payload.questionId,
             similarityScore: Math.round(normalised * 10) / 10,
@@ -829,12 +841,19 @@ export const plagiarismService = {
             flagged: raw.flagged ?? normalised >= 70,
             matchedText: raw.warningMessage,
             checkedAt: new Date().toISOString(),
+            internetSimilarityScore: normScore(raw.internetSimilarityScore),
+            peerSimilarityScore:     normScore(raw.peerSimilarityScore),
+            riskScore:               raw.riskScore ?? undefined,
+            riskLevel:               (raw.riskLevel ?? undefined) as LivePlagiarismResult['riskLevel'],
             internetMatches: (raw.internetMatches ?? []).map(m => ({
-                title:           m.title ?? '',
-                url:             m.url ?? '',
-                snippet:         m.snippet ?? '',
-                similarityScore: m.similarityScore ?? 0,
-                sourceDomain:    m.sourceDomain,
+                title:               m.title ?? '',
+                url:                 m.url ?? '',
+                snippet:             m.snippet ?? '',
+                similarityScore:     m.similarityScore ?? 0,
+                sourceDomain:        m.sourceDomain,
+                sourceCategory:      m.sourceCategory as import('@/types/submission.types').InternetMatchCategory | undefined,
+                confidenceLevel:     m.confidenceLevel as import('@/types/submission.types').ConfidenceLevel | undefined,
+                matchedStudentText:  m.matchedStudentText,
             })),
         };
 

@@ -375,22 +375,44 @@ export interface LiveFeedback {
  *   0.40-0.70 → MEDIUM
  *   ≥ 0.70  → HIGH
  */
+export type InternetMatchCategory =
+    | 'ACADEMIC' | 'ENCYCLOPEDIA' | 'NEWS' | 'GOVERNMENT'
+    | 'EDUCATIONAL' | 'BLOG' | 'TECH_COMMUNITY' | 'OTHER';
+
+export type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW';
+
 export interface InternetMatch {
     title: string;
     url: string;
     snippet: string;
-    similarityScore: number;    // 0-100
+    similarityScore: number;        // 0-100
     sourceDomain?: string;
+    /** Source type: ACADEMIC | ENCYCLOPEDIA | NEWS | GOVERNMENT | EDUCATIONAL | BLOG | TECH_COMMUNITY | OTHER */
+    sourceCategory?: InternetMatchCategory;
+    /** Match confidence based on similarity score */
+    confidenceLevel?: ConfidenceLevel;
+    /** Excerpt from the student's own answer that overlaps with this source */
+    matchedStudentText?: string;
 }
+
+export type RiskLevel = 'CLEAN' | 'LOW' | 'MEDIUM' | 'HIGH';
 
 export interface LivePlagiarismResult {
     questionId: string;
-    similarityScore: number;    // 0-100 (converted from 0.0-1.0 backend value)
+    similarityScore: number;        // 0-100 (converted from 0.0-1.0 backend value)
     severity: 'LOW' | 'MEDIUM' | 'HIGH';
     flagged: boolean;
-    matchedText?: string;       // excerpt of matched content
-    checkedAt: string;          // ISO-8601
-    internetMatches?: InternetMatch[];  // sources where similar content was found
+    matchedText?: string;           // excerpt of matched content
+    checkedAt: string;              // ISO-8601
+    internetMatches?: InternetMatch[];
+    /** Raw internet similarity score 0-100 (before peer comparison) */
+    internetSimilarityScore?: number;
+    /** Raw peer similarity score 0-100 */
+    peerSimilarityScore?: number;
+    /** Aggregate risk score 0-100 (includes match-count bonus) */
+    riskScore?: number;
+    /** CLEAN | LOW | MEDIUM | HIGH */
+    riskLevel?: RiskLevel;
 }
 
 // ─── Hook state shapes ─────────────────────────────────────────

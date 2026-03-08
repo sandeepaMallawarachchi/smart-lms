@@ -15,8 +15,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Real-time plagiarism checking as students type
@@ -65,7 +67,7 @@ public class RealtimeCheckService {
                 log.info("[RealtimeCheck] Skipped — text too short ({} < {} chars)",
                         request.getTextContent().length(), minTextLength);
                 return ApiResponse.success("Text too short for checking",
-                        buildResponse(request, 0.0, false, List.of()));
+                        buildResponse(request, 0.0, false, List.of(), 0.0, 0.0));
             }
 
             // Check if plagiarism check needed for this question
@@ -76,12 +78,14 @@ public class RealtimeCheckService {
             if (!checkNeeded) {
                 log.info("[RealtimeCheck] Skipped — question type does not require plagiarism check");
                 return ApiResponse.success("Plagiarism check not needed for this question type",
-                        buildResponse(request, 0.0, false, List.of()));
+                        buildResponse(request, 0.0, false, List.of(), 0.0, 0.0));
             }
 
             double maxSimilarity = 0.0;
             boolean flagged = false;
             List<InternetMatchResponse> internetMatches = new ArrayList<>();
+            double internetSimilarityScore = 0.0;
+            double peerSimilarityScore = 0.0;
 
             if (request.getTextContent().length() > 100) {
                 // ── Internet search (Google Custom Search API) ─────────────────
@@ -90,8 +94,17 @@ public class RealtimeCheckService {
                         request.getTextContent(), 3);
                 log.debug("[RealtimeCheck] Google returned {} results", searchResults.size());
 
+                // ── Scholar search (academic sources) ──────────────────────────
+                List<Map<String, String>> scholarResults = googleSearch.searchScholar(
+                        request.getTextContent(), 2);
+                log.debug("[RealtimeCheck] Scholar returned {} results", scholarResults.size());
+                // Merge scholar results into searchResults for combined similarity
+                List<Map<String, String>> allSearchResults = new ArrayList<>(searchResults);
+                allSearchResults.addAll(scholarResults);
+
                 double internetSimilarity = textSimilarity.calculateInternetSimilarity(
-                        request.getTextContent(), searchResults);
+                        request.getTextContent(), allSearchResults);
+                internetSimilarityScore = internetSimilarity; // track separately
                 log.info("[RealtimeCheck] Internet similarity={} threshold={}", internetSimilarity, internetSimilarityThreshold);
                 // Internet results require minimum similarity before being included in the final
                 // score. Snippet-based TF-IDF naturally tops out ~0.55 even for exact copy-paste,
@@ -102,19 +115,25 @@ public class RealtimeCheckService {
 
                     // Collect per-source scores to send back in the response
                     List<Double> perSnippet = textSimilarity.calculatePerSnippetSimilarities(
-                            request.getTextContent(), searchResults);
-                    for (int i = 0; i < searchResults.size(); i++) {
-                        double score = i < perSnippet.size() ? perSnippet.get(i) : 0.0;
-                        if (score >= internetSimilarityThreshold) {
-                            Map<String, String> sr = searchResults.get(i);
+                            request.getTextContent(), allSearchResults);
+                    for (int i = 0; i < allSearchResults.size(); i++) {
+                        Map<String, String> sr = allSearchResults.get(i);
+                        String domain = sr.getOrDefault("domain", "");
+                        String category = sr.getOrDefault("category", categorizeSource(domain));
+                        double rawScore = i < perSnippet.size() ? perSnippet.get(i) : 0.0;
+                        double displayScore = Math.round(rawScore * 1000.0) / 10.0;
+                        if (rawScore >= internetSimilarityThreshold) {
                             internetMatches.add(InternetMatchResponse.builder()
                                     .url(sr.getOrDefault("url", ""))
                                     .title(sr.getOrDefault("title", ""))
                                     .snippet(sr.getOrDefault("snippet", ""))
-                                    .similarityScore(Math.round(score * 1000.0) / 10.0)  // → 0-100, 1 dp
-                                    .sourceDomain(sr.getOrDefault("domain", ""))
+                                    .similarityScore(displayScore)
+                                    .sourceDomain(domain)
+                                    .sourceCategory(category)
+                                    .confidenceLevel(determineConfidence(displayScore))
+                                    .matchedStudentText(extractMatchedStudentText(request.getTextContent(), sr.getOrDefault("snippet", "")))
                                     .build());
-                            log.debug("[RealtimeCheck] Matched source: domain={} score={}", sr.get("domain"), score);
+                            log.debug("[RealtimeCheck] Matched source: domain={} score={}", domain, rawScore);
                         }
                     }
                 } else {
@@ -149,6 +168,7 @@ public class RealtimeCheckService {
                                     peerSim, peer.get("submissionId"));
                             maxSimilarity = peerSim;
                         }
+                        if (peerSim > peerSimilarityScore) peerSimilarityScore = peerSim;
                     }
                     log.info("[RealtimeCheck] After peer comparison maxSimilarity={}", maxSimilarity);
                 } else {
@@ -175,7 +195,8 @@ public class RealtimeCheckService {
             realtimeCheckRepository.save(check);
             log.debug("[RealtimeCheck] Saved record id={}", check.getId());
 
-            RealtimeCheckResponse response = buildResponse(request, maxSimilarity, flagged, internetMatches);
+            RealtimeCheckResponse response = buildResponse(request, maxSimilarity, flagged, internetMatches,
+                    internetSimilarityScore, peerSimilarityScore);
 
             if (flagged) {
                 log.warn("[RealtimeCheck] FLAGGED — sending WebSocket warning to session={}",
@@ -199,7 +220,9 @@ public class RealtimeCheckService {
             RealtimeCheckRequest request,
             double similarity,
             boolean flagged,
-            List<InternetMatchResponse> internetMatches) {
+            List<InternetMatchResponse> internetMatches,
+            double internetSimilarityScore,
+            double peerSimilarityScore) {
 
         String warningMessage = null;
         if (flagged) {
@@ -209,6 +232,9 @@ public class RealtimeCheckService {
                     similarity * 100
             );
         }
+
+        double riskScore = computeRiskScore(similarity, internetMatches.size(), flagged);
+        String riskLevel = riskScore >= 70 ? "HIGH" : riskScore >= 40 ? "MEDIUM" : riskScore > 5 ? "LOW" : "CLEAN";
 
         return RealtimeCheckResponse.builder()
                 .sessionId(request.getSessionId())
@@ -220,7 +246,106 @@ public class RealtimeCheckService {
                 .textLength(request.getTextContent().length())
                 .checkedAt(LocalDateTime.now())
                 .internetMatches(internetMatches)
+                .internetSimilarityScore(internetSimilarityScore)
+                .peerSimilarityScore(peerSimilarityScore)
+                .riskScore(riskScore)
+                .riskLevel(riskLevel)
                 .build();
+    }
+
+    /**
+     * Classify an internet source domain into a category.
+     */
+    private String categorizeSource(String domain) {
+        if (domain == null || domain.isBlank()) return "OTHER";
+        String d = domain.toLowerCase();
+        if (d.contains("scholar.google") || d.contains("researchgate") || d.contains("academia.edu")
+                || d.contains("springer") || d.contains("arxiv") || d.contains("pubmed")
+                || d.contains("ieee.org") || d.contains("jstor") || d.contains("nature.com")
+                || d.contains("sciencedirect") || d.contains("wiley.com") || d.contains("cambridge.org")
+                || d.contains("ncbi.nlm.nih") || d.contains("tandfonline") || d.contains("sagepub")
+                || d.contains("semanticscholar") || d.contains("acm.org")) {
+            return "ACADEMIC";
+        }
+        if (d.contains("wikipedia") || d.contains("britannica") || d.contains("encyclopedia")) {
+            return "ENCYCLOPEDIA";
+        }
+        if (d.endsWith(".gov") || d.contains(".gov.")) return "GOVERNMENT";
+        if (d.endsWith(".edu") || d.contains(".edu.")) return "EDUCATIONAL";
+        if (d.contains("bbc.") || d.contains("cnn.") || d.contains("reuters") || d.contains("theguardian")
+                || d.contains("nytimes") || d.contains("bloomberg") || d.contains("techcrunch")
+                || d.contains("wired.com") || d.contains("zdnet") || d.contains("techradar")) {
+            return "NEWS";
+        }
+        if (d.contains("medium.com") || d.contains("wordpress") || d.contains("blogger")
+                || d.contains("blogspot") || d.contains("substack") || d.contains("hashnode")) {
+            return "BLOG";
+        }
+        if (d.contains("stackoverflow") || d.contains("github.com") || d.contains("gitlab")
+                || d.contains("dev.to") || d.contains("hackernoon") || d.contains("geeksforgeeks")) {
+            return "TECH_COMMUNITY";
+        }
+        return "OTHER";
+    }
+
+    /**
+     * Determine confidence level for a similarity score (0-100 scale).
+     */
+    private String determineConfidence(double scorePercent) {
+        if (scorePercent >= 70) return "HIGH";
+        if (scorePercent >= 40) return "MEDIUM";
+        return "LOW";
+    }
+
+    /**
+     * Find the sentence in the student's text that best overlaps with the source snippet.
+     * Returns null if no meaningful overlap found (fewer than 3 keyword words in common).
+     */
+    private String extractMatchedStudentText(String studentText, String snippet) {
+        if (studentText == null || snippet == null || snippet.isBlank()) return null;
+
+        // Build keyword set from snippet (words longer than 4 chars)
+        String[] snippetWords = snippet.toLowerCase().split("\\W+");
+        Set<String> keyWords = new HashSet<>();
+        for (String word : snippetWords) {
+            if (word.length() > 4) keyWords.add(word);
+        }
+        if (keyWords.isEmpty()) return null;
+
+        // Split student text into sentences and find best-matching one
+        String[] sentences = studentText.split("[.!?]+\\s*");
+        String bestSentence = null;
+        int maxOverlap = 2; // minimum threshold
+
+        for (String sentence : sentences) {
+            String trimmed = sentence.trim();
+            if (trimmed.length() < 20) continue;
+            String[] sWords = trimmed.toLowerCase().split("\\W+");
+            int overlap = 0;
+            for (String word : sWords) {
+                if (keyWords.contains(word)) overlap++;
+            }
+            if (overlap > maxOverlap) {
+                maxOverlap = overlap;
+                bestSentence = trimmed;
+            }
+        }
+
+        if (bestSentence != null && bestSentence.length() > 250) {
+            bestSentence = bestSentence.substring(0, 250) + "…";
+        }
+        return bestSentence;
+    }
+
+    /**
+     * Compute an aggregate risk score 0-100.
+     * Base = maxSimilarity × 100, bonus up to +20 for multiple matched sources.
+     */
+    private double computeRiskScore(double maxSimilarity, int numMatches, boolean flagged) {
+        if (!flagged && maxSimilarity < 0.20) return 0.0;
+        double base = maxSimilarity * 100;
+        double matchBonus = Math.min(numMatches * 5.0, 20.0);
+        return Math.min(100.0, Math.round((base + matchBonus) * 10.0) / 10.0);
     }
 
     /**
