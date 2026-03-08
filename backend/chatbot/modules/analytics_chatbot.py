@@ -298,13 +298,16 @@ Format your response as a numbered list with clear, concise points."""
         task_map = {str(t["_id"]): t for t in tasks}
         project_marks_map = {str(p["_id"]): self._project_possible_marks(p) for p in projects}
         task_marks_map = {str(t["_id"]): self._task_possible_marks(t) for t in tasks}
+        latest_project_progress = {}
+        latest_task_progress = {}
 
         progress_dates = []
         completed_projects = 0
         completed_tasks = 0
         late_count = 0
-        total_possible_completed_marks = 0.0
-        total_earned_completed_marks = 0.0
+        total_possible_assigned_marks = 0.0
+        total_earned_assigned_marks = 0.0
+        assigned_score_values = []
         completion_score_events = []
         days_early_values = []
         worst_delay = 0.0
@@ -313,47 +316,73 @@ Format your response as a numbered list with clear, concise points."""
             project = project_map.get(p.get("projectId"))
             if not project:
                 continue
-            if p.get("updatedAt"):
-                progress_dates.append(p["updatedAt"])
-            if p.get("status") == "done":
-                completed_projects += 1
-                possible_marks = float(project_marks_map.get(p.get("projectId"), 0) or 0)
-                days_early = None
-                if project and project.get("deadlineDate") and p.get("updatedAt"):
-                    days_early = self._days_early(p["updatedAt"], project["deadlineDate"], project.get("deadlineTime"))
-                    if days_early is not None:
-                        days_early_values.append(days_early)
-                        if days_early < 0:
-                            late_count += 1
-                            worst_delay = min(worst_delay, days_early)
-                if possible_marks > 0 and p.get("updatedAt"):
-                    total_possible_completed_marks += possible_marks
-                    earned_marks = possible_marks if (days_early is None or days_early >= 0) else 0.0
-                    total_earned_completed_marks += earned_marks
-                    completion_score_events.append((p.get("updatedAt"), (earned_marks / possible_marks) * 100.0))
+            existing = latest_project_progress.get(p.get("projectId"))
+            if (not existing) or (p.get("updatedAt") and ((not existing.get("updatedAt")) or p.get("updatedAt") > existing.get("updatedAt"))):
+                latest_project_progress[p.get("projectId")] = p
 
         for t in task_progress:
             task = task_map.get(t.get("taskId"))
             if not task:
                 continue
-            if t.get("updatedAt"):
-                progress_dates.append(t["updatedAt"])
-            if t.get("status") == "done":
+            existing = latest_task_progress.get(t.get("taskId"))
+            if (not existing) or (t.get("updatedAt") and ((not existing.get("updatedAt")) or t.get("updatedAt") > existing.get("updatedAt"))):
+                latest_task_progress[t.get("taskId")] = t
+
+        for project in projects:
+            project_id = str(project.get("_id"))
+            progress = latest_project_progress.get(project_id)
+            possible_marks = float(project_marks_map.get(project_id, 0) or 0)
+            if progress and progress.get("updatedAt"):
+                progress_dates.append(progress.get("updatedAt"))
+
+            is_done = bool(progress and progress.get("status") == "done")
+            if is_done:
+                completed_projects += 1
+
+            days_early = None
+            if is_done and project.get("deadlineDate") and progress and progress.get("updatedAt"):
+                days_early = self._days_early(progress.get("updatedAt"), project.get("deadlineDate"), project.get("deadlineTime"))
+                if days_early is not None:
+                    days_early_values.append(days_early)
+                    if days_early < 0:
+                        late_count += 1
+                        worst_delay = min(worst_delay, days_early)
+
+            if possible_marks > 0:
+                total_possible_assigned_marks += possible_marks
+                earned_marks = possible_marks if (is_done and (days_early is None or days_early >= 0)) else 0.0
+                total_earned_assigned_marks += earned_marks
+                assigned_score_values.append((earned_marks / possible_marks) * 100.0)
+                if is_done and progress and progress.get("updatedAt"):
+                    completion_score_events.append((progress.get("updatedAt"), (earned_marks / possible_marks) * 100.0))
+
+        for task in tasks:
+            task_id = str(task.get("_id"))
+            progress = latest_task_progress.get(task_id)
+            possible_marks = float(task_marks_map.get(task_id, 0) or 0)
+            if progress and progress.get("updatedAt"):
+                progress_dates.append(progress.get("updatedAt"))
+
+            is_done = bool(progress and progress.get("status") == "done")
+            if is_done:
                 completed_tasks += 1
-                possible_marks = float(task_marks_map.get(t.get("taskId"), 0) or 0)
-                days_early = None
-                if task and task.get("deadlineDate") and t.get("updatedAt"):
-                    days_early = self._days_early(t["updatedAt"], task["deadlineDate"], task.get("deadlineTime"))
-                    if days_early is not None:
-                        days_early_values.append(days_early)
-                        if days_early < 0:
-                            late_count += 1
-                            worst_delay = min(worst_delay, days_early)
-                if possible_marks > 0 and t.get("updatedAt"):
-                    total_possible_completed_marks += possible_marks
-                    earned_marks = possible_marks if (days_early is None or days_early >= 0) else 0.0
-                    total_earned_completed_marks += earned_marks
-                    completion_score_events.append((t.get("updatedAt"), (earned_marks / possible_marks) * 100.0))
+
+            days_early = None
+            if is_done and task.get("deadlineDate") and progress and progress.get("updatedAt"):
+                days_early = self._days_early(progress.get("updatedAt"), task.get("deadlineDate"), task.get("deadlineTime"))
+                if days_early is not None:
+                    days_early_values.append(days_early)
+                    if days_early < 0:
+                        late_count += 1
+                        worst_delay = min(worst_delay, days_early)
+
+            if possible_marks > 0:
+                total_possible_assigned_marks += possible_marks
+                earned_marks = possible_marks if (is_done and (days_early is None or days_early >= 0)) else 0.0
+                total_earned_assigned_marks += earned_marks
+                assigned_score_values.append((earned_marks / possible_marks) * 100.0)
+                if is_done and progress and progress.get("updatedAt"):
+                    completion_score_events.append((progress.get("updatedAt"), (earned_marks / possible_marks) * 100.0))
 
         total_items = len(projects) + len(tasks)
         completion_rate = (completed_projects + completed_tasks) / total_items if total_items > 0 else 0
@@ -393,10 +422,10 @@ Format your response as a numbered list with clear, concise points."""
         engagement_regularity = clicks_std / avg_clicks_per_day if avg_clicks_per_day else 0
         completion_score_events.sort(key=lambda item: item[0] if isinstance(item[0], datetime) else datetime.min)
         completion_scores = [float(item[1]) for item in completion_score_events]
-        avg_score = (total_earned_completed_marks / total_possible_completed_marks * 100.0) if total_possible_completed_marks > 0 else 0.0
-        score_std = float(np.std(completion_scores)) if completion_scores else 0.0
-        min_score = float(min(completion_scores)) if completion_scores else 0.0
-        max_score = float(max(completion_scores)) if completion_scores else 0.0
+        avg_score = (total_earned_assigned_marks / total_possible_assigned_marks * 100.0) if total_possible_assigned_marks > 0 else 0.0
+        score_std = float(np.std(assigned_score_values)) if assigned_score_values else 0.0
+        min_score = float(min(assigned_score_values)) if assigned_score_values else 0.0
+        max_score = float(max(assigned_score_values)) if assigned_score_values else 0.0
         first_score = float(completion_scores[0]) if completion_scores else 0.0
         score_improvement = float(completion_scores[-1] - completion_scores[0]) if len(completion_scores) > 1 else 0.0
         avg_days_early = float(sum(days_early_values) / len(days_early_values)) if days_early_values else 0.0
@@ -727,7 +756,7 @@ What would you like to know about?"""
                 
                 # Enrich empty/zero metrics from activity-derived payload.
                 # This keeps project/task-based metrics available even when stored prediction is sparse.
-                if completion_rate <= 0 or engagement <= 0 or late_submission_count <= 0:
+                if completion_rate <= 0 or engagement <= 0 or late_submission_count <= 0 or avg_score <= 0:
                     try:
                         gender = self._map_gender(student.get("gender", "male"))
                         age_band = self._compute_age_band(student.get("dateOfBirth"))
@@ -740,6 +769,7 @@ What would you like to know about?"""
                         completion_rate = completion_rate if completion_rate > 0 else float(activity_payload.get("completion_rate", 0))
                         engagement = engagement if engagement > 0 else int(activity_payload.get("total_clicks", 0))
                         late_submission_count = late_submission_count if late_submission_count > 0 else int(activity_payload.get("late_submission_count", 0))
+                        avg_score = avg_score if avg_score > 0 else float(activity_payload.get("avg_score", 0))
                     except Exception:
                         pass
 

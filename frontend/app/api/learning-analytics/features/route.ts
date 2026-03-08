@@ -143,12 +143,15 @@ export async function GET(request: NextRequest) {
     const projectMarksMap = new Map(projects.map((p) => [p._id.toString(), projectPossibleMarks(p)]));
     const taskMarksMap = new Map(tasks.map((t) => [t._id.toString(), taskPossibleMarks(t)]));
 
+    const latestProjectProgress = new Map<string, any>();
+    const latestTaskProgress = new Map<string, any>();
     const progressDates: Date[] = [];
     let completedProjects = 0;
     let completedTasks = 0;
     let lateTaskOrProjectCount = 0;
-    let totalPossibleCompletedMarks = 0;
-    let totalEarnedCompletedMarks = 0;
+    let totalPossibleAssignedMarks = 0;
+    let totalEarnedAssignedMarks = 0;
+    const assignedScoreValues: number[] = [];
     const completionScores: Array<{ score: number; completedAt: Date }> = [];
     const daysEarlyValues: number[] = [];
     let worstDelay = 0;
@@ -156,60 +159,86 @@ export async function GET(request: NextRequest) {
     for (const p of projectProgress) {
       const project = projectMap.get(p.projectId);
       if (!project) continue;
-      if (p.updatedAt) progressDates.push(new Date(p.updatedAt));
-      if (p.status === 'done') {
-        completedProjects++;
-        const possibleMarks = safeNumber(projectMarksMap.get(p.projectId), 0);
-        let daysEarly: number | null = null;
-        if (project?.deadlineDate && p.updatedAt) {
-          daysEarly = calcDaysEarly(p.updatedAt.toISOString(), project.deadlineDate, project.deadlineTime);
-          if (daysEarly !== null) {
-            daysEarlyValues.push(daysEarly);
-            if (daysEarly < 0) {
-              lateTaskOrProjectCount++;
-              worstDelay = Math.min(worstDelay, daysEarly);
-            }
-          }
-        }
-
-        if (possibleMarks > 0 && p.updatedAt) {
-          totalPossibleCompletedMarks += possibleMarks;
-          const earnedMarks = daysEarly === null || daysEarly >= 0 ? possibleMarks : 0;
-          totalEarnedCompletedMarks += earnedMarks;
-          completionScores.push({
-            score: (earnedMarks / possibleMarks) * 100,
-            completedAt: new Date(p.updatedAt),
-          });
-        }
+      const existing = latestProjectProgress.get(p.projectId);
+      if (!existing || (p.updatedAt && (!existing.updatedAt || new Date(p.updatedAt).getTime() > new Date(existing.updatedAt).getTime()))) {
+        latestProjectProgress.set(p.projectId, p);
       }
     }
 
     for (const t of taskProgress) {
       const task = taskMap.get(t.taskId);
       if (!task) continue;
-      if (t.updatedAt) progressDates.push(new Date(t.updatedAt));
-      if (t.status === 'done') {
-        completedTasks++;
-        const possibleMarks = safeNumber(taskMarksMap.get(t.taskId), 0);
-        let daysEarly: number | null = null;
-        if (task?.deadlineDate && t.updatedAt) {
-          daysEarly = calcDaysEarly(t.updatedAt.toISOString(), task.deadlineDate, task.deadlineTime);
-          if (daysEarly !== null) {
-            daysEarlyValues.push(daysEarly);
-            if (daysEarly < 0) {
-              lateTaskOrProjectCount++;
-              worstDelay = Math.min(worstDelay, daysEarly);
-            }
+      const existing = latestTaskProgress.get(t.taskId);
+      if (!existing || (t.updatedAt && (!existing.updatedAt || new Date(t.updatedAt).getTime() > new Date(existing.updatedAt).getTime()))) {
+        latestTaskProgress.set(t.taskId, t);
+      }
+    }
+
+    for (const project of projects) {
+      const projectId = project._id.toString();
+      const progress = latestProjectProgress.get(projectId);
+      const possibleMarks = safeNumber(projectMarksMap.get(projectId), 0);
+      if (progress?.updatedAt) progressDates.push(new Date(progress.updatedAt));
+
+      const isDone = progress?.status === 'done';
+      if (isDone) completedProjects++;
+
+      let daysEarly: number | null = null;
+      if (isDone && project.deadlineDate && progress?.updatedAt) {
+        daysEarly = calcDaysEarly(progress.updatedAt.toISOString(), project.deadlineDate, project.deadlineTime);
+        if (daysEarly !== null) {
+          daysEarlyValues.push(daysEarly);
+          if (daysEarly < 0) {
+            lateTaskOrProjectCount++;
+            worstDelay = Math.min(worstDelay, daysEarly);
           }
         }
+      }
 
-        if (possibleMarks > 0 && t.updatedAt) {
-          totalPossibleCompletedMarks += possibleMarks;
-          const earnedMarks = daysEarly === null || daysEarly >= 0 ? possibleMarks : 0;
-          totalEarnedCompletedMarks += earnedMarks;
+      if (possibleMarks > 0) {
+        totalPossibleAssignedMarks += possibleMarks;
+        const earnedMarks = isDone && (daysEarly === null || daysEarly >= 0) ? possibleMarks : 0;
+        totalEarnedAssignedMarks += earnedMarks;
+        assignedScoreValues.push((earnedMarks / possibleMarks) * 100);
+        if (isDone && progress?.updatedAt) {
           completionScores.push({
             score: (earnedMarks / possibleMarks) * 100,
-            completedAt: new Date(t.updatedAt),
+            completedAt: new Date(progress.updatedAt),
+          });
+        }
+      }
+    }
+
+    for (const task of tasks) {
+      const taskId = task._id.toString();
+      const progress = latestTaskProgress.get(taskId);
+      const possibleMarks = safeNumber(taskMarksMap.get(taskId), 0);
+      if (progress?.updatedAt) progressDates.push(new Date(progress.updatedAt));
+
+      const isDone = progress?.status === 'done';
+      if (isDone) completedTasks++;
+
+      let daysEarly: number | null = null;
+      if (isDone && task.deadlineDate && progress?.updatedAt) {
+        daysEarly = calcDaysEarly(progress.updatedAt.toISOString(), task.deadlineDate, task.deadlineTime);
+        if (daysEarly !== null) {
+          daysEarlyValues.push(daysEarly);
+          if (daysEarly < 0) {
+            lateTaskOrProjectCount++;
+            worstDelay = Math.min(worstDelay, daysEarly);
+          }
+        }
+      }
+
+      if (possibleMarks > 0) {
+        totalPossibleAssignedMarks += possibleMarks;
+        const earnedMarks = isDone && (daysEarly === null || daysEarly >= 0) ? possibleMarks : 0;
+        totalEarnedAssignedMarks += earnedMarks;
+        assignedScoreValues.push((earnedMarks / possibleMarks) * 100);
+        if (isDone && progress?.updatedAt) {
+          completionScores.push({
+            score: (earnedMarks / possibleMarks) * 100,
+            completedAt: new Date(progress.updatedAt),
           });
         }
       }
@@ -269,12 +298,12 @@ export async function GET(request: NextRequest) {
 
     completionScores.sort((a, b) => a.completedAt.getTime() - b.completedAt.getTime());
     const scoreValues = completionScores.map((entry) => entry.score);
-    const avgScore = totalPossibleCompletedMarks > 0
-      ? (totalEarnedCompletedMarks / totalPossibleCompletedMarks) * 100
+    const avgScore = totalPossibleAssignedMarks > 0
+      ? (totalEarnedAssignedMarks / totalPossibleAssignedMarks) * 100
       : 0;
-    const scoreStd = stdDev(scoreValues);
-    const minScore = scoreValues.length > 0 ? Math.min(...scoreValues) : 0;
-    const maxScore = scoreValues.length > 0 ? Math.max(...scoreValues) : 0;
+    const scoreStd = stdDev(assignedScoreValues);
+    const minScore = assignedScoreValues.length > 0 ? Math.min(...assignedScoreValues) : 0;
+    const maxScore = assignedScoreValues.length > 0 ? Math.max(...assignedScoreValues) : 0;
     const firstScore = scoreValues.length > 0 ? scoreValues[0] : 0;
     const scoreImprovement = scoreValues.length > 1 ? scoreValues[scoreValues.length - 1] - scoreValues[0] : 0;
     const completionRate = taskCompletionRate;
