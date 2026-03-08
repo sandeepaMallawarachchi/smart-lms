@@ -11,9 +11,10 @@ from src.models.anomaly import AnomalyDetector
 from src.utils.formatter import map_to_level, adaptive_thresholds
 
 app = Flask(__name__)
+cors_origins = [origin.strip() for origin in os.getenv('CORS_ORIGINS', '*').split(',') if origin.strip()]
 CORS(app, resources={
     r"/*": {
-        "origins": ["http://localhost:3000", "http://localhost:3001"],
+        "origins": cors_origins,
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True
