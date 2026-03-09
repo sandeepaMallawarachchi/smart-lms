@@ -252,9 +252,12 @@ public class AnswerService {
                 .plagiarismSeverity(a.getPlagiarismSeverity())
                 .plagiarismFlagged(a.getPlagiarismFlagged())
                 .plagiarismCheckedAt(a.getPlagiarismCheckedAt() != null ? a.getPlagiarismCheckedAt().toString() : null)
-                // Lecturer per-question grading
+                // Lecturer per-question grading (post-deadline overrides)
+                .aiGeneratedMark(a.getAiGeneratedMark())
                 .lecturerMark(a.getLecturerMark())
                 .lecturerFeedbackText(a.getLecturerFeedbackText())
+                .lecturerUpdatedAt(a.getLecturerUpdatedAt() != null ? a.getLecturerUpdatedAt().toString() : null)
+                .lecturerUpdatedBy(a.getLecturerUpdatedBy())
                 .build();
     }
 

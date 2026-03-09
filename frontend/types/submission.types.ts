@@ -93,60 +93,117 @@ export interface UpdateSubmissionPayload {
     title?: string;
 }
 
-export interface GradeSubmissionPayload {
-    grade: number;
-    lecturerFeedback: string;
-    questionScores?: Record<string, number>;
+// ─── New Versioning System (text-based, immutable snapshots) ──────────────────
+
+/**
+ * A detailed internet plagiarism source match saved for one answer in one version.
+ * Written by the frontend after a plagiarism check completes.
+ */
+export interface VersionPlagiarismSource {
+    id: string;
+    sourceUrl: string;
+    sourceTitle?: string;
+    sourceSnippet?: string;
+    matchedText?: string;
+    similarityPercentage: number;
+    detectedAt?: string;       // ISO-8601
 }
 
-// ─── Version ─────────────────────────────────────────────────
+/**
+ * Frozen snapshot of one question's answer at a specific version.
+ * AI fields are immutable once created.
+ * Lecturer fields (lecturerMark, lecturerFeedbackText) may be non-null only on the LATEST version.
+ */
+export interface VersionAnswer {
+    id: string;
+    versionId: string;
+    questionId: string;
+    questionText?: string;
+    answerText?: string;
+    wordCount?: number;
+    characterCount?: number;
 
-export interface VersionFile {
-    fileName: string;
-    fileSize: number;
-    fileType: string;
-    fileUrl: string;
-    changes?: string;   // e.g. "+45 -12" or "new file"
+    // AI feedback (frozen at submit time)
+    grammarScore?: number | null;
+    clarityScore?: number | null;
+    completenessScore?: number | null;
+    relevanceScore?: number | null;
+    strengths?: string[] | null;
+    improvements?: string[] | null;
+    suggestions?: string[] | null;
+    /** AI-suggested mark 0-10. Null if AI had no scores at submit time. */
+    aiGeneratedMark?: number | null;
+
+    // Plagiarism summary (frozen at submit time)
+    similarityScore?: number | null;
+    plagiarismSeverity?: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+    plagiarismFlagged?: boolean | null;
+    plagiarismCheckedAt?: string | null;
+    plagiarismSources?: VersionPlagiarismSource[];
+
+    // Lecturer override (post-deadline, latest version only)
+    lecturerMark?: number | null;
+    lecturerFeedbackText?: string | null;
+    lecturerUpdatedAt?: string | null;
+    lecturerUpdatedBy?: string | null;
+
+    snapshotCreatedAt?: string;
 }
 
+/**
+ * Immutable version header + all answer snapshots.
+ * One row is created for every Submit / Resubmit action.
+ * Version 1 = first submit, Version 2 = first resubmit, etc.
+ */
 export interface SubmissionVersion {
     id: string;
     submissionId: string;
     versionNumber: number;
-    files: VersionFile[];
-    wordCount: number;
-    plagiarismScore: number;
-    aiScore: number;
-    changes?: string;        // human-readable description
+    studentId?: string;
+    submittedAt: string;       // ISO-8601
+    isLate?: boolean;
+
+    // Aggregate metrics (frozen at submit time)
+    aiScore?: number;
+    plagiarismScore?: number;
+    totalWordCount?: number;
+    /** AI-computed grade at submit time. Never changes. */
+    aiGrade?: number;
+    maxGrade?: number;
+
+    /** Effective grade: lecturerFinalGrade if override exists, else aiGrade. */
+    finalGrade?: number;
+    /** True if any question has a lecturer override on this version. */
+    hasLecturerOverride?: boolean;
+
     commitMessage?: string;
     createdAt: string;
-    isSubmitted: boolean;
-    aiFeedback?: string;
-    plagiarismDetails?: string;
-    metadata?: Record<string, unknown>;
+
+    /** Populated for detail view; null/undefined for list view. */
+    answers?: VersionAnswer[];
 }
 
-export interface VersionComparison {
-    versionA: SubmissionVersion;
-    versionB: SubmissionVersion;
-    diffs: FileDiff[];
-    wordCountChange: number;
-    aiScoreChange: number;
-    plagiarismChange: number;
+/** Payload for saving detailed plagiarism sources after a submit. */
+export interface SavePlagiarismSourcesPayload {
+    sources: Array<{
+        sourceUrl: string;
+        sourceTitle?: string;
+        sourceSnippet?: string;
+        matchedText?: string;
+        similarityPercentage: number;
+        detectedAt?: string;
+    }>;
 }
 
-export interface FileDiff {
-    fileName: string;
-    additions: number;
-    deletions: number;
-    hunks: DiffHunk[];
+export interface GradeSubmissionPayload {
+    grade: number;
+    lecturerFeedback: string;
+    questionScores?: Record<string, number>;
+    questionFeedbacks?: Record<string, string>;
+    lecturerId?: string;
 }
 
-export interface DiffHunk {
-    oldStart: number;
-    newStart: number;
-    lines: DiffLine[];
-}
+// ─── Version text diff (for compare view) ─────────────────────
 
 export interface DiffLine {
     type: 'add' | 'remove' | 'context';

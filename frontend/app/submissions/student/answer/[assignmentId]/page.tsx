@@ -28,7 +28,10 @@
 
 import { useState, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { submissionService, getAssignmentWithFallback } from '@/lib/api/submission-services';
+import {
+    submissionService,
+    getAssignmentWithFallback,
+} from '@/lib/api/submission-services';
 import { QuestionCard } from '@/components/submissions/QuestionCard';
 import type { AssignmentWithQuestions, TextAnswer, LiveFeedback, LivePlagiarismResult } from '@/types/submission.types';
 
@@ -150,10 +153,8 @@ export default function AnswerPage({
 
     // ── Core state ────────────────────────────────────────────
     const [studentId, setStudentId]           = useState<string>('');
-    const [studentName, setStudentName]       = useState<string>('Student');
     const [assignment, setAssignment]         = useState<AssignmentWithQuestions | null>(null);
     const [submissionId, setSubmissionId]     = useState<string>('');
-    const [savedAnswers, setSavedAnswers]     = useState<TextAnswer[]>([]);
     const [answerMap, setAnswerMap]           = useState<Record<string, string>>({});
     const [feedbackMap, setFeedbackMap]       = useState<Record<string, LiveFeedback | null>>({});
     const [plagiarismMap, setPlagiarismMap]   = useState<Record<string, LivePlagiarismResult | null>>({});
@@ -173,7 +174,6 @@ export default function AnswerPage({
         const sid = getStudentId();
         const sName = getStudentName();
         setStudentId(sid);
-        setStudentName(sName);
 
         async function load() {
             try {
@@ -228,8 +228,6 @@ export default function AnswerPage({
                 // 3. Pre-load saved answers (+ their persisted feedback/plagiarism)
                 try {
                     const answers = await submissionService.getAnswers(draft.id);
-
-                    setSavedAnswers(answers);
 
                     const textMap:  Record<string, string>                    = {};
                     const fbMap:    Record<string, LiveFeedback | null>        = {};
@@ -319,7 +317,10 @@ export default function AnswerPage({
             setSubmitDone(true);
             setShowConfirm(false);
             console.debug('[AnswerPage] Submit SUCCESS — submissionId:', submissionId, '| versionNumber:', versionNumber);
-            // Text snapshot is now created server-side by submitSubmission — no client call needed.
+
+            // The backend creates the version snapshot atomically in the same transaction
+            // as submitSubmission — no frontend fallback needed.
+            console.debug('[AnswerPage] Server-side snapshot created — v', versionNumber);
 
             // Short delay so the user sees the success state before redirect.
             setTimeout(() => {

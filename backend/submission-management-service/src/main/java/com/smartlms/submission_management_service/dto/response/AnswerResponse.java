@@ -65,9 +65,21 @@ public class AnswerResponse {
 
     // ── Lecturer per-question grading ─────────────────────────────────────────
 
-    /** Numeric mark assigned by the lecturer for this specific question. */
+    /**
+     * AI-suggested mark on the 0–10 scale. Computed at submit time; immutable.
+     * Null if AI scores were not available when the submission was made.
+     */
+    private Double aiGeneratedMark;
+
+    /** Lecturer-set mark for this question (after deadline). Null until overridden. */
     private Double lecturerMark;
 
-    /** Targeted feedback from the lecturer for this specific question. */
+    /** Lecturer feedback for this question (after deadline). Null until overridden. */
     private String lecturerFeedbackText;
+
+    /** ISO-8601 timestamp of when the lecturer last updated this question. Null until overridden. */
+    private String lecturerUpdatedAt;
+
+    /** lecturerId who last updated this question's mark/feedback. Null until overridden. */
+    private String lecturerUpdatedBy;
 }

@@ -130,11 +130,27 @@ public class Answer {
 
     // ── Lecturer per-question grading ─────────────────────────────────────────
 
-    /** Numeric mark assigned by the lecturer for this specific question. */
+    /**
+     * AI-suggested mark for this question (0–maxPoints scale, where maxPoints defaults to 10).
+     * Computed at submit time as: avg(grammarScore, clarityScore, completenessScore, relevanceScore).
+     * Immutable after submit — not overwritten by later operations.
+     */
+    @Column(name = "ai_generated_mark")
+    private Double aiGeneratedMark;
+
+    /** Numeric mark assigned by the lecturer for this specific question (after deadline). */
     @Column(name = "lecturer_mark")
     private Double lecturerMark;
 
-    /** Targeted feedback from the lecturer for this specific question. */
+    /** Targeted feedback from the lecturer for this specific question (after deadline). */
     @Column(name = "lecturer_feedback_text", columnDefinition = "TEXT")
     private String lecturerFeedbackText;
+
+    /** When the lecturer last updated the mark or feedback for this question. */
+    @Column(name = "lecturer_updated_at")
+    private LocalDateTime lecturerUpdatedAt;
+
+    /** Who (lecturerId) last updated the mark or feedback for this question. */
+    @Column(name = "lecturer_updated_by", length = 100)
+    private String lecturerUpdatedBy;
 }

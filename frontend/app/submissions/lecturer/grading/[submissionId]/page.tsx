@@ -4,7 +4,6 @@ import React, { useState, use, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     ArrowLeft,
-    Save,
     Send,
     Star,
     Edit,
@@ -20,194 +19,304 @@ import {
     RefreshCw,
     AlertCircle,
     CheckCircle2,
+    Lock,
+    Unlock,
+    Info,
 } from 'lucide-react';
 import { useSubmission, useGradeSubmission } from '@/hooks/useSubmissions';
-import { useFeedback } from '@/hooks/useFeedback';
-import { submissionService, getAssignmentWithFallback } from '@/lib/api/submission-services';
-import type { AssignmentWithQuestions, Feedback, Question, TextAnswer } from '@/types/submission.types';
+import { getAssignmentWithFallback } from '@/lib/api/submission-services';
+import { useLatestVersion } from '@/hooks/useVersions';
+import type { AssignmentWithQuestions, Question } from '@/types/submission.types';
 
-// ─── Types for per-question grading ──────────────────────────
+// ─── Types ─────────────────────────────────────────────────────
 
-interface QuestionAnswer {
+interface QuestionGradeState {
     questionId: string;
-    text: string;
-    wordCount: number;
+    /** AI-suggested mark scaled to maxMarks (from aiGeneratedMark 0–10). */
+    aiMark: number;
+    /** Lecturer-set mark. Null until lecturer overrides post-deadline. */
+    lecturerMark: number | null;
+    /** AI feedback summary from stored bullets. */
     aiFeedback: string;
-    aiScore: number;
-    lecturerFeedback: string;
-    lecturerScore?: number;
+    /** Lecturer feedback. Null until lecturer overrides. */
+    lecturerFeedback: string | null;
     maxMarks: number;
+    /** Audit trail from backend. */
+    lecturerUpdatedBy: string | null;
+    lecturerUpdatedAt: string | null;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────
 
 function formatDate(dateStr: string | null | undefined) {
     if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleDateString('en-US', {
-        month: 'short', day: 'numeric',
+    return new Date(dateStr).toLocaleString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
     });
 }
 
-// ─── Sub-components ──────────────────────────────────────────
+function getLetterGrade(pct: number) {
+    if (pct >= 90) return 'A+';
+    if (pct >= 80) return 'A';
+    if (pct >= 70) return 'B';
+    if (pct >= 60) return 'C';
+    if (pct >= 50) return 'D';
+    return 'F';
+}
 
-function FeedbackBlock({
-    questionKey,
-    answer,
-    questionMarks,
-    isEditing,
-    isGenerating,
-    onEdit,
-    onSave,
-    onCancel,
-    onRegenerate,
-    tempFeedback,
-    setTempFeedback,
-    tempScore,
-    setTempScore,
+function getLecturerId(): string {
+    try {
+        const token = localStorage.getItem('authToken') ?? '';
+        if (!token) return 'unknown';
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return String(payload.userId ?? payload.sub ?? 'unknown');
+    } catch {
+        return 'unknown';
+    }
+}
+
+// ─── Read-only question card (pre-deadline) ─────────────────────
+
+function ReadOnlyQuestionCard({
+    idx,
+    question,
+    state,
     studentAnswerText,
 }: {
-    questionKey: string;
-    answer: QuestionAnswer;
-    questionMarks: number;
-    isEditing: boolean;
-    isGenerating: boolean;
-    onEdit: () => void;
-    onSave: () => void;
-    onCancel: () => void;
-    onRegenerate: () => void;
-    tempFeedback: string;
-    setTempFeedback: (v: string) => void;
-    tempScore: number | undefined;
-    setTempScore: (v: number) => void;
-    /** Student's typed text answer for this question (from submission-management-service). */
+    idx: number;
+    question: Question;
+    state: QuestionGradeState;
     studentAnswerText?: string;
 }) {
-    const isModified = !!answer.lecturerFeedback;
-    const displayFeedback = answer.lecturerFeedback || answer.aiFeedback;
-    const displayScore = answer.lecturerScore ?? answer.aiScore;
-
-    // ── Student's typed answer box ─────────────────────────
-    const studentAnswerBox = (
-        <div className="mb-4">
-            <p className="text-xs font-semibold text-gray-600 mb-1.5 flex items-center gap-1">
-                <FileText size={13} className="text-gray-400" />
-                Student&apos;s Answer
-            </p>
-            {studentAnswerText && studentAnswerText.trim() ? (
-                <>
-                    <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
-                        {studentAnswerText}
-                    </div>
-                    <p className="mt-1 text-xs text-gray-400">
-                        {studentAnswerText.trim().split(/\s+/).length} words
-                    </p>
-                </>
-            ) : (
-                <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-400 italic">
-                    No answer provided
-                </div>
-            )}
-        </div>
-    );
-
-    if (isEditing) {
-        return (
-            <div className="space-y-3">
-                {studentAnswerBox}
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Your Feedback:
-                    </label>
-                    <textarea
-                        value={tempFeedback}
-                        onChange={e => setTempFeedback(e.target.value)}
-                        rows={4}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="Enter your feedback..."
-                    />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Score (out of {questionMarks}):
-                    </label>
-                    <input
-                        type="number"
-                        value={tempScore ?? ''}
-                        onChange={e => setTempScore(Number(e.target.value))}
-                        min={0}
-                        max={questionMarks}
-                        step={0.5}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                </div>
-                <div className="flex gap-2">
-                    <button
-                        onClick={onSave}
-                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm cursor-pointer"
-                    >
-                        <Check size={16} /> Save
-                    </button>
-                    <button
-                        onClick={onCancel}
-                        className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium flex items-center justify-center gap-2 text-sm cursor-pointer"
-                    >
-                        <X size={16} /> Cancel
-                    </button>
-                </div>
-            </div>
-        );
-    }
+    const displayMark = state.lecturerMark ?? state.aiMark;
+    const isOverridden = state.lecturerMark != null;
 
     return (
-        <div>
-            {studentAnswerBox}
-            <div className={`p-4 rounded-lg border-l-4 ${
-                isModified ? 'bg-blue-50 border-blue-500' : 'bg-purple-50 border-purple-500'
-            }`}>
-                <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                        {isModified
-                            ? <Edit className="text-blue-600" size={18} />
-                            : <Sparkles className="text-purple-600" size={18} />
-                        }
-                        <span className="font-medium text-sm">
-                            {isModified ? 'Your Feedback' : 'AI-Generated Feedback'}
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-xl font-bold text-gray-900">{displayScore}/{questionMarks}</span>
-                    </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-100">
+                <div className="flex-1">
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">
+                        Question {idx + 1}
+                        <span className="ml-2 text-sm font-normal text-gray-500">({state.maxMarks} marks)</span>
+                    </h3>
+                    <p className="text-gray-700">{question.text}</p>
                 </div>
-                <p className="text-sm text-gray-700">{displayFeedback}</p>
+                <div className={`ml-4 flex-shrink-0 px-4 py-2 rounded-xl font-bold text-lg ${
+                    isOverridden ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                }`}>
+                    {displayMark}/{state.maxMarks}
+                </div>
             </div>
 
-            <div className="flex gap-2 mt-3">
-                <button
-                    onClick={onEdit}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm cursor-pointer"
-                >
-                    <Edit size={16} />
-                    {isModified ? 'Edit Feedback' : 'Modify AI Feedback'}
-                </button>
-                {!isModified && (
-                    <button
-                        onClick={onRegenerate}
-                        disabled={isGenerating}
-                        className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors font-medium flex items-center gap-2 text-sm disabled:opacity-50 cursor-pointer"
-                    >
-                        <RefreshCw size={16} className={isGenerating ? 'animate-spin' : ''} />
-                        Regenerate
-                    </button>
+            {/* Student answer */}
+            <div className="mb-4">
+                <p className="text-xs font-semibold text-gray-500 mb-1.5 flex items-center gap-1">
+                    <FileText size={13} className="text-gray-400" /> Student&apos;s Answer
+                </p>
+                {studentAnswerText?.trim() ? (
+                    <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+                        {studentAnswerText}
+                    </div>
+                ) : (
+                    <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-400 italic">
+                        No answer provided
+                    </div>
+                )}
+            </div>
+
+            {/* AI mark */}
+            <div className="flex gap-3">
+                <div className="flex-1 rounded-lg bg-purple-50 border border-purple-100 px-4 py-3">
+                    <div className="flex items-center gap-1.5 mb-1">
+                        <Sparkles size={14} className="text-purple-600" />
+                        <span className="text-xs font-semibold text-purple-700">AI Generated Mark</span>
+                    </div>
+                    <p className="text-xl font-bold text-purple-900">{state.aiMark}/{state.maxMarks}</p>
+                    <p className="text-xs text-purple-600 mt-0.5 line-clamp-2">{state.aiFeedback}</p>
+                </div>
+
+                {isOverridden && (
+                    <div className="flex-1 rounded-lg bg-blue-50 border border-blue-100 px-4 py-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                            <Edit size={14} className="text-blue-600" />
+                            <span className="text-xs font-semibold text-blue-700">Lecturer Override</span>
+                        </div>
+                        <p className="text-xl font-bold text-blue-900">{state.lecturerMark}/{state.maxMarks}</p>
+                        {state.lecturerFeedback && (
+                            <p className="text-xs text-blue-600 mt-0.5 line-clamp-2">{state.lecturerFeedback}</p>
+                        )}
+                        {state.lecturerUpdatedBy && (
+                            <p className="text-xs text-gray-400 mt-1">
+                                by {state.lecturerUpdatedBy} · {formatDate(state.lecturerUpdatedAt)}
+                            </p>
+                        )}
+                    </div>
                 )}
             </div>
         </div>
     );
 }
 
-// ─── Page ─────────────────────────────────────────────────────
+// ─── Editable question card (post-deadline) ─────────────────────
 
-export default function LecturerGradingInterfacePage({
+function EditableQuestionCard({
+    idx,
+    question,
+    state,
+    studentAnswerText,
+    onSave,
+}: {
+    idx: number;
+    question: Question;
+    state: QuestionGradeState;
+    studentAnswerText?: string;
+    onSave: (questionId: string, mark: number, feedback: string) => void;
+}) {
+    const [isEditing, setIsEditing] = useState(false);
+    const [tempMark, setTempMark] = useState<number>(state.lecturerMark ?? state.aiMark);
+    const [tempFeedback, setTempFeedback] = useState<string>(state.lecturerFeedback ?? state.aiFeedback);
+
+    const displayMark = state.lecturerMark ?? state.aiMark;
+    const isOverridden = state.lecturerMark != null;
+
+    const handleEdit = () => {
+        setTempMark(state.lecturerMark ?? state.aiMark);
+        setTempFeedback(state.lecturerFeedback ?? state.aiFeedback);
+        setIsEditing(true);
+    };
+
+    const handleSave = () => {
+        const clamped = Math.min(Math.max(tempMark, 0), state.maxMarks);
+        onSave(state.questionId, clamped, tempFeedback);
+        setIsEditing(false);
+    };
+
+    return (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-100">
+                <div className="flex-1">
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">
+                        Question {idx + 1}
+                        <span className="ml-2 text-sm font-normal text-gray-500">({state.maxMarks} marks)</span>
+                    </h3>
+                    <p className="text-gray-700">{question.text}</p>
+                </div>
+                <div className={`ml-4 flex-shrink-0 px-4 py-2 rounded-xl font-bold text-lg ${
+                    isOverridden ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                }`}>
+                    {displayMark}/{state.maxMarks}
+                </div>
+            </div>
+
+            {/* Student answer */}
+            <div className="mb-4">
+                <p className="text-xs font-semibold text-gray-500 mb-1.5 flex items-center gap-1">
+                    <FileText size={13} className="text-gray-400" /> Student&apos;s Answer
+                </p>
+                {studentAnswerText?.trim() ? (
+                    <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+                        {studentAnswerText}
+                    </div>
+                ) : (
+                    <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-400 italic">
+                        No answer provided
+                    </div>
+                )}
+            </div>
+
+            {/* AI mark — always shown, never hidden */}
+            <div className="rounded-lg bg-purple-50 border border-purple-100 px-4 py-3 mb-3">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                        <Sparkles size={14} className="text-purple-600" />
+                        <span className="text-xs font-semibold text-purple-700">AI Generated Mark</span>
+                        <span className="text-xs text-purple-400">(original — immutable)</span>
+                    </div>
+                    <span className="font-bold text-purple-900">{state.aiMark}/{state.maxMarks}</span>
+                </div>
+                <p className="text-xs text-purple-600 mt-1.5 line-clamp-3">{state.aiFeedback}</p>
+            </div>
+
+            {/* Lecturer override */}
+            {isEditing ? (
+                <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-4">
+                    <p className="text-sm font-semibold text-blue-800 flex items-center gap-1.5">
+                        <Edit size={14} /> Override Mark &amp; Feedback
+                    </p>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Mark (0 – {state.maxMarks}):
+                        </label>
+                        <input
+                            type="number"
+                            value={tempMark}
+                            onChange={e => setTempMark(Number(e.target.value))}
+                            min={0} max={state.maxMarks} step={0.5}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Feedback:</label>
+                        <textarea
+                            value={tempFeedback}
+                            onChange={e => setTempFeedback(e.target.value)}
+                            rows={3}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleSave}
+                            className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                            <Check size={15} /> Save Override
+                        </button>
+                        <button
+                            onClick={() => setIsEditing(false)}
+                            className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-medium flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                            <X size={15} /> Cancel
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <>
+                    {isOverridden && (
+                        <div className="rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 mb-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                    <Edit size={14} className="text-blue-600" />
+                                    <span className="text-xs font-semibold text-blue-700">Lecturer Override</span>
+                                </div>
+                                <span className="font-bold text-blue-900">{state.lecturerMark}/{state.maxMarks}</span>
+                            </div>
+                            {state.lecturerFeedback && (
+                                <p className="text-xs text-blue-600 mt-1.5 line-clamp-3">{state.lecturerFeedback}</p>
+                            )}
+                            {state.lecturerUpdatedBy && (
+                                <p className="text-xs text-gray-400 mt-1">
+                                    by {state.lecturerUpdatedBy} · {formatDate(state.lecturerUpdatedAt)}
+                                </p>
+                            )}
+                        </div>
+                    )}
+                    <button
+                        onClick={handleEdit}
+                        className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                        <Edit size={15} />
+                        {isOverridden ? 'Edit Override' : 'Override AI Mark & Feedback'}
+                    </button>
+                </>
+            )}
+        </div>
+    );
+}
+
+// ─── Page ───────────────────────────────────────────────────────
+
+export default function LecturerGradingPage({
     params,
 }: {
     params: Promise<{ submissionId: string }>;
@@ -215,433 +324,436 @@ export default function LecturerGradingInterfacePage({
     const { submissionId } = use(params);
     const router = useRouter();
 
-    // API hooks
     const { data: submission, loading: subLoading } = useSubmission(submissionId);
-    const { data: feedback, loading: fbLoading } = useFeedback(submissionId);
-    const {
-        loading: grading,
-        error: gradeError,
-        success: gradeSuccess,
-        gradeSubmission,
-    } = useGradeSubmission();
+    const { data: latestVersion, loading: versionLoading } = useLatestVersion(submissionId);
+    const { loading: grading, error: gradeError, success: gradeSuccess, gradeSubmission } = useGradeSubmission();
 
-    // Local grading state
-    const [answers, setAnswers]             = useState<Record<string, QuestionAnswer>>({});
-    const [editingKey, setEditingKey]       = useState<string | null>(null);
-    const [tempFeedback, setTempFeedback]   = useState('');
-    const [tempScore, setTempScore]         = useState<number | undefined>();
-    const [overallComment, setOverallComment] = useState('');
-    const [isGeneratingAI, setIsGeneratingAI] = useState(false);
-    const [submitted, setSubmitted]         = useState(false);
+    const [questionStates, setQuestionStates] = useState<Record<string, QuestionGradeState>>({});
+    const [overallComment, setOverallComment]   = useState('');
+    const [apiQuestions, setApiQuestions]       = useState<Question[] | null>(null);
+    const [submitDone, setSubmitDone]           = useState(false);
 
-    // Text answers and assignment questions
-    const [textAnswers, setTextAnswers]     = useState<TextAnswer[]>([]);
-    const [apiQuestions, setApiQuestions]   = useState<Question[] | null>(null);
+    // Compute deadline status. Prefer the backend-computed field; fall back to local check.
+    const isDeadlinePassed: boolean = (() => {
+        if (submission?.isDeadlinePassed != null) return submission.isDeadlinePassed as unknown as boolean;
+        if (!submission?.dueDate) return false;
+        return new Date() > new Date(submission.dueDate as unknown as string);
+    })();
 
-    // Fetch text answers + assignment questions once the submission loads.
+    // Load assignment questions
     useEffect(() => {
-        if (!submission?.id) return;
+        if (!submission?.assignmentId) return;
+        getAssignmentWithFallback(submission.assignmentId)
+            .then(asg => {
+                const withQ = asg as AssignmentWithQuestions;
+                if (withQ.questions?.length) setApiQuestions(withQ.questions);
+            })
+            .catch(() => {});
+    }, [submission?.assignmentId]);
 
-        // Text answers from submission-management-service
-        submissionService.getAnswers(submission.id).then((ans) => {
-            setTextAnswers(ans);
-        }).catch(() => {
-            // No text answers — that's fine for file-upload submissions
-        });
-
-        // Real questions from the assignment API (falls back to sample data if unavailable)
-        if (submission.assignmentId) {
-            getAssignmentWithFallback(submission.assignmentId)
-                .then((asg) => {
-                    const withQ = asg as AssignmentWithQuestions;
-                    if (withQ.questions && withQ.questions.length > 0) {
-                        setApiQuestions(withQ.questions);
-                    }
-                })
-                .catch(() => {
-                    // No questions available — UI shows empty state
-                });
-        }
-    }, [submission?.id, submission?.assignmentId]);
-
-    /** Lookup helper: find a student's typed answer for a given questionId. */
-    const getTextAnswer = (questionId: string): string | undefined =>
-        textAnswers.find((a) => a.questionId === questionId)?.answerText;
-
-    // Initialise per-question answer entries when API questions or text answers arrive.
+    // Build per-question state from version snapshot answers
     useEffect(() => {
-        if (!apiQuestions) return;
-        const overallFeedback = feedback?.overallAssessment ?? 'AI feedback not yet available.';
-        setAnswers((prev) => {
+        if (!apiQuestions || !latestVersion?.answers) return;
+        setQuestionStates(prev => {
             const next = { ...prev };
             for (const q of apiQuestions) {
                 const maxMarks = q.maxPoints ?? 10;
-                // Compute AI score from per-question text-answer AI component scores (0-10 each → scale to maxMarks)
-                const ta = textAnswers.find(t => t.questionId === q.id);
-                let aiScore = 0;
-                if (ta) {
-                    const components = [ta.grammarScore, ta.clarityScore, ta.completenessScore, ta.relevanceScore]
+                const va = latestVersion.answers!.find(a => a.questionId === q.id);
+
+                // aiGeneratedMark is already on 0–10 scale; scale to maxMarks
+                let aiMark = 0;
+                if (va?.aiGeneratedMark != null) {
+                    aiMark = Math.round((va.aiGeneratedMark / 10) * maxMarks * 10) / 10;
+                } else if (va) {
+                    const comps = [va.grammarScore, va.clarityScore, va.completenessScore, va.relevanceScore]
                         .filter((s): s is number => s != null);
-                    if (components.length > 0) {
-                        const avg = components.reduce((s, v) => s + v, 0) / components.length; // 0-10
-                        aiScore = Math.round((avg / 10) * maxMarks * 10) / 10;
+                    if (comps.length > 0) {
+                        const avg = comps.reduce((s, v) => s + v, 0) / comps.length;
+                        aiMark = Math.round((avg / 10) * maxMarks * 10) / 10;
                     }
                 }
-                // Only initialise — don't overwrite lecturer edits
+
+                const bullets: string[] = [];
+                if (va?.strengths?.length)    bullets.push(...va.strengths.slice(0, 2));
+                if (va?.improvements?.length) bullets.push(...va.improvements.slice(0, 1));
+                const aiFeedback = bullets.length > 0 ? bullets.join(' · ') : 'AI feedback not available.';
+
                 if (!next[q.id]) {
                     next[q.id] = {
-                        questionId: q.id,
-                        text: ta?.answerText ?? '',
-                        wordCount: ta?.wordCount ?? 0,
-                        aiFeedback: overallFeedback,
-                        aiScore,
-                        lecturerFeedback: ta?.lecturerFeedbackText ?? '',
-                        lecturerScore: ta?.lecturerMark ?? undefined,
+                        questionId:        q.id,
+                        aiMark,
+                        lecturerMark:      va?.lecturerMark ?? null,
+                        aiFeedback,
+                        lecturerFeedback:  va?.lecturerFeedbackText ?? null,
                         maxMarks,
+                        lecturerUpdatedBy: va?.lecturerUpdatedBy ?? null,
+                        lecturerUpdatedAt: va?.lecturerUpdatedAt ?? null,
                     };
-                } else {
-                    // Update aiScore if we now have real text-answer data
-                    if (ta && next[q.id].aiScore === 0 && aiScore > 0) {
-                        next[q.id] = { ...next[q.id], aiScore };
-                    }
+                } else if (next[q.id].aiMark === 0 && aiMark > 0) {
+                    next[q.id] = { ...next[q.id], aiMark };
                 }
             }
             return next;
         });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [apiQuestions, textAnswers]);
+    }, [apiQuestions, latestVersion?.answers]);
 
-    // Show AI overall assessment in overall comment when feedback arrives
+    // Pre-fill overall comment from stored feedback
     useEffect(() => {
-        if (feedback?.overallAssessment && !overallComment) {
-            setOverallComment(feedback.overallAssessment);
-        }
-    }, [feedback]); // eslint-disable-line react-hooks/exhaustive-deps
+        if (submission?.feedbackText && !overallComment) setOverallComment(submission.feedbackText);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [submission?.feedbackText]);
 
-    // ── Handlers ────────────────────────────────────────────
+    // ── Handlers ───────────────────────────────────────────────
 
-    const handleEditFeedback = (key: string) => {
-        setEditingKey(key);
-        setTempFeedback(answers[key]?.lecturerFeedback || answers[key]?.aiFeedback || '');
-        setTempScore(answers[key]?.lecturerScore ?? answers[key]?.aiScore);
-    };
-
-    const handleSaveFeedback = (key: string) => {
-        setAnswers(prev => ({
+    const handleQuestionSave = (questionId: string, mark: number, feedback: string) => {
+        setQuestionStates(prev => ({
             ...prev,
-            [key]: { ...prev[key], lecturerFeedback: tempFeedback, lecturerScore: tempScore },
+            [questionId]: { ...prev[questionId], lecturerMark: mark, lecturerFeedback: feedback },
         }));
-        setEditingKey(null);
-
-        // Persist lecturer mark + feedback to the Answer row immediately
-        if (submission?.id) {
-            submissionService.saveAnswerAnalysis(submission.id, key, {
-                lecturerMark: tempScore,
-                lecturerFeedbackText: tempFeedback || undefined,
-            }).catch(() => {/* silent — main grade submit will persist questionMarksJson anyway */});
-        }
-    };
-
-    const handleRegenerate = async (key: string) => {
-        setIsGeneratingAI(true);
-        await new Promise(r => setTimeout(r, 1500));
-        setAnswers(prev => ({
-            ...prev,
-            [key]: {
-                ...prev[key],
-                aiFeedback: feedback?.overallAssessment ?? 'Regenerated AI feedback.',
-            },
-        }));
-        setIsGeneratingAI(false);
     };
 
     const calculateGrade = () => {
-        let scored = 0;
-        let maxTotal = 0;
-        Object.values(answers).forEach(a => {
-            scored   += a.lecturerScore ?? a.aiScore ?? 0;
-            maxTotal += a.maxMarks;
+        let scored = 0, maxTotal = 0;
+        Object.values(questionStates).forEach(s => {
+            scored   += s.lecturerMark ?? s.aiMark ?? 0;
+            maxTotal += s.maxMarks;
         });
         const percentage = maxTotal > 0 ? Math.round((scored / maxTotal) * 100) : 0;
         return { scored: Math.round(scored * 10) / 10, total: maxTotal, percentage };
     };
 
     const handleSubmitGrade = async () => {
-        if (!confirm('Submit this grade? The student will be notified.')) return;
+        if (!isDeadlinePassed) return;
+        if (!confirm('Submit this grade? The student will be notified and this becomes the final grade.')) return;
 
         const grade = calculateGrade();
-        // questionScores: actual marks (not percentage)
         const questionScores = Object.fromEntries(
-            Object.entries(answers).map(([k, a]) => [k, a.lecturerScore ?? a.aiScore ?? 0])
+            Object.entries(questionStates).map(([k, s]) => [k, s.lecturerMark ?? s.aiMark ?? 0])
+        );
+        const questionFeedbacks = Object.fromEntries(
+            Object.entries(questionStates)
+                .filter(([, s]) => s.lecturerFeedback != null)
+                .map(([k, s]) => [k, s.lecturerFeedback!])
         );
 
         const result = await gradeSubmission(submissionId, {
-            grade: grade.percentage,
+            grade:            grade.percentage,
             lecturerFeedback: overallComment,
             questionScores,
-        });
+            questionFeedbacks,
+            lecturerId:       getLecturerId(),
+        } as Parameters<typeof gradeSubmission>[1]);
 
         if (result) {
-            setSubmitted(true);
-            router.push('/submissions/lecturer/submissions');
+            setSubmitDone(true);
+            setTimeout(() => router.push('/submissions/lecturer/submissions'), 1500);
         }
     };
 
     const grade = calculateGrade();
 
-    // ── Loading skeleton ─────────────────────────────────────
-    if (subLoading && !submission) {
+    // ── Loading ─────────────────────────────────────────────────
+
+    if ((subLoading || versionLoading) && !submission) {
         return (
-            <div className="max-w-7xl mx-auto animate-pulse space-y-6">
+            <div className="max-w-7xl mx-auto animate-pulse space-y-4 py-8">
                 <div className="h-6 bg-gray-200 rounded w-36" />
                 <div className="h-32 bg-gray-100 rounded-lg" />
-                <div className="h-64 bg-gray-100 rounded-lg" />
                 <div className="h-64 bg-gray-100 rounded-lg" />
             </div>
         );
     }
 
-    return (
-        <div className="max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="mb-6">
-                <button
-                    onClick={() => router.back()}
-                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors cursor-pointer"
-                >
-                    <ArrowLeft size={20} />
-                    Back to Submissions
-                </button>
+    const sortedQuestions = apiQuestions ? [...apiQuestions].sort((a, b) => a.order - b.order) : [];
 
-                {/* Submission info card */}
-                <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
-                    <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
-                                <User className="text-blue-600" size={32} />
-                            </div>
-                            <div>
-                                <h1 className="text-2xl font-bold text-gray-900">
-                                    {submission?.studentId ?? submissionId}
-                                </h1>
-                                <p className="text-gray-600">
-                                    {submission?.assignmentTitle ?? 'Assignment'}
-                                    {submission?.moduleCode ? ` • ${submission.moduleCode}` : ''}
-                                </p>
-                            </div>
+    return (
+        <div className="max-w-7xl mx-auto pb-40">
+            {/* Back */}
+            <button
+                onClick={() => router.back()}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors cursor-pointer"
+            >
+                <ArrowLeft size={20} /> Back to Submissions
+            </button>
+
+            {/* ── Deadline status banner ───────────────────────────── */}
+            {isDeadlinePassed ? (
+                <div className="flex items-start gap-3 p-4 mb-6 bg-green-50 border border-green-200 rounded-lg">
+                    <Unlock size={20} className="text-green-600 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="font-semibold text-green-800">Assignment deadline has passed — grading unlocked</p>
+                        <p className="text-sm text-green-700 mt-0.5">
+                            You can now override AI-generated marks and feedback. Your changes are saved separately
+                            from the original AI values and are fully attributed to your account for audit.
+                        </p>
+                    </div>
+                </div>
+            ) : (
+                <div className="flex items-start gap-3 p-4 mb-6 bg-amber-50 border border-amber-200 rounded-lg">
+                    <Lock size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="font-semibold text-amber-800">Grading locked — deadline has not yet passed</p>
+                        <p className="text-sm text-amber-700 mt-0.5">
+                            The current grade is AI-generated and cannot be changed before the deadline.
+                            You can read the submission but all marks are locked.
+                            {submission?.dueDate && (
+                                <> Deadline: <strong>{formatDate(String(submission.dueDate))}</strong>.</>
+                            )}
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Submission info card ─────────────────────────────── */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+                <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center">
+                            <User className="text-blue-600" size={28} />
                         </div>
-                        <div className="text-right">
-                            <div className="text-3xl font-bold text-blue-600">{grade.percentage}%</div>
-                            <div className="text-sm text-gray-600">{grade.scored}/{grade.total} marks</div>
+                        <div>
+                            <h1 className="text-xl font-bold text-gray-900">
+                                {submission?.studentName ?? submission?.studentId ?? submissionId}
+                            </h1>
+                            <p className="text-gray-500 text-sm">
+                                {submission?.assignmentTitle ?? 'Assignment'}
+                                {submission?.moduleCode ? ` · ${submission.moduleCode}` : ''}
+                            </p>
+                            {submission?.isLate && (
+                                <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium mt-0.5">
+                                    <Clock size={12} /> Submitted late
+                                </span>
+                            )}
                         </div>
                     </div>
+                    <div className="text-right">
+                        <div className="text-3xl font-bold text-blue-600">{grade.percentage}%</div>
+                        <div className="text-sm text-gray-500">{grade.scored}/{grade.total} marks</div>
+                    </div>
+                </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="flex items-center gap-2 text-gray-700">
-                            <Calendar className="text-blue-600" size={20} />
-                            <div>
-                                <div className="text-xs text-gray-500">Submitted</div>
-                                <div className="font-medium text-sm">
-                                    {formatDate(submission?.submittedAt)}
-                                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
+                    <div className="flex items-center gap-2 text-gray-700">
+                        <Calendar className="text-blue-500 shrink-0" size={18} />
+                        <div>
+                            <div className="text-xs text-gray-400">Submitted</div>
+                            <div className="font-medium">{formatDate(submission?.submittedAt as unknown as string)}</div>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-700">
+                        <Clock className={`shrink-0 ${isDeadlinePassed ? 'text-green-500' : 'text-amber-500'}`} size={18} />
+                        <div>
+                            <div className="text-xs text-gray-400">Deadline</div>
+                            <div className={`font-medium ${isDeadlinePassed ? 'text-green-700' : 'text-amber-700'}`}>
+                                {formatDate(submission?.dueDate as unknown as string)}
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 text-gray-700">
-                            <GitBranch className="text-purple-600" size={20} />
-                            <div>
-                                <div className="text-xs text-gray-500">Version</div>
-                                <div className="font-medium text-sm">
-                                    {submission?.currentVersionNumber ?? '—'}
-                                </div>
-                            </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-700">
+                        <GitBranch className="text-purple-500 shrink-0" size={18} />
+                        <div>
+                            <div className="text-xs text-gray-400">Version</div>
+                            <div className="font-medium">{latestVersion?.versionNumber ?? submission?.currentVersionNumber ?? '—'}</div>
                         </div>
-                        <div className="flex items-center gap-2 text-gray-700">
-                            <Shield className="text-green-600" size={20} />
-                            <div>
-                                <div className="text-xs text-gray-500">Plagiarism</div>
-                                <div className="font-medium text-sm">
-                                    {submission?.plagiarismScore != null
-                                        ? `${submission.plagiarismScore}%`
-                                        : '—'}
-                                </div>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2 text-gray-700">
-                            <Star className="text-amber-600" size={20} />
-                            <div>
-                                <div className="text-xs text-gray-500">AI Score</div>
-                                <div className="font-medium text-sm">
-                                    {submission?.aiScore != null ? `${submission.aiScore}/100` : '—'}
-                                </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-700">
+                        <Shield className="text-green-500 shrink-0" size={18} />
+                        <div>
+                            <div className="text-xs text-gray-400">Plagiarism</div>
+                            <div className="font-medium">
+                                {submission?.plagiarismScore != null ? `${submission.plagiarismScore}%` : '—'}
                             </div>
                         </div>
                     </div>
                 </div>
+
+                {/* AI grade · Lecturer grade · Final grade summary */}
+                <div className="grid grid-cols-3 gap-4 text-sm pt-4 border-t border-gray-100">
+                    <div className="rounded-lg bg-purple-50 border border-purple-100 p-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                            <Sparkles size={13} className="text-purple-600" />
+                            <span className="text-xs font-semibold text-purple-700">AI Grade</span>
+                        </div>
+                        <p className="text-lg font-bold text-purple-900">
+                            {submission?.aiScore != null ? `${submission.aiScore}/100` : '—'}
+                        </p>
+                        <p className="text-xs text-purple-500">Quality score · immutable</p>
+                    </div>
+                    <div className="rounded-lg bg-blue-50 border border-blue-100 p-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                            <Edit size={13} className="text-blue-600" />
+                            <span className="text-xs font-semibold text-blue-700">Lecturer Grade</span>
+                        </div>
+                        <p className="text-lg font-bold text-blue-900">
+                            {latestVersion?.hasLecturerOverride
+                                ? `${grade.percentage}%`
+                                : 'Not set'}
+                        </p>
+                        <p className="text-xs text-blue-500">
+                            {latestVersion?.hasLecturerOverride
+                                ? 'Override active'
+                                : isDeadlinePassed ? 'Set below' : 'Available after deadline'}
+                        </p>
+                    </div>
+                    <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                            <Star size={13} className="text-gray-600" />
+                            <span className="text-xs font-semibold text-gray-700">Final Grade</span>
+                        </div>
+                        <p className="text-lg font-bold text-gray-900">
+                            {latestVersion?.finalGrade != null
+                                ? `${Math.round(latestVersion.finalGrade * 10) / 10}%`
+                                : `${grade.percentage}%`}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                            {latestVersion?.hasLecturerOverride
+                                ? 'Lecturer override'
+                                : 'AI generated'}
+                        </p>
+                    </div>
+                </div>
             </div>
 
-            {/* Grading error / success */}
+            {/* ── Error / success ──────────────────────────────────── */}
             {gradeError && (
                 <div className="flex items-start gap-3 p-4 mb-6 bg-red-50 border border-red-200 rounded-lg">
                     <AlertCircle size={20} className="text-red-600 shrink-0 mt-0.5" />
                     <div>
-                        <p className="font-medium text-red-800">Grade submission failed</p>
+                        <p className="font-semibold text-red-800">Grade submission failed</p>
                         <p className="text-sm text-red-700 mt-0.5">{gradeError}</p>
                     </div>
                 </div>
             )}
-            {gradeSuccess && !submitted && (
+            {gradeSuccess && submitDone && (
                 <div className="flex items-start gap-3 p-4 mb-6 bg-green-50 border border-green-200 rounded-lg">
                     <CheckCircle2 size={20} className="text-green-600 shrink-0 mt-0.5" />
-                    <p className="font-medium text-green-800">Grade submitted successfully!</p>
+                    <p className="font-semibold text-green-800">Grade submitted successfully. Redirecting…</p>
                 </div>
             )}
 
-            {/* AI Feedback banner (overall) */}
-            {feedback && (
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
-                    <div className="flex items-center gap-2 mb-2">
-                        <Sparkles className="text-purple-600" size={20} />
-                        <span className="font-semibold text-purple-800">AI Overall Assessment</span>
-                        {fbLoading && <RefreshCw size={14} className="text-purple-500 animate-spin ml-1" />}
+            {/* Pre-deadline read-only notice */}
+            {!isDeadlinePassed && (
+                <div className="flex items-start gap-3 p-4 mb-6 bg-blue-50 border border-blue-200 rounded-lg">
+                    <Info size={20} className="text-blue-600 shrink-0 mt-0.5" />
+                    <p className="text-sm text-blue-800">
+                        <strong>Read-only view.</strong> All marks below are AI-generated and cannot be changed
+                        before the deadline. Override buttons will appear after the deadline passes.
+                    </p>
+                </div>
+            )}
+
+            {/* ── Question cards ───────────────────────────────────── */}
+            <div className="space-y-5">
+                {sortedQuestions.length > 0 ? (
+                    sortedQuestions.map((question, idx) => {
+                        const state = questionStates[question.id] ?? {
+                            questionId: question.id,
+                            aiMark: 0,
+                            lecturerMark: null,
+                            aiFeedback: 'AI feedback not available.',
+                            lecturerFeedback: null,
+                            maxMarks: question.maxPoints ?? 10,
+                            lecturerUpdatedBy: null,
+                            lecturerUpdatedAt: null,
+                        };
+                        const studentAnswerText = latestVersion?.answers?.find(a => a.questionId === question.id)?.answerText;
+
+                        return isDeadlinePassed ? (
+                            <EditableQuestionCard
+                                key={question.id}
+                                idx={idx}
+                                question={question}
+                                state={state}
+                                studentAnswerText={studentAnswerText}
+                                onSave={handleQuestionSave}
+                            />
+                        ) : (
+                            <ReadOnlyQuestionCard
+                                key={question.id}
+                                idx={idx}
+                                question={question}
+                                state={state}
+                                studentAnswerText={studentAnswerText}
+                            />
+                        );
+                    })
+                ) : (
+                    <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
+                        <FileText size={36} className="mx-auto mb-3 text-gray-300" />
+                        <p className="font-medium">No questions loaded</p>
+                        <p className="text-sm mt-1">Questions appear once assignment data is available.</p>
                     </div>
-                    {feedback.overallAssessment && (
-                        <p className="text-sm text-purple-700 mb-3">{feedback.overallAssessment}</p>
-                    )}
-                    {feedback.strengths && feedback.strengths.length > 0 && (
-                        <div className="mt-2">
-                            <p className="text-xs font-semibold text-purple-700 mb-1">Strengths:</p>
-                            <ul className="space-y-1">
-                                {feedback.strengths.slice(0, 3).map((s, i) => (
-                                    <li key={i} className="text-xs text-purple-600 flex items-start gap-1">
-                                        <span className="mt-0.5">•</span>{s}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-                </div>
-            )}
+                )}
 
-            {/* Questions & grading */}
-            <div className="space-y-6">
-                {apiQuestions && apiQuestions.length > 0
-                    ? apiQuestions
-                        .slice()
-                        .sort((a, b) => a.order - b.order)
-                        .map((question, idx) => {
-                            const key = question.id;
-                            const maxMarks = question.maxPoints ?? 10;
-                            const answer = answers[key] ?? {
-                                questionId: key,
-                                text: '',
-                                wordCount: 0,
-                                aiFeedback: feedback?.overallAssessment ?? 'AI feedback not yet available.',
-                                aiScore: 0,
-                                lecturerFeedback: '',
-                                maxMarks,
-                            };
-
-                            return (
-                                <div key={key} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                                    <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200">
-                                        <div className="flex-1">
-                                            <h3 className="text-lg font-bold text-gray-900 mb-1">
-                                                Question {idx + 1}
-                                                <span className="ml-2 text-sm font-normal text-gray-500">({maxMarks} marks)</span>
-                                            </h3>
-                                            <p className="text-gray-700">{question.text}</p>
-                                        </div>
-                                    </div>
-
-                                    <FeedbackBlock
-                                        questionKey={key}
-                                        answer={answer}
-                                        questionMarks={maxMarks}
-                                        isEditing={editingKey === key}
-                                        isGenerating={isGeneratingAI}
-                                        onEdit={() => handleEditFeedback(key)}
-                                        onSave={() => handleSaveFeedback(key)}
-                                        onCancel={() => setEditingKey(null)}
-                                        onRegenerate={() => handleRegenerate(key)}
-                                        tempFeedback={tempFeedback}
-                                        setTempFeedback={setTempFeedback}
-                                        tempScore={tempScore}
-                                        setTempScore={setTempScore}
-                                        studentAnswerText={getTextAnswer(question.id)}
-                                    />
-                                </div>
-                            );
-                        })
-                    : (
-                        <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
-                            <FileText size={36} className="mx-auto mb-3 text-gray-300" />
-                            <p className="font-medium">No questions loaded</p>
-                            <p className="text-sm mt-1">Questions will appear here once the assignment data is available.</p>
-                        </div>
-                    )
-                }
-
-                {/* Overall Comment */}
+                {/* Overall comment */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <h3 className="text-lg font-bold text-gray-900 mb-4">Overall Comment</h3>
-                    <textarea
-                        value={overallComment}
-                        onChange={e => setOverallComment(e.target.value)}
-                        rows={4}
-                        placeholder="Add an overall comment for the student..."
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        Overall Comment
+                        {!isDeadlinePassed && <Lock size={15} className="text-amber-500" />}
+                    </h3>
+                    {isDeadlinePassed ? (
+                        <textarea
+                            value={overallComment}
+                            onChange={e => setOverallComment(e.target.value)}
+                            rows={4}
+                            placeholder="Add an overall comment for the student..."
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        />
+                    ) : (
+                        <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500 italic">
+                            {submission?.feedbackText ?? 'Overall comment can be set after the deadline passes.'}
+                        </div>
+                    )}
                 </div>
 
-                {/* Grade Summary */}
-                <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+                {/* Grade summary */}
+                <div className={`rounded-lg shadow-lg p-6 text-white ${
+                    isDeadlinePassed
+                        ? 'bg-gradient-to-br from-blue-500 to-blue-700'
+                        : 'bg-gradient-to-br from-gray-500 to-gray-600'
+                }`}>
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className="text-xl font-bold mb-1">Final Grade</h3>
-                            <p className="text-blue-100">{grade.scored} out of {grade.total} marks</p>
+                            <h3 className="text-xl font-bold mb-1">
+                                {isDeadlinePassed ? 'Lecturer Final Grade' : 'AI Grade (read-only)'}
+                            </h3>
+                            <p className="opacity-80 text-sm">{grade.scored} / {grade.total} marks</p>
                         </div>
                         <div className="text-right">
                             <div className="text-5xl font-bold">{grade.percentage}%</div>
-                            <p className="text-blue-100 mt-1">
-                                {grade.percentage >= 90 ? 'A+' :
-                                 grade.percentage >= 80 ? 'A'  :
-                                 grade.percentage >= 70 ? 'B'  :
-                                 grade.percentage >= 60 ? 'C'  :
-                                 grade.percentage >= 50 ? 'D'  : 'F'}
-                            </p>
+                            <p className="opacity-80 mt-1">{getLetterGrade(grade.percentage)}</p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Sticky Action Bar */}
-            <div className="sticky bottom-0 bg-white border-t border-gray-200 p-6 mt-8 shadow-lg rounded-t-lg">
-                <div className="flex gap-4 max-w-7xl mx-auto">
+            {/* ── Sticky action bar ────────────────────────────────── */}
+            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-4 shadow-lg z-10">
+                <div className="max-w-7xl mx-auto flex gap-4">
                     <button
                         onClick={() => router.back()}
-                        disabled={grading}
-                        className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                        className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium flex items-center gap-2 cursor-pointer"
                     >
-                        <Save size={18} />
-                        Save as Draft
+                        <ArrowLeft size={18} /> Back
                     </button>
-                    <button
-                        onClick={handleSubmitGrade}
-                        disabled={grading}
-                        className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                        {grading ? (
-                            <>
-                                <RefreshCw size={18} className="animate-spin" />
-                                Submitting…
-                            </>
-                        ) : (
-                            <>
-                                <Send size={18} />
-                                Submit Grade &amp; Notify Student
-                            </>
-                        )}
-                    </button>
+
+                    {isDeadlinePassed ? (
+                        <button
+                            onClick={handleSubmitGrade}
+                            disabled={grading || submitDone}
+                            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                            {grading
+                                ? <><RefreshCw size={18} className="animate-spin" /> Submitting…</>
+                                : <><Send size={18} /> Submit Grade &amp; Notify Student</>
+                            }
+                        </button>
+                    ) : (
+                        <div className="flex-1 px-6 py-3 bg-gray-100 text-gray-400 rounded-lg font-medium flex items-center justify-center gap-2 select-none cursor-not-allowed border border-dashed border-gray-300">
+                            <Lock size={18} /> Grading locked — deadline has not yet passed
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

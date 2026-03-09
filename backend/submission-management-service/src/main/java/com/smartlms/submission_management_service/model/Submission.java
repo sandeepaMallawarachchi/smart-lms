@@ -1,22 +1,16 @@
 package com.smartlms.submission_management_service.model;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -93,10 +87,6 @@ public class Submission {
     @Builder.Default
     private Boolean isLate = false;
 
-    @OneToMany(mappedBy = "submission", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
-    @Builder.Default
-    private List<SubmissionFile> files = new ArrayList<>();
-
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -141,16 +131,30 @@ public class Submission {
     @Column(name = "question_marks_json", columnDefinition = "TEXT")
     private String questionMarksJson;
 
-    // Helper methods
-    public void addFile(SubmissionFile file) {
-        files.add(file);
-        file.setSubmission(this);
-    }
+    // ── Lecturer override (post-deadline only) ────────────────────────────────
 
-    public void removeFile(SubmissionFile file) {
-        files.remove(file);
-        file.setSubmission(null);
-    }
+    /**
+     * Overall grade explicitly set by the lecturer after the deadline (percentage 0–100).
+     * Null until a lecturer grades this submission post-deadline.
+     *
+     * Rule: finalGrade = lecturerGrade if not null, else grade (AI-computed at submit).
+     */
+    @Column(name = "lecturer_grade")
+    private Double lecturerGrade;
+
+    /**
+     * When the lecturer last overrode marks or feedback on this submission.
+     * Null until a post-deadline override is made.
+     */
+    @Column(name = "lecturer_overridden_at")
+    private LocalDateTime lecturerOverriddenAt;
+
+    /**
+     * The lecturerId who last made a post-deadline override on this submission.
+     * Null until a post-deadline override is made.
+     */
+    @Column(name = "lecturer_overridden_by", length = 100)
+    private String lecturerOverriddenBy;
 
     public void submit() {
         this.versionNumber = (this.versionNumber != null ? this.versionNumber : 0) + 1;

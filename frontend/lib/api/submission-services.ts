@@ -9,7 +9,8 @@ import type {
     UpdateSubmissionPayload,
     GradeSubmissionPayload,
     SubmissionVersion,
-    VersionComparison,
+    VersionAnswer,
+    SavePlagiarismSourcesPayload,
     Feedback,
     GenerateFeedbackPayload,
     PlagiarismReport,
@@ -30,8 +31,6 @@ import type {
 
 const SUBMISSION_API =
     process.env.NEXT_PUBLIC_SUBMISSION_API_URL ?? 'http://localhost:8081';
-const VERSION_API =
-    process.env.NEXT_PUBLIC_VERSION_API_URL ?? 'http://localhost:8082';
 const FEEDBACK_API =
     process.env.NEXT_PUBLIC_FEEDBACK_API_URL ?? 'http://localhost:8083';
 const PLAGIARISM_API =
@@ -556,10 +555,13 @@ export const projectsAndTasksService = {
     },
 };
 
-// ─── Version Control Service (port 8082) ─────────────────────
+// ─── Version Service (new — port 8081, /api/submissions/{id}/versions) ────────
+//
+// All version endpoints now live inside submission-management-service (port 8081).
+// Snapshots are created server-side inside submitSubmission() — no client-side
+// createTextSnapshot() call needed any more.
 
-// Helper: unwrap { success, data } envelope from the version-control service
-function unwrapVersion<T>(raw: unknown): T {
+function unwrapData<T>(raw: unknown): T {
     if (raw && typeof raw === 'object') {
         const obj = raw as Record<string, unknown>;
         if ('data' in obj) return obj.data as T;
@@ -568,166 +570,59 @@ function unwrapVersion<T>(raw: unknown): T {
 }
 
 export const versionService = {
-    /** Get all versions for a submission */
+    /**
+     * List all version headers for a submission (newest first).
+     * Answers are NOT included in the list response — use getVersion() for detail.
+     * GET /api/submissions/{submissionId}/versions
+     */
     async getVersions(submissionId: string): Promise<SubmissionVersion[]> {
-        console.debug('[versionService] getVersions — submissionId:', submissionId);
         const raw = await apiRequest<unknown>(
-            `${VERSION_API}/api/versions/submission/${encodeURIComponent(submissionId)}`
+            `${SUBMISSION_API}/api/submissions/${encodeURIComponent(submissionId)}/versions`
         );
-        const list = unwrapVersion<SubmissionVersion[]>(raw);
-        const result = Array.isArray(list) ? list : [];
-        console.debug('[versionService] getVersions — submissionId:', submissionId, '| received:', result.length, 'versions',
-            result.length > 0 ? '| versionNumbers: [' + result.map(v => 'v' + v.versionNumber).join(', ') + ']' : '');
-        return result;
+        const list = unwrapData<SubmissionVersion[]>(raw);
+        return Array.isArray(list) ? list : [];
     },
 
-    /** Get a specific version */
-    async getVersion(id: string): Promise<SubmissionVersion> {
-        console.debug('[versionService] getVersion — id:', id);
-        const raw = await apiRequest<unknown>(`${VERSION_API}/api/versions/${id}`);
-        const result = unwrapVersion<SubmissionVersion>(raw);
-        console.debug('[versionService] getVersion — id:', id, '| response: versionNumber:', result?.versionNumber,
-            '| submissionId:', result?.submissionId, '| commitHash:', result?.commitHash);
-        return result;
-    },
-
-    /** Get the latest version of a submission */
+    /**
+     * Get the latest version with full answer+plagiarism detail.
+     * Used as the default report view.
+     * GET /api/submissions/{submissionId}/versions/latest
+     */
     async getLatestVersion(submissionId: string): Promise<SubmissionVersion> {
-        console.debug('[versionService] getLatestVersion — submissionId:', submissionId);
         const raw = await apiRequest<unknown>(
-            `${VERSION_API}/api/versions/submission/${encodeURIComponent(submissionId)}/latest`
+            `${SUBMISSION_API}/api/submissions/${encodeURIComponent(submissionId)}/versions/latest`
         );
-        const result = unwrapVersion<SubmissionVersion>(raw);
-        console.debug('[versionService] getLatestVersion — submissionId:', submissionId,
-            '| response: id:', result?.id, '| versionNumber:', result?.versionNumber, '| commitHash:', result?.commitHash);
-        return result;
+        return unwrapData<SubmissionVersion>(raw);
     },
 
-    /** Compare two versions */
-    async compareVersions(versionAId: string, versionBId: string): Promise<VersionComparison> {
-        console.debug('[versionService] compareVersions — sourceVersionId:', versionAId, '| targetVersionId:', versionBId);
+    /**
+     * Get a specific version with full answer+plagiarism detail.
+     * Used for historical version report pages.
+     * GET /api/submissions/{submissionId}/versions/{versionId}
+     */
+    async getVersion(submissionId: string, versionId: string): Promise<SubmissionVersion> {
         const raw = await apiRequest<unknown>(
-            `${VERSION_API}/api/versions/diff`,
-            {
-                method: 'POST',
-                body: JSON.stringify({ sourceVersionId: Number(versionAId), targetVersionId: Number(versionBId) }),
-            }
+            `${SUBMISSION_API}/api/submissions/${encodeURIComponent(submissionId)}/versions/${encodeURIComponent(versionId)}`
         );
-        const result = unwrapVersion<VersionComparison>(raw);
-        console.debug('[versionService] compareVersions — response: sourceV:', (result as Record<string, unknown>)?.sourceVersionNumber,
-            '| targetV:', (result as Record<string, unknown>)?.targetVersionNumber,
-            '| fileDiffs:', Array.isArray((result as Record<string, unknown>)?.fileDiffs) ? ((result as Record<string, unknown>).fileDiffs as unknown[]).length : 0);
-        return result;
+        return unwrapData<SubmissionVersion>(raw);
     },
 
-    /** Create a new version (usually triggered automatically on file upload) */
-    async createVersion(payload: {
-        submissionId: string;
-        files: File[];
-        commitMessage?: string;
-    }): Promise<SubmissionVersion> {
-        console.debug('[versionService] createVersion — submissionId:', payload.submissionId,
-            '| fileCount:', payload.files.length,
-            '| fileNames:', payload.files.map(f => f.name).join(', '),
-            '| totalSize:', payload.files.reduce((s, f) => s + f.size, 0), 'bytes',
-            '| commitMessage:', payload.commitMessage);
-        const formData = new FormData();
-        formData.append('submissionId', payload.submissionId);
-        if (payload.commitMessage) {
-            formData.append('commitMessage', payload.commitMessage);
-        }
-        payload.files.forEach((f) => formData.append('files', f));
-
-        const raw = await apiRequest<unknown>(`${VERSION_API}/api/versions`, {
-            method: 'POST',
-            body: formData,
-        });
-        const result = unwrapVersion<SubmissionVersion>(raw);
-        console.debug('[versionService] createVersion — response: id:', result?.id,
-            '| versionNumber:', result?.versionNumber, '| commitHash:', result?.commitHash);
-        return result;
-    },
-
-    /** Create an immutable text-answer snapshot after a successful submission. */
-    async createTextSnapshot(payload: {
-        submissionId: number;
-        studentId: string;
-        commitMessage?: string;
-        totalWordCount: number;
-        overallGrade?: number;
-        maxGrade?: number;
-        answers: Array<{
-            questionId: string;
-            questionText?: string;
-            answerText: string;
-            wordCount: number;
-            grammarScore?: number;
-            clarityScore?: number;
-            completenessScore?: number;
-            relevanceScore?: number;
-            strengths?: string[];
-            improvements?: string[];
-            suggestions?: string[];
-            similarityScore?: number;
-            plagiarismSeverity?: string;
-            internetSimilarityScore?: number;
-            peerSimilarityScore?: number;
-            riskScore?: number;
-            riskLevel?: string;
-            internetMatches?: Array<{
-                title: string;
-                url: string;
-                snippet: string;
-                similarityScore: number;
-                sourceDomain?: string;
-                sourceCategory?: string;
-                confidenceLevel?: string;
-                matchedStudentText?: string;
-            }>;
-            projectedGrade?: number;
-            maxPoints?: number;
-        }>;
-    }): Promise<SubmissionVersion> {
-        console.debug('[versionService] createTextSnapshot — submissionId:', payload.submissionId,
-            '| studentId:', payload.studentId, '| totalWordCount:', payload.totalWordCount,
-            '| overallGrade:', payload.overallGrade, '| maxGrade:', payload.maxGrade,
-            '| answerCount:', payload.answers?.length);
-        if (payload.answers) {
-            payload.answers.forEach((a, i) => {
-                console.debug(`[versionService] createTextSnapshot — answer[${i}]: questionId=${a.questionId}, wordCount=${a.wordCount}, grammarScore=${a.grammarScore}, similarityScore=${a.similarityScore}, projectedGrade=${a.projectedGrade}`);
-            });
-        }
-        const raw = await apiRequest<unknown>(
-            `${VERSION_API}/api/versions/text-snapshot`,
+    /**
+     * Save detailed internet plagiarism sources for one answer in one version.
+     * Called immediately after a submit completes, once the plagiarism check
+     * result is received. Replaces any previously saved sources for the same answer.
+     * POST /api/submissions/{submissionId}/versions/{versionId}/answers/{questionId}/sources
+     */
+    savePlagiarismSources(
+        submissionId: string,
+        versionId: string,
+        questionId: string,
+        payload: SavePlagiarismSourcesPayload,
+    ): Promise<void> {
+        return apiRequest<void>(
+            `${SUBMISSION_API}/api/submissions/${encodeURIComponent(submissionId)}/versions/${encodeURIComponent(versionId)}/answers/${encodeURIComponent(questionId)}/sources`,
             { method: 'POST', body: JSON.stringify(payload) }
         );
-        const result = unwrapVersion<SubmissionVersion>(raw);
-        console.debug('[versionService] createTextSnapshot — response: id:', result?.id,
-            '| versionNumber:', result?.versionNumber, '| commitHash:', result?.commitHash);
-        return result;
-    },
-
-    /** Download a specific version as ZIP or JSON; returns blob + server-supplied filename */
-    downloadVersion(versionId: string): Promise<{ blob: Blob; fileName: string }> {
-        console.debug('[versionService] downloadVersion — versionId:', versionId);
-        const token = getToken();
-        return fetch(`${VERSION_API}/api/versions/${versionId}/download`, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-        }).then((res) => {
-            console.debug('[versionService] downloadVersion — HTTP', res.status, '| versionId:', versionId);
-            if (!res.ok) {
-                console.error('[versionService] downloadVersion FAILED — HTTP', res.status, res.statusText);
-                throw new Error(`Download failed: ${res.status}`);
-            }
-            const disposition = res.headers.get('Content-Disposition') ?? '';
-            const match = disposition.match(/filename[^;=\n]*=["']?([^"';\n]+)["']?/);
-            const fileName = match ? match[1].trim() : `version-${versionId}.zip`;
-            console.debug('[versionService] downloadVersion — fileName:', fileName, '| contentType:', res.headers.get('Content-Type'));
-            return res.blob().then((blob) => {
-                console.debug('[versionService] downloadVersion — blob size:', blob.size, 'bytes');
-                return { blob, fileName };
-            });
-        });
     },
 };
 
