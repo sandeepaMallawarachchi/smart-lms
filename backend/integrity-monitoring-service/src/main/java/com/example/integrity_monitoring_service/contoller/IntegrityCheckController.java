@@ -76,4 +76,18 @@ public class IntegrityCheckController {
 
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * Get plagiarism checks by submission ID
+     */
+    @GetMapping("/submission/{submissionId}")
+    public ResponseEntity<ApiResponse<List<PlagiarismCheckResponse>>> getChecksBySubmission(
+            @PathVariable Long submissionId) {
+        log.info("GET /api/integrity/checks/submission/{} - Fetching checks", submissionId);
+
+        ApiResponse<List<PlagiarismCheckResponse>> response =
+                integrityCheckService.getChecksBySubmissionId(submissionId);
+
+        return ResponseEntity.ok(response);
+    }
 }

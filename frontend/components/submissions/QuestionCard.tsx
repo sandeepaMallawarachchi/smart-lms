@@ -115,6 +115,10 @@ export interface QuestionCardProps {
     onAnswerChange: (questionId: string, text: string) => void;
     /** Fired whenever the projected grade changes (null = no feedback yet). */
     onGradeChange?: (questionId: string, grade: number | null) => void;
+    /** Fired whenever the live AI feedback changes. */
+    onFeedbackChange?: (questionId: string, feedback: LiveFeedback | null) => void;
+    /** Fired whenever the live plagiarism result changes. */
+    onPlagiarismChange?: (questionId: string, result: LivePlagiarismResult | null) => void;
     /** 0-based index for display order. */
     questionIndex: number;
 }
@@ -133,6 +137,8 @@ export function QuestionCard({
     disabled = false,
     onAnswerChange,
     onGradeChange,
+    onFeedbackChange,
+    onPlagiarismChange,
     questionIndex,
 }: QuestionCardProps) {
 
@@ -182,6 +188,18 @@ export function QuestionCard({
         onGradeChange?.(question.id, projectedGrade);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [projectedGrade]);
+
+    // Notify parent whenever live AI feedback changes.
+    useEffect(() => {
+        onFeedbackChange?.(question.id, liveFeedback);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [liveFeedback]);
+
+    // Notify parent whenever live plagiarism result changes.
+    useEffect(() => {
+        onPlagiarismChange?.(question.id, plagiarismResult);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [plagiarismResult]);
 
     // Propagate text to parent for progress tracking.
     const handleTextChange = (newText: string) => {

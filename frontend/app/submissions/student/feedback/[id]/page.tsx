@@ -1,24 +1,56 @@
 'use client';
 
-import React, { use } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { use, useCallback, useState, useMemo } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
-    ArrowLeft,
-    Star,
-    Shield,
-    GitBranch,
-    FileText,
-    AlertCircle,
-    CheckCircle2,
-    Download,
-    Clock,
-    User,
+    ArrowLeft, Star, Shield, GitBranch, AlertCircle, Download,
+    Clock, ChevronDown, CheckCircle2, TrendingUp, Lightbulb,
+    ExternalLink, User,
 } from 'lucide-react';
 import { useSubmission } from '@/hooks/useSubmissions';
-import { useFeedback } from '@/hooks/useFeedback';
-import { usePlagiarismReport } from '@/hooks/usePlagiarism';
-import AIFeedbackCard from '@/components/submissions/AIFeedbackCard';
-import PlagiarismReportCard from '@/components/submissions/PlagiarismReportCard';
+import { useVersions } from '@/hooks/useVersions';
+
+// ─── Types ────────────────────────────────────────────────────
+
+interface AnswerSnapshotData {
+    questionId: string;
+    questionText?: string;
+    answerText?: string;
+    wordCount?: number;
+    grammarScore?: number;
+    clarityScore?: number;
+    completenessScore?: number;
+    relevanceScore?: number;
+    strengths?: string[];
+    improvements?: string[];
+    suggestions?: string[];
+    similarityScore?: number;
+    plagiarismSeverity?: string;
+    internetSimilarityScore?: number;
+    peerSimilarityScore?: number;
+    riskScore?: number;
+    riskLevel?: string;
+    internetMatches?: Array<{
+        title: string;
+        url: string;
+        snippet: string;
+        similarityScore: number;
+        sourceDomain?: string;
+        sourceCategory?: string;
+        confidenceLevel?: string;
+        matchedStudentText?: string;
+    }>;
+    projectedGrade?: number;
+    maxPoints?: number;
+}
+
+interface VersionMetadata {
+    type?: string;
+    overallGrade?: number;
+    maxGrade?: number;
+    totalWordCount?: number;
+    answers?: AnswerSnapshotData[];
+}
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -29,19 +61,7 @@ function formatDate(dateStr: string | null | undefined): string {
             month: 'short', day: 'numeric', year: 'numeric',
             hour: '2-digit', minute: '2-digit',
         });
-    } catch {
-        return dateStr;
-    }
-}
-
-function formatBytes(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function getFileExt(name: string) {
-    return name.split('.').pop()?.toUpperCase() ?? 'FILE';
+    } catch { return dateStr; }
 }
 
 function gradeColor(pct: number) {
@@ -58,28 +78,369 @@ function gradeBg(pct: number) {
     return 'bg-red-50 border-red-200';
 }
 
+function scoreColor(score: number, max = 10) {
+    const pct = (score / max) * 100;
+    if (pct >= 80) return 'text-green-600';
+    if (pct >= 60) return 'text-amber-600';
+    return 'text-red-600';
+}
+
+function plagSeverityBadge(severity?: string | null) {
+    switch (severity?.toUpperCase()) {
+        case 'HIGH':   return 'bg-red-100 text-red-800';
+        case 'MEDIUM': return 'bg-amber-100 text-amber-800';
+        case 'LOW':    return 'bg-yellow-100 text-yellow-800';
+        default:       return 'bg-green-100 text-green-800';
+    }
+}
+
+// ─── Report HTML builder ───────────────────────────────────────
+
+function buildReportHtml(
+    assignmentTitle: string,
+    versionNumber: number,
+    metadata: VersionMetadata,
+): string {
+    const now = new Date().toLocaleString('en-US', {
+        month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+    const answers = metadata.answers ?? [];
+    const reportTotalGrade    = answers.reduce((s, a) => s + (a.projectedGrade ?? 0), 0);
+    const reportTotalMaxGrade = answers.reduce((s, a) => s + (a.maxPoints ?? 0), 0);
+    const displayTotal    = reportTotalMaxGrade > 0 ? reportTotalGrade    : (metadata.overallGrade  ?? 0);
+    const displayTotalMax = reportTotalMaxGrade > 0 ? reportTotalMaxGrade : (metadata.maxGrade ?? 0);
+    const totalPct = displayTotalMax > 0 ? Math.round((displayTotal / displayTotalMax) * 100) : 0;
+
+    const scoreBar = (label: string, score: number, max = 10) => {
+        const pct = Math.min(Math.max((score / max) * 100, 0), 100);
+        const color = pct >= 80 ? '#16a34a' : pct >= 60 ? '#d97706' : '#dc2626';
+        return `<div style="margin-bottom:8px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+                <span style="font-size:12px;color:#6b7280;">${label}</span>
+                <span style="font-size:12px;font-weight:700;color:${color};">${score}/${max}</span>
+            </div>
+            <div style="background:#e5e7eb;border-radius:3px;height:6px;">
+                <div style="background:${color};width:${pct}%;height:6px;border-radius:3px;"></div>
+            </div></div>`;
+    };
+
+    const qSections = answers.map((a, i) => {
+        const hasInternet = (a.internetMatches?.length ?? 0) > 0;
+        return `
+        <div style="margin-bottom:28px;page-break-inside:avoid;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+            <div style="background:#f3f4f6;padding:12px 16px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;">
+                <div style="font-weight:700;font-size:14px;color:#111827;">Question ${i + 1}</div>
+                ${a.projectedGrade != null ? `<div style="font-weight:700;color:#7c3aed;">${a.projectedGrade} / ${a.maxPoints ?? 10} pts</div>` : ''}
+            </div>
+            <div style="padding:16px;">
+                ${a.questionText ? `<p style="font-size:13px;color:#374151;margin-bottom:10px;font-style:italic;">${a.questionText}</p>` : ''}
+
+                <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:12px;margin-bottom:12px;">
+                    <div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:6px;">STUDENT ANSWER (${a.wordCount ?? 0} words)</div>
+                    <p style="font-size:13px;color:#111827;line-height:1.6;white-space:pre-wrap;">${a.answerText ?? '(no answer)'}</p>
+                </div>
+
+                ${(a.grammarScore != null) ? `
+                <div style="margin-bottom:12px;">
+                    <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">AI SCORES</div>
+                    ${scoreBar('Grammar', a.grammarScore)}
+                    ${scoreBar('Clarity', a.clarityScore ?? 0)}
+                    ${scoreBar('Completeness', a.completenessScore ?? 0)}
+                    ${scoreBar('Relevance', a.relevanceScore ?? 0)}
+                </div>` : ''}
+
+                ${(a.strengths?.length ?? 0) > 0 ? `
+                <div style="margin-bottom:10px;">
+                    <div style="font-size:12px;font-weight:600;color:#16a34a;margin-bottom:4px;">✓ STRENGTHS</div>
+                    <ul style="list-style:none;padding:0;">${(a.strengths ?? []).map(s => `<li style="font-size:12px;color:#374151;margin-bottom:3px;">✓ ${s}</li>`).join('')}</ul>
+                </div>` : ''}
+
+                ${(a.improvements?.length ?? 0) > 0 ? `
+                <div style="margin-bottom:10px;">
+                    <div style="font-size:12px;font-weight:600;color:#d97706;margin-bottom:4px;">→ AREAS FOR IMPROVEMENT</div>
+                    <ul style="list-style:none;padding:0;">${(a.improvements ?? []).map(s => `<li style="font-size:12px;color:#374151;margin-bottom:3px;">→ ${s}</li>`).join('')}</ul>
+                </div>` : ''}
+
+                ${(a.suggestions?.length ?? 0) > 0 ? `
+                <div style="margin-bottom:10px;">
+                    <div style="font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:4px;">• RECOMMENDATIONS</div>
+                    <ul style="list-style:none;padding:0;">${(a.suggestions ?? []).map(s => `<li style="font-size:12px;color:#374151;margin-bottom:3px;">• ${s}</li>`).join('')}</ul>
+                </div>` : ''}
+
+                <div style="border-top:1px solid #f3f4f6;padding-top:10px;margin-top:10px;">
+                    <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">PLAGIARISM</div>
+                    <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                        ${a.similarityScore != null ? `<div><span style="font-size:11px;color:#6b7280;">Overall: </span><span style="font-size:12px;font-weight:700;color:${a.similarityScore > 50 ? '#dc2626' : a.similarityScore > 20 ? '#d97706' : '#16a34a'};">${a.similarityScore.toFixed(1)}%</span></div>` : ''}
+                        ${a.internetSimilarityScore != null ? `<div><span style="font-size:11px;color:#6b7280;">Internet: </span><span style="font-size:12px;font-weight:700;">${a.internetSimilarityScore.toFixed(1)}%</span></div>` : ''}
+                        ${a.peerSimilarityScore != null ? `<div><span style="font-size:11px;color:#6b7280;">Peer: </span><span style="font-size:12px;font-weight:700;">${a.peerSimilarityScore.toFixed(1)}%</span></div>` : ''}
+                        ${a.riskLevel ? `<div style="padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;background:${a.riskLevel === 'HIGH' ? '#fee2e2' : a.riskLevel === 'MEDIUM' ? '#fed7aa' : a.riskLevel === 'LOW' ? '#fef9c3' : '#dcfce7'};color:${a.riskLevel === 'HIGH' ? '#991b1b' : a.riskLevel === 'MEDIUM' ? '#9a3412' : a.riskLevel === 'LOW' ? '#854d0e' : '#166534'};">${a.riskLevel}</div>` : ''}
+                    </div>
+
+                    ${hasInternet ? `
+                    <div style="margin-top:8px;">
+                        <div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;">MATCHED INTERNET SOURCES</div>
+                        ${(a.internetMatches ?? []).slice(0, 5).map(m => `
+                        <div style="border:1px solid #f3f4f6;border-radius:4px;padding:8px;margin-bottom:6px;">
+                            <div style="font-size:12px;font-weight:600;color:#1d4ed8;">${m.title}</div>
+                            <div style="font-size:11px;color:#6b7280;">${m.url}</div>
+                            ${m.snippet ? `<div style="font-size:11px;color:#374151;margin-top:3px;font-style:italic;">"${m.snippet.substring(0, 150)}${m.snippet.length > 150 ? '…' : ''}"</div>` : ''}
+                            ${m.matchedStudentText ? `<div style="font-size:11px;color:#991b1b;margin-top:3px;">Matched: "${m.matchedStudentText}"</div>` : ''}
+                            <div style="font-size:11px;color:#6b7280;margin-top:2px;">Similarity: ${m.similarityScore.toFixed(1)}% | ${m.sourceCategory ?? 'OTHER'} | Confidence: ${m.confidenceLevel ?? '—'}</div>
+                        </div>`).join('')}
+                    </div>` : ''}
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/>
+<title>Submission Report — ${assignmentTitle} v${versionNumber}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #111827; background: #fff; padding: 32px; font-size: 14px; }
+  h1 { font-size: 22px; font-weight: 800; color: #111827; margin-bottom: 4px; }
+  .meta { color: #6b7280; font-size: 12px; margin-bottom: 24px; }
+  .summary { background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 24px; display: flex; gap: 32px; flex-wrap: wrap; }
+  .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #e5e7eb; color: #9ca3af; font-size: 11px; text-align: center; }
+  @media print { body { padding: 16px; } }
+</style>
+</head>
+<body>
+<h1>Submission Report — Version ${versionNumber}</h1>
+<p class="meta">${assignmentTitle} &bull; Generated ${now}</p>
+<div class="summary">
+    <div><div style="font-size:11px;color:#6b7280;">AI PROJECTED SCORE</div><div style="font-size:24px;font-weight:800;color:${totalPct >= 80 ? '#16a34a' : totalPct >= 60 ? '#d97706' : '#dc2626'};">${displayTotal % 1 === 0 ? displayTotal.toFixed(0) : displayTotal.toFixed(1)} / ${displayTotalMax % 1 === 0 ? displayTotalMax.toFixed(0) : displayTotalMax.toFixed(1)}</div><div style="font-size:13px;color:#6b7280;">${totalPct}%</div></div>
+    <div><div style="font-size:11px;color:#6b7280;">TOTAL WORDS</div><div style="font-size:20px;font-weight:800;">${metadata.totalWordCount ?? 0}</div></div>
+    <div><div style="font-size:11px;color:#6b7280;">QUESTIONS</div><div style="font-size:20px;font-weight:800;">${answers.length}</div></div>
+</div>
+${qSections}
+<div class="footer">Smart LMS &bull; Per-Question Report &bull; ${now}</div>
+</body></html>`;
+}
+
+// ─── Sub-components ───────────────────────────────────────────
+
+function ScoreBar({ label, score, max = 10 }: { label: string; score: number; max?: number }) {
+    const pct = Math.min(Math.max((score / max) * 100, 0), 100);
+    const color = pct >= 80 ? 'bg-green-500' : pct >= 60 ? 'bg-amber-500' : 'bg-red-500';
+    const text = pct >= 80 ? 'text-green-600' : pct >= 60 ? 'text-amber-600' : 'text-red-600';
+    return (
+        <div>
+            <div className="flex justify-between mb-1">
+                <span className="text-xs text-gray-500">{label}</span>
+                <span className={`text-xs font-bold ${text}`}>{score}/{max}</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${pct}%` }} />
+            </div>
+        </div>
+    );
+}
+
+function QuestionReport({ answer, index }: { answer: AnswerSnapshotData; index: number }) {
+    const [expanded, setExpanded] = useState(true);
+    const hasFeedback = answer.grammarScore != null;
+    const hasInternet = (answer.internetMatches?.length ?? 0) > 0;
+    const severityClass = plagSeverityBadge(answer.plagiarismSeverity);
+
+    return (
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-4">
+            {/* Header */}
+            <button
+                onClick={() => setExpanded(!expanded)}
+                className="w-full flex items-center justify-between px-6 py-4 bg-gray-50 border-b border-gray-200 hover:bg-gray-100 transition-colors cursor-pointer text-left"
+            >
+                <div className="flex items-center gap-3">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-600 text-xs font-bold text-white flex-shrink-0">
+                        {index + 1}
+                    </span>
+                    <span className="text-sm font-medium text-gray-900 line-clamp-2">
+                        {answer.questionText ?? `Question ${index + 1}`}
+                    </span>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                    {answer.projectedGrade != null && (
+                        <span className={`text-sm font-bold ${scoreColor(answer.projectedGrade, answer.maxPoints ?? 10)}`}>
+                            {answer.projectedGrade} / {answer.maxPoints ?? 10}
+                        </span>
+                    )}
+                    <ChevronDown size={16} className={`text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                </div>
+            </button>
+
+            {expanded && (
+                <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Left: answer + plagiarism */}
+                    <div className="space-y-4">
+                        {/* Answer text */}
+                        <div>
+                            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                Student Answer <span className="font-normal">({answer.wordCount ?? 0} words)</span>
+                            </h4>
+                            <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 max-h-48 overflow-y-auto">
+                                <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                                    {answer.answerText || <span className="italic text-gray-400">No answer provided</span>}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Plagiarism summary */}
+                        <div>
+                            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+                                <Shield size={12} /> Plagiarism
+                            </h4>
+                            <div className="space-y-2">
+                                <div className="flex flex-wrap gap-2">
+                                    {answer.similarityScore != null && (
+                                        <span className={`px-2 py-1 rounded text-xs font-medium ${severityClass}`}>
+                                            {answer.plagiarismSeverity ?? 'CLEAN'} — {answer.similarityScore.toFixed(1)}%
+                                        </span>
+                                    )}
+                                    {answer.riskLevel && (
+                                        <span className={`px-2 py-1 rounded text-xs font-medium ${plagSeverityBadge(answer.riskLevel)}`}>
+                                            Risk: {answer.riskLevel}
+                                        </span>
+                                    )}
+                                </div>
+                                {(answer.internetSimilarityScore != null || answer.peerSimilarityScore != null) && (
+                                    <div className="text-xs text-gray-500 space-y-1">
+                                        {answer.internetSimilarityScore != null && (
+                                            <div>Internet similarity: <span className="font-medium text-gray-700">{answer.internetSimilarityScore.toFixed(1)}%</span></div>
+                                        )}
+                                        {answer.peerSimilarityScore != null && (
+                                            <div>Peer similarity: <span className="font-medium text-gray-700">{answer.peerSimilarityScore.toFixed(1)}%</span></div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Internet matches */}
+                            {hasInternet && (
+                                <div className="mt-3 space-y-2">
+                                    <p className="text-xs font-semibold text-gray-500">Matched Sources:</p>
+                                    {(answer.internetMatches ?? []).slice(0, 3).map((m, mi) => (
+                                        <div key={mi} className="bg-red-50 border border-red-100 rounded p-3">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="min-w-0">
+                                                    <p className="text-xs font-medium text-gray-900 truncate">{m.title}</p>
+                                                    <a href={m.url} target="_blank" rel="noopener noreferrer"
+                                                        className="text-xs text-blue-600 hover:underline flex items-center gap-1 truncate">
+                                                        {m.sourceDomain ?? m.url} <ExternalLink size={10} />
+                                                    </a>
+                                                </div>
+                                                <span className="text-xs font-bold text-red-700 flex-shrink-0">
+                                                    {m.similarityScore.toFixed(0)}%
+                                                </span>
+                                            </div>
+                                            {m.matchedStudentText && (
+                                                <p className="text-xs text-red-700 mt-1 italic">
+                                                    Matched: &quot;{m.matchedStudentText}&quot;
+                                                </p>
+                                            )}
+                                            {m.snippet && (
+                                                <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                                    {m.snippet}
+                                                </p>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Right: AI feedback */}
+                    <div className="space-y-4">
+                        {hasFeedback ? (
+                            <>
+                                {/* Scores */}
+                                <div>
+                                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1">
+                                        <Star size={12} /> AI Scores
+                                    </h4>
+                                    <div className="space-y-2">
+                                        <ScoreBar label="Grammar" score={answer.grammarScore ?? 0} />
+                                        <ScoreBar label="Clarity" score={answer.clarityScore ?? 0} />
+                                        <ScoreBar label="Completeness" score={answer.completenessScore ?? 0} />
+                                        <ScoreBar label="Relevance" score={answer.relevanceScore ?? 0} />
+                                    </div>
+                                </div>
+
+                                {/* Strengths */}
+                                {(answer.strengths?.length ?? 0) > 0 && (
+                                    <div>
+                                        <h4 className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2 flex items-center gap-1">
+                                            <CheckCircle2 size={12} /> Strengths
+                                        </h4>
+                                        <ul className="space-y-1">
+                                            {(answer.strengths ?? []).map((s, i) => (
+                                                <li key={i} className="text-xs text-gray-700 flex items-start gap-1.5">
+                                                    <span className="text-green-600 mt-0.5 flex-shrink-0">✓</span>{s}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {/* Improvements */}
+                                {(answer.improvements?.length ?? 0) > 0 && (
+                                    <div>
+                                        <h4 className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-2 flex items-center gap-1">
+                                            <TrendingUp size={12} /> Improvements
+                                        </h4>
+                                        <ul className="space-y-1">
+                                            {(answer.improvements ?? []).map((s, i) => (
+                                                <li key={i} className="text-xs text-gray-700 flex items-start gap-1.5">
+                                                    <span className="text-amber-600 mt-0.5 flex-shrink-0">→</span>{s}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {/* Suggestions */}
+                                {(answer.suggestions?.length ?? 0) > 0 && (
+                                    <div>
+                                        <h4 className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-2 flex items-center gap-1">
+                                            <Lightbulb size={12} /> Recommendations
+                                        </h4>
+                                        <ul className="space-y-1">
+                                            {(answer.suggestions ?? []).map((s, i) => (
+                                                <li key={i} className="text-xs text-gray-700 flex items-start gap-1.5">
+                                                    <span className="text-purple-600 mt-0.5 flex-shrink-0">•</span>{s}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-8 text-center text-gray-400">
+                                <Star size={32} className="mb-2 opacity-30" />
+                                <p className="text-sm">No AI feedback saved for this question</p>
+                                <p className="text-xs mt-1">Feedback is generated as you type answers</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ─── Skeleton ─────────────────────────────────────────────────
 
 function PageSkeleton() {
     return (
-        <div className="max-w-6xl mx-auto animate-pulse">
-            <div className="h-5 bg-gray-200 rounded w-36 mb-4" />
-            <div className="h-9 bg-gray-200 rounded w-56 mb-2" />
-            <div className="h-4 bg-gray-100 rounded w-80 mb-8" />
-            <div className="h-40 bg-gray-100 rounded-lg mb-8" />
-            <div className="grid grid-cols-3 gap-6 mb-8">
-                {[1, 2, 3].map(i => <div key={i} className="h-24 bg-gray-100 rounded-lg" />)}
+        <div className="max-w-5xl mx-auto animate-pulse space-y-4">
+            <div className="h-5 bg-gray-200 rounded w-36" />
+            <div className="h-9 bg-gray-200 rounded w-64" />
+            <div className="grid grid-cols-3 gap-4">
+                {[1,2,3].map(i => <div key={i} className="h-20 bg-gray-100 rounded-lg" />)}
             </div>
-            <div className="grid grid-cols-3 gap-8">
-                <div className="col-span-2 space-y-6">
-                    <div className="h-72 bg-gray-100 rounded-lg" />
-                    <div className="h-40 bg-gray-100 rounded-lg" />
-                </div>
-                <div className="space-y-6">
-                    <div className="h-52 bg-gray-100 rounded-lg" />
-                    <div className="h-36 bg-gray-100 rounded-lg" />
-                </div>
-            </div>
+            {[1,2,3].map(i => <div key={i} className="h-48 bg-gray-100 rounded-lg" />)}
         </div>
     );
 }
@@ -89,278 +450,284 @@ function PageSkeleton() {
 export default function FeedbackPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const requestedVersion = searchParams.get('version') ? Number(searchParams.get('version')) : null;
 
-    const { data: submission, loading: subLoading, error: subError } = useSubmission(id);
-    const { data: feedback, loading: fbLoading, error: fbError } = useFeedback(id);
-    const { data: report, loading: plLoading, error: plError } = usePlagiarismReport(id);
+    const { data: submission, loading: subLoading } = useSubmission(id);
+    const { data: versions, loading: vLoading, error: vError } = useVersions(id);
 
-    if (subLoading && !submission) return <PageSkeleton />;
+    // Pick which version to display
+    const sortedVersions = useMemo(
+        () => versions ? [...versions].sort((a, b) => b.versionNumber - a.versionNumber) : [],
+        [versions]
+    );
+
+    const selectedVersion = useMemo(() => {
+        if (!sortedVersions.length) return null;
+        if (requestedVersion != null) {
+            return sortedVersions.find(v => v.versionNumber === requestedVersion) ?? sortedVersions[0];
+        }
+        return sortedVersions[0]; // latest
+    }, [sortedVersions, requestedVersion]);
+
+    const metadata = useMemo<VersionMetadata>(() => {
+        if (!selectedVersion?.metadata) return {};
+        return selectedVersion.metadata as unknown as VersionMetadata;
+    }, [selectedVersion]);
+
+    const answers = metadata.answers ?? [];
+
+    // Derive totals by summing per-question data (source of truth)
+    const totalProjectedGrade = answers.reduce((s, a) => s + (a.projectedGrade ?? 0), 0);
+    const totalMaxPoints      = answers.reduce((s, a) => s + (a.maxPoints      ?? 0), 0);
+    // Fall back to metadata fields for older snapshots that may not have per-question maxPoints
+    const displayGrade   = totalMaxPoints > 0 ? totalProjectedGrade : (metadata.overallGrade ?? null);
+    const displayMaxGrade = totalMaxPoints > 0 ? totalMaxPoints      : (metadata.maxGrade    ?? null);
+    const scorePct = (displayGrade != null && displayMaxGrade && displayMaxGrade > 0)
+        ? Math.round((displayGrade / displayMaxGrade) * 100)
+        : null;
 
     const grade = submission?.grade ?? null;
     const totalMarks = submission?.totalMarks ?? 100;
     const gradePct = grade != null ? Math.round((grade / totalMarks) * 100) : null;
 
+    const downloadReport = useCallback(() => {
+        if (!selectedVersion) return;
+        const html = buildReportHtml(
+            submission?.assignmentTitle ?? 'Assignment',
+            selectedVersion.versionNumber,
+            metadata,
+        );
+        const win = window.open('', '_blank');
+        if (!win) return;
+        win.document.write(html);
+        win.document.close();
+        win.focus();
+        setTimeout(() => win.print(), 400);
+    }, [selectedVersion, submission, metadata]);
+
+    if ((subLoading || vLoading) && !submission) return <PageSkeleton />;
+
+    const hasReport = answers.length > 0;
+
     return (
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-5xl mx-auto">
             {/* Header */}
-            <div className="mb-8">
+            <div className="mb-6">
                 <button
                     onClick={() => router.back()}
                     className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors cursor-pointer"
                 >
-                    <ArrowLeft size={20} />
-                    Back to Submissions
+                    <ArrowLeft size={20} /> Back to Submissions
                 </button>
-                <h1 className="text-4xl font-bold text-gray-900 mb-2">Submission Feedback</h1>
-                {submission && (
-                    <p className="text-gray-600">
-                        {submission.assignmentTitle ?? 'Assignment'}
-                        {submission.moduleName ? ` • ${submission.moduleName}` : ''}
-                    </p>
-                )}
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-gray-900 mb-1">Submission Report</h1>
+                        {submission && (
+                            <p className="text-gray-600">
+                                {submission.assignmentTitle ?? 'Assignment'}
+                                {submission.moduleName ? ` • ${submission.moduleName}` : ''}
+                            </p>
+                        )}
+                    </div>
+                    {hasReport && (
+                        <button
+                            onClick={downloadReport}
+                            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium shrink-0 cursor-pointer"
+                        >
+                            <Download size={16} /> Download Report
+                        </button>
+                    )}
+                </div>
             </div>
 
-            {/* Error banner */}
-            {subError && (
+            {vError && (
                 <div className="flex items-start gap-3 p-4 mb-6 bg-amber-50 border border-amber-200 rounded-lg">
                     <AlertCircle size={20} className="text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                        <p className="font-medium text-amber-800">Could not load submission data</p>
-                        <p className="text-sm text-amber-700 mt-0.5">{subError}</p>
+                    <p className="text-sm text-amber-800">{vError}</p>
+                </div>
+            )}
+
+            {/* Grade card */}
+            {grade != null && gradePct != null && (
+                <div className={`rounded-lg border-2 p-6 mb-6 flex items-center justify-between gap-4 ${gradeBg(gradePct)}`}>
+                    <div className="flex items-center gap-6">
+                        <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center shadow-md">
+                            <div className="text-center">
+                                <div className={`text-3xl font-bold ${gradeColor(gradePct)}`}>{grade}</div>
+                                <div className="text-xs text-gray-500">/ {totalMarks}</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div className="text-xl font-bold text-gray-900">Final Grade: {gradePct}%</div>
+                            <div className="text-sm text-gray-600 flex items-center gap-1 mt-1">
+                                <Clock size={14} />
+                                {submission?.submittedAt ? formatDate(submission.submittedAt) : '—'}
+                            </div>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => router.push(`/submissions/student/version-history/${id}`)}
+                        className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm cursor-pointer"
+                    >
+                        <GitBranch size={16} /> Version History
+                    </button>
+                </div>
+            )}
+
+            {/* Version selector */}
+            {sortedVersions.length > 1 && (
+                <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <span className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                            <GitBranch size={16} /> Viewing version:
+                        </span>
+                        {sortedVersions.map(v => (
+                            <button
+                                key={v.id}
+                                onClick={() => router.push(`/submissions/student/feedback/${id}?version=${v.versionNumber}`)}
+                                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                                    selectedVersion?.id === v.id
+                                        ? 'bg-purple-600 text-white'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                            >
+                                v{v.versionNumber}
+                                {v.id === sortedVersions[0].id && (
+                                    <span className="ml-1 text-xs opacity-75">(latest)</span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                    {selectedVersion && (
+                        <p className="text-xs text-gray-500 mt-2">
+                            {selectedVersion.commitMessage ?? `Version ${selectedVersion.versionNumber}`}
+                            {' • '}{formatDate(selectedVersion.createdAt)}
+                        </p>
+                    )}
+                </div>
+            )}
+
+            {/* Score banner */}
+            {hasReport && displayGrade != null && displayMaxGrade != null && (
+                <div className={`rounded-xl border-2 p-6 mb-4 ${scorePct != null ? gradeBg(scorePct) : 'bg-purple-50 border-purple-200'}`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        {/* Big score */}
+                        <div className="flex items-center gap-5">
+                            <div className="flex-shrink-0 w-24 h-24 rounded-full bg-white shadow-md flex flex-col items-center justify-center border-4 border-white">
+                                <span className={`text-3xl font-extrabold leading-none ${scorePct != null ? gradeColor(scorePct) : 'text-purple-700'}`}>
+                                    {displayGrade % 1 === 0 ? displayGrade.toFixed(0) : displayGrade.toFixed(1)}
+                                </span>
+                                <span className="text-xs text-gray-400 mt-0.5">/ {displayMaxGrade % 1 === 0 ? displayMaxGrade.toFixed(0) : displayMaxGrade.toFixed(1)}</span>
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-0.5">AI Projected Score</p>
+                                <p className={`text-2xl font-extrabold ${scorePct != null ? gradeColor(scorePct) : 'text-purple-700'}`}>
+                                    {scorePct != null ? `${scorePct}%` : '—'}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                    Sum of per-question marks &nbsp;·&nbsp; {answers.length} question{answers.length !== 1 ? 's' : ''}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Per-question breakdown bar */}
+                        <div className="flex-1 max-w-xs hidden sm:block">
+                            <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Question breakdown</p>
+                            <div className="space-y-1.5">
+                                {answers.map((a, i) => {
+                                    const qMax = a.maxPoints ?? 0;
+                                    const qGot = a.projectedGrade ?? 0;
+                                    const qPct = qMax > 0 ? Math.round((qGot / qMax) * 100) : 0;
+                                    const barColor = qPct >= 80 ? 'bg-green-500' : qPct >= 60 ? 'bg-amber-500' : 'bg-red-400';
+                                    return (
+                                        <div key={a.questionId ?? i} className="flex items-center gap-2">
+                                            <span className="text-[10px] text-gray-400 w-4 text-right flex-shrink-0">Q{i + 1}</span>
+                                            <div className="flex-1 bg-white/60 rounded-full h-2">
+                                                <div className={`h-2 rounded-full ${barColor}`} style={{ width: `${qPct}%` }} />
+                                            </div>
+                                            <span className="text-[10px] font-semibold text-gray-600 w-14 text-right flex-shrink-0">
+                                                {qGot % 1 === 0 ? qGot.toFixed(0) : qGot.toFixed(1)} / {qMax % 1 === 0 ? qMax.toFixed(0) : qMax.toFixed(1)}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* Grade Card */}
-            {grade != null && gradePct != null ? (
-                <div className={`rounded-lg shadow-lg p-8 mb-8 border-2 ${gradeBg(gradePct)}`}>
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-6">
-                            <div className="w-24 h-24 rounded-full bg-white flex items-center justify-center shadow-lg">
-                                <div className="text-center">
-                                    <div className={`text-4xl font-bold ${gradeColor(gradePct)}`}>{grade}</div>
-                                    <div className="text-sm text-gray-600">/ {totalMarks}</div>
-                                </div>
-                            </div>
-                            <div>
-                                <h2 className="text-2xl font-bold text-gray-900 mb-2">Final Grade</h2>
-                                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-                                    {submission?.submittedAt && (
-                                        <span className="flex items-center gap-1">
-                                            <Clock size={16} />
-                                            Submitted: {formatDate(submission.submittedAt)}
-                                        </span>
-                                    )}
-                                    <span className="flex items-center gap-1">
-                                        <CheckCircle2 size={16} />
-                                        Status: {submission?.status ?? '—'}
-                                    </span>
-                                    {submission?.currentVersionNumber != null && (
-                                        <span className="flex items-center gap-1">
-                                            <GitBranch size={16} />
-                                            Version {submission.currentVersionNumber}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                        <button
-                            onClick={() => router.push(`/submissions/student/version-history/${id}`)}
-                            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-white transition-colors cursor-pointer"
-                        >
-                            <GitBranch size={18} />
-                            View Versions
+            {/* Summary stats */}
+            {hasReport && (
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                        <p className="text-xs text-gray-500 mb-1">Total Words</p>
+                        <p className="text-2xl font-bold text-blue-700">{(metadata.totalWordCount ?? 0).toLocaleString()}</p>
+                    </div>
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                        <p className="text-xs text-gray-500 mb-1">Questions</p>
+                        <p className="text-2xl font-bold text-green-700">{answers.length}</p>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
+                        <p className="text-xs text-gray-500 mb-1">Flagged</p>
+                        <p className="text-2xl font-bold text-amber-700">
+                            {answers.filter(a => (a.riskLevel === 'HIGH' || a.riskLevel === 'MEDIUM')).length}
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* Per-question report */}
+            {hasReport ? (
+                <div>
+                    <h2 className="text-lg font-bold text-gray-900 mb-4">Per-Question Report</h2>
+                    {answers.map((a, i) => (
+                        <QuestionReport key={a.questionId ?? i} answer={a} index={i} />
+                    ))}
+                </div>
+            ) : (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
+                    <Clock size={40} className="mx-auto text-gray-300 mb-3" />
+                    <p className="font-medium text-gray-600">No report available yet</p>
+                    <p className="text-sm text-gray-400 mt-1">
+                        The report is generated when you submit your assignment.
+                        {sortedVersions.length === 0 ? ' Submit your answers to generate a report.' : ''}
+                    </p>
+                </div>
+            )}
+
+            {/* Lecturer feedback */}
+            {submission?.lecturerFeedback && (
+                <div className="mt-6 bg-white rounded-lg border border-gray-200 p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                        <User className="text-blue-600" size={20} />
+                        <h2 className="text-lg font-bold text-gray-900">Lecturer Feedback</h2>
+                    </div>
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-gray-700 leading-relaxed italic">&quot;{submission.lecturerFeedback}&quot;</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Quick actions */}
+            <div className="mt-6 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border-2 border-purple-200">
+                <h3 className="font-bold text-gray-900 mb-4">Quick Actions</h3>
+                <div className="flex flex-wrap gap-3">
+                    {hasReport && (
+                        <button onClick={downloadReport}
+                            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium cursor-pointer">
+                            <Download size={15} /> Download PDF Report
                         </button>
-                    </div>
-                </div>
-            ) : submission ? (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 mb-8 text-center">
-                    <Clock size={32} className="mx-auto text-gray-400 mb-3" />
-                    <p className="font-semibold text-gray-700">Awaiting Grade</p>
-                    <p className="text-sm text-gray-500 mt-1">This submission hasn&#39;t been graded yet.</p>
-                </div>
-            ) : null}
-
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-6">
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-medium text-gray-600">AI Quality Score</h3>
-                        <Star className="text-purple-600" size={24} />
-                    </div>
-                    <p className="text-3xl font-bold text-purple-600">
-                        {submission?.aiScore != null ? `${submission.aiScore}/100` : '—'}
-                    </p>
-                </div>
-
-                <div className={`border-2 rounded-lg p-6 ${
-                    (submission?.plagiarismScore ?? 0) < 20
-                        ? 'bg-green-50 border-green-200'
-                        : 'bg-red-50 border-red-200'
-                }`}>
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-medium text-gray-600">Plagiarism Score</h3>
-                        <Shield
-                            className={(submission?.plagiarismScore ?? 0) < 20 ? 'text-green-600' : 'text-red-600'}
-                            size={24}
-                        />
-                    </div>
-                    <p className={`text-3xl font-bold ${
-                        (submission?.plagiarismScore ?? 0) < 20 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                        {submission?.plagiarismScore != null ? `${submission.plagiarismScore}%` : '—'}
-                    </p>
-                    {submission?.plagiarismScore != null && submission.plagiarismScore < 20 && (
-                        <p className="text-xs text-green-700 mt-1">Clean submission</p>
                     )}
-                </div>
-
-                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6">
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-medium text-gray-600">Files Submitted</h3>
-                        <FileText className="text-blue-600" size={24} />
-                    </div>
-                    <p className="text-3xl font-bold text-blue-600">
-                        {submission?.files?.length ?? '—'}
-                    </p>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Main Content */}
-                <div className="lg:col-span-2 space-y-6">
-                    {/* AI Feedback */}
-                    <div className="bg-white rounded-lg shadow-lg border border-gray-200">
-                        <div className="flex items-center gap-3 px-6 pt-6 pb-4">
-                            <Star className="text-purple-600" size={24} />
-                            <h2 className="text-xl font-bold text-gray-900">AI-Generated Feedback</h2>
-                        </div>
-                        <div className="px-6 pb-6">
-                            <AIFeedbackCard
-                                feedback={feedback}
-                                loading={fbLoading}
-                                error={fbError ?? undefined}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Lecturer Feedback */}
-                    {submission?.lecturerFeedback && (
-                        <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
-                            <div className="flex items-center gap-3 mb-4">
-                                <User className="text-blue-600" size={24} />
-                                <h2 className="text-xl font-bold text-gray-900">Lecturer Feedback</h2>
-                            </div>
-                            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                                <p className="text-gray-700 leading-relaxed italic">
-                                    &#34;{submission.lecturerFeedback}&#34;
-                                </p>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Plagiarism Report */}
-                    <div className="bg-white rounded-lg shadow-lg border border-gray-200">
-                        <div className="flex items-center gap-3 px-6 pt-6 pb-4">
-                            <Shield className="text-green-600" size={24} />
-                            <h2 className="text-xl font-bold text-gray-900">Plagiarism Report</h2>
-                        </div>
-                        <div className="px-6 pb-6">
-                            <PlagiarismReportCard
-                                report={report}
-                                loading={plLoading}
-                                error={plError ?? undefined}
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {/* Sidebar */}
-                <div className="space-y-6">
-                    {/* Submitted Files */}
-                    {submission?.files && submission.files.length > 0 && (
-                        <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
-                            <h3 className="font-bold text-gray-900 mb-4">Submitted Files</h3>
-                            <div className="space-y-3">
-                                {submission.files.map((file) => (
-                                    <div
-                                        key={file.id}
-                                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                                    >
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <FileText className="text-purple-600 shrink-0" size={20} />
-                                            <div className="min-w-0">
-                                                <p className="text-sm font-medium text-gray-900 truncate">
-                                                    {file.originalFileName ?? file.fileName}
-                                                </p>
-                                                <p className="text-xs text-gray-500">
-                                                    {formatBytes(file.fileSize)} • {getFileExt(file.fileName)}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        {file.fileUrl && (
-                                            <a
-                                                href={file.fileUrl}
-                                                download
-                                                className="text-purple-600 hover:text-purple-700 shrink-0 ml-2"
-                                            >
-                                                <Download size={18} />
-                                            </a>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Quick Actions */}
-                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border-2 border-purple-200">
-                        <h3 className="font-bold text-gray-900 mb-4">Quick Actions</h3>
-                        <div className="space-y-3">
-                            <button
-                                onClick={() => router.push(`/submissions/student/version-history/${id}`)}
-                                className="w-full px-4 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-white transition-colors text-sm font-medium cursor-pointer"
-                            >
-                                View All Versions
-                            </button>
-                            <button
-                                onClick={() => router.push('/submissions/student/submit')}
-                                className="w-full px-4 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-white transition-colors text-sm font-medium cursor-pointer"
-                            >
-                                Submit New Version
-                            </button>
-                            <button
-                                onClick={() => router.push('/submissions/student/my-submissions')}
-                                className="w-full px-4 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-white transition-colors text-sm font-medium cursor-pointer"
-                            >
-                                All My Submissions
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Grade Performance */}
-                    {grade != null && gradePct != null && (
-                        <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
-                            <h3 className="font-bold text-gray-900 mb-4">Your Performance</h3>
-                            <div>
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm text-gray-600">Your Score</span>
-                                    <span className="text-sm font-bold text-gray-900">{gradePct}%</span>
-                                </div>
-                                <div className="w-full bg-gray-200 rounded-full h-3">
-                                    <div
-                                        className={`h-3 rounded-full ${gradeColor(gradePct).replace('text-', 'bg-')}`}
-                                        style={{ width: `${Math.min(100, gradePct)}%` }}
-                                    />
-                                </div>
-                                <div className="pt-3 mt-3 border-t border-gray-200">
-                                    <p className="text-sm font-medium text-gray-700">
-                                        {grade} / {totalMarks} marks
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    <button onClick={() => router.push(`/submissions/student/version-history/${id}`)}
+                        className="flex items-center gap-2 px-4 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-white transition-colors text-sm font-medium cursor-pointer">
+                        <GitBranch size={15} /> View All Versions
+                    </button>
+                    <button onClick={() => router.push('/submissions/student/my-submissions')}
+                        className="flex items-center gap-2 px-4 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-white transition-colors text-sm font-medium cursor-pointer">
+                        All My Submissions
+                    </button>
                 </div>
             </div>
         </div>

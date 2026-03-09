@@ -116,6 +116,73 @@ public class GoogleSearchService {
         }
     }
 
+    /**
+     * Search Google Scholar for academic sources matching the query.
+     * Uses SerpAPI engine=google_scholar.
+     * Results are cached for 1 hour.
+     */
+    @Cacheable(value = "scholarSearchCache", key = "#query + ':' + #numResults")
+    public List<Map<String, String>> searchScholar(String query, int numResults) {
+        if (!searchEnabled || apiKey == null || apiKey.isBlank()) {
+            log.info("[SerpAPI Scholar] Disabled or no API key — skipping scholar check");
+            return new ArrayList<>();
+        }
+        String queryPreview = query.substring(0, Math.min(60, query.length()));
+        log.info("[SerpAPI Scholar] Starting scholar search — numResults={} query=\"{}\"", numResults, queryPreview);
+        try {
+            String searchQuery = prepareSearchQuery(query);
+            String encodedQuery = URLEncoder.encode(searchQuery, StandardCharsets.UTF_8);
+            String url = String.format("%s?engine=google_scholar&q=%s&num=%d&api_key=%s",
+                    searchApiUrl, encodedQuery, Math.min(numResults, 10), apiKey);
+            Request request = new Request.Builder().url(url).get().build();
+            long t0 = System.currentTimeMillis();
+            try (Response response = client.newCall(request).execute()) {
+                log.info("[SerpAPI Scholar] Response — HTTP {} in {}ms", response.code(), System.currentTimeMillis() - t0);
+                if (!response.isSuccessful()) {
+                    log.warn("[SerpAPI Scholar] HTTP {} — skipping scholar results", response.code());
+                    return new ArrayList<>();
+                }
+                String body = response.body() != null ? response.body().string() : "";
+                return parseScholarResults(body);
+            }
+        } catch (IOException e) {
+            log.warn("[SerpAPI Scholar] Network error — {} — skipping", e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    private List<Map<String, String>> parseScholarResults(String responseBody) {
+        List<Map<String, String>> results = new ArrayList<>();
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            JsonNode items = root.get("organic_results");
+            if (items == null || !items.isArray()) {
+                log.info("[SerpAPI Scholar] No organic_results in scholar response");
+                return results;
+            }
+            for (JsonNode item : items) {
+                Map<String, String> result = new HashMap<>();
+                result.put("url",      item.has("link")    ? item.get("link").asText()    : "");
+                result.put("title",    item.has("title")   ? item.get("title").asText()   : "");
+                String snippet = item.has("snippet") ? item.get("snippet").asText() : "";
+                // Append publication summary if present
+                if (item.has("publication_info") && item.get("publication_info").has("summary")) {
+                    String pub = item.get("publication_info").get("summary").asText();
+                    if (!pub.isBlank()) snippet = snippet + " [" + pub + "]";
+                }
+                result.put("snippet", snippet);
+                String url = result.get("url");
+                if (url != null && !url.isEmpty()) result.put("domain", extractDomain(url));
+                result.put("category", "ACADEMIC"); // Scholar results are always academic
+                results.add(result);
+            }
+            log.info("[SerpAPI Scholar] Parsed {} scholar results", results.size());
+        } catch (Exception e) {
+            log.error("[SerpAPI Scholar] Failed to parse response — {}", e.getMessage(), e);
+        }
+        return results;
+    }
+
     private String prepareSearchQuery(String text) {
         if (text == null || text.isEmpty()) return "";
         String cleaned = text.trim().replaceAll("\\s+", " ");

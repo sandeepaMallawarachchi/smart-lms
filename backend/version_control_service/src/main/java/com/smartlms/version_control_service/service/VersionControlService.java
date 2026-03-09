@@ -154,10 +154,18 @@ public class VersionControlService {
                 m.put("clarityScore",        a.getClarityScore());
                 m.put("completenessScore",   a.getCompletenessScore());
                 m.put("relevanceScore",      a.getRelevanceScore());
-                m.put("similarityScore",     a.getSimilarityScore());
-                m.put("plagiarismSeverity",  a.getPlagiarismSeverity());
-                m.put("projectedGrade",      a.getProjectedGrade());
-                m.put("maxPoints",           a.getMaxPoints());
+                m.put("strengths",               a.getStrengths());
+                m.put("improvements",            a.getImprovements());
+                m.put("suggestions",             a.getSuggestions());
+                m.put("similarityScore",         a.getSimilarityScore());
+                m.put("plagiarismSeverity",      a.getPlagiarismSeverity());
+                m.put("internetSimilarityScore", a.getInternetSimilarityScore());
+                m.put("peerSimilarityScore",     a.getPeerSimilarityScore());
+                m.put("riskScore",               a.getRiskScore());
+                m.put("riskLevel",               a.getRiskLevel());
+                m.put("internetMatches",         a.getInternetMatches());
+                m.put("projectedGrade",          a.getProjectedGrade());
+                m.put("maxPoints",               a.getMaxPoints());
                 answerMaps.add(m);
             }
             metadata.put("answers", answerMaps);

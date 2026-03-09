@@ -123,6 +123,7 @@ export interface SubmissionVersion {
     isSubmitted: boolean;
     aiFeedback?: string;
     plagiarismDetails?: string;
+    metadata?: Record<string, unknown>;
 }
 
 export interface VersionComparison {

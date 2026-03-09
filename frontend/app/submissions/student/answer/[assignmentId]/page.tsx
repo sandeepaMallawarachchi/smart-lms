@@ -316,6 +316,14 @@ export default function AnswerPage({
         setGradeMap((prev) => ({ ...prev, [questionId]: grade }));
     }, []);
 
+    const handleFeedbackChange = useCallback((questionId: string, feedback: LiveFeedback | null) => {
+        setFeedbackMap((prev) => ({ ...prev, [questionId]: feedback }));
+    }, []);
+
+    const handlePlagiarismChange = useCallback((questionId: string, result: LivePlagiarismResult | null) => {
+        setPlagiarismMap((prev) => ({ ...prev, [questionId]: result }));
+    }, []);
+
     // ── Derived values ────────────────────────────────────────
 
     const questions = assignment?.questions ?? [];
@@ -363,18 +371,35 @@ export default function AnswerPage({
                         const grade = gradeMap[q.id];
                         const text = answerMap[q.id] ?? '';
                         return {
-                            questionId:        q.id,
-                            questionText:      q.text,
-                            answerText:        text,
-                            wordCount:         countWords(text),
-                            grammarScore:      fb?.grammarScore,
-                            clarityScore:      fb?.clarityScore,
-                            completenessScore: fb?.completenessScore,
-                            relevanceScore:    fb?.relevanceScore,
-                            similarityScore:   pl?.similarityScore,
-                            plagiarismSeverity: pl?.severity,
-                            projectedGrade:    grade ?? undefined,
-                            maxPoints:         q.maxPoints ?? 10,
+                            questionId:              q.id,
+                            questionText:            q.text,
+                            answerText:              text,
+                            wordCount:               countWords(text),
+                            grammarScore:            fb?.grammarScore,
+                            clarityScore:            fb?.clarityScore,
+                            completenessScore:       fb?.completenessScore,
+                            relevanceScore:          fb?.relevanceScore,
+                            strengths:               fb?.strengths,
+                            improvements:            fb?.improvements,
+                            suggestions:             fb?.suggestions,
+                            similarityScore:         pl?.similarityScore,
+                            plagiarismSeverity:      pl?.severity,
+                            internetSimilarityScore: pl?.internetSimilarityScore,
+                            peerSimilarityScore:     pl?.peerSimilarityScore,
+                            riskScore:               pl?.riskScore,
+                            riskLevel:               pl?.riskLevel,
+                            internetMatches:         pl?.internetMatches?.map(m => ({
+                                title:               m.title,
+                                url:                 m.url,
+                                snippet:             m.snippet,
+                                similarityScore:     m.similarityScore,
+                                sourceDomain:        m.sourceDomain,
+                                sourceCategory:      m.sourceCategory,
+                                confidenceLevel:     m.confidenceLevel,
+                                matchedStudentText:  m.matchedStudentText,
+                            })),
+                            projectedGrade:          grade ?? undefined,
+                            maxPoints:               q.maxPoints ?? 10,
                         };
                     });
 
@@ -446,7 +471,10 @@ export default function AnswerPage({
                         </svg>
                     </div>
                     <h2 className="text-xl font-bold text-green-800 mb-2">Assignment Submitted!</h2>
-                    <p className="text-sm text-green-700">Redirecting to your submissions…</p>
+                    <p className="text-sm text-green-700 mb-3">Redirecting to your submissions…</p>
+                    <p className="text-xs text-green-600 opacity-80">
+                        Your report has been saved. View it on your submissions page.
+                    </p>
                 </div>
             </div>
         );
@@ -587,6 +615,8 @@ export default function AnswerPage({
                                 disabled={submitDone || isDeadlinePassed}
                                 onAnswerChange={handleAnswerChange}
                                 onGradeChange={handleGradeChange}
+                                onFeedbackChange={handleFeedbackChange}
+                                onPlagiarismChange={handlePlagiarismChange}
                                 questionIndex={idx}
                             />
                         ))}

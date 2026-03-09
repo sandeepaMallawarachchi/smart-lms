@@ -3,6 +3,7 @@ package com.smartlms.version_control_service.dto.request;
 import lombok.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Request body for POST /api/versions/text-snapshot
@@ -59,9 +60,23 @@ public class TextSnapshotRequest {
         private Double completenessScore;
         private Double relevanceScore;
 
+        // AI feedback text
+        private List<String> strengths;
+        private List<String> improvements;
+        private List<String> suggestions;
+
         // Plagiarism
         private Double similarityScore;
         private String plagiarismSeverity;
+
+        // Enhanced plagiarism
+        private Double internetSimilarityScore;
+        private Double peerSimilarityScore;
+        private Double riskScore;
+        private String riskLevel;  // CLEAN | LOW | MEDIUM | HIGH
+
+        // Internet match details — each entry has: title, url, snippet, similarityScore, sourceDomain, sourceCategory, confidenceLevel, matchedStudentText
+        private List<Map<String, Object>> internetMatches;
 
         // Projected grade for this question
         private Double projectedGrade;

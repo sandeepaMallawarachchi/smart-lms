@@ -566,39 +566,53 @@ export const projectsAndTasksService = {
 
 // ─── Version Control Service (port 8082) ─────────────────────
 
+// Helper: unwrap { success, data } envelope from the version-control service
+function unwrapVersion<T>(raw: unknown): T {
+    if (raw && typeof raw === 'object') {
+        const obj = raw as Record<string, unknown>;
+        if ('data' in obj) return obj.data as T;
+    }
+    return raw as T;
+}
+
 export const versionService = {
     /** Get all versions for a submission */
-    getVersions(submissionId: string): Promise<SubmissionVersion[]> {
-        return apiRequest<SubmissionVersion[]>(
+    async getVersions(submissionId: string): Promise<SubmissionVersion[]> {
+        const raw = await apiRequest<unknown>(
             `${VERSION_API}/api/versions/submission/${encodeURIComponent(submissionId)}`
         );
+        const list = unwrapVersion<SubmissionVersion[]>(raw);
+        return Array.isArray(list) ? list : [];
     },
 
     /** Get a specific version */
-    getVersion(id: string): Promise<SubmissionVersion> {
-        return apiRequest<SubmissionVersion>(`${VERSION_API}/api/versions/${id}`);
+    async getVersion(id: string): Promise<SubmissionVersion> {
+        const raw = await apiRequest<unknown>(`${VERSION_API}/api/versions/${id}`);
+        return unwrapVersion<SubmissionVersion>(raw);
     },
 
     /** Get the latest version of a submission */
-    getLatestVersion(submissionId: string): Promise<SubmissionVersion> {
-        return apiRequest<SubmissionVersion>(
+    async getLatestVersion(submissionId: string): Promise<SubmissionVersion> {
+        const raw = await apiRequest<unknown>(
             `${VERSION_API}/api/versions/submission/${encodeURIComponent(submissionId)}/latest`
         );
+        return unwrapVersion<SubmissionVersion>(raw);
     },
 
     /** Compare two versions */
-    compareVersions(versionAId: string, versionBId: string): Promise<VersionComparison> {
-        return apiRequest<VersionComparison>(
+    async compareVersions(versionAId: string, versionBId: string): Promise<VersionComparison> {
+        const raw = await apiRequest<unknown>(
             `${VERSION_API}/api/versions/diff`,
             {
                 method: 'POST',
                 body: JSON.stringify({ sourceVersionId: Number(versionAId), targetVersionId: Number(versionBId) }),
             }
         );
+        return unwrapVersion<VersionComparison>(raw);
     },
 
     /** Create a new version (usually triggered automatically on file upload) */
-    createVersion(payload: {
+    async createVersion(payload: {
         submissionId: string;
         files: File[];
         commitMessage?: string;
@@ -610,14 +624,15 @@ export const versionService = {
         }
         payload.files.forEach((f) => formData.append('files', f));
 
-        return apiRequest<SubmissionVersion>(`${VERSION_API}/api/versions`, {
+        const raw = await apiRequest<unknown>(`${VERSION_API}/api/versions`, {
             method: 'POST',
             body: formData,
         });
+        return unwrapVersion<SubmissionVersion>(raw);
     },
 
     /** Create an immutable text-answer snapshot after a successful submission. */
-    createTextSnapshot(payload: {
+    async createTextSnapshot(payload: {
         submissionId: number;
         studentId: string;
         commitMessage?: string;
@@ -633,16 +648,34 @@ export const versionService = {
             clarityScore?: number;
             completenessScore?: number;
             relevanceScore?: number;
+            strengths?: string[];
+            improvements?: string[];
+            suggestions?: string[];
             similarityScore?: number;
             plagiarismSeverity?: string;
+            internetSimilarityScore?: number;
+            peerSimilarityScore?: number;
+            riskScore?: number;
+            riskLevel?: string;
+            internetMatches?: Array<{
+                title: string;
+                url: string;
+                snippet: string;
+                similarityScore: number;
+                sourceDomain?: string;
+                sourceCategory?: string;
+                confidenceLevel?: string;
+                matchedStudentText?: string;
+            }>;
             projectedGrade?: number;
             maxPoints?: number;
         }>;
     }): Promise<SubmissionVersion> {
-        return apiRequest<SubmissionVersion>(
+        const raw = await apiRequest<unknown>(
             `${VERSION_API}/api/versions/text-snapshot`,
             { method: 'POST', body: JSON.stringify(payload) }
         );
+        return unwrapVersion<SubmissionVersion>(raw);
     },
 
     /** Download a specific version as ZIP */
@@ -660,11 +693,17 @@ export const versionService = {
 // ─── AI Feedback Service (port 8083) ─────────────────────────
 
 export const feedbackService = {
-    /** Get feedback for a submission (latest) */
-    getFeedback(submissionId: string): Promise<Feedback> {
-        return apiRequest<Feedback>(
-            `${FEEDBACK_API}/api/feedback?submissionId=${encodeURIComponent(submissionId)}`
+    /** Get feedback for a submission (latest) — GET /api/feedback/submission/{submissionId} */
+    async getFeedback(submissionId: string): Promise<Feedback> {
+        // Backend returns ApiResponse<List<FeedbackResponse>> — unwrap and take the most recent
+        const res = await apiRequest<{ success: boolean; data: Feedback[] }>(
+            `${FEEDBACK_API}/api/feedback/submission/${encodeURIComponent(submissionId)}`
         );
+        const items = res.data;
+        if (!items || items.length === 0) {
+            throw new Error('No feedback found for this submission');
+        }
+        return items[0];
     },
 
     /** Get feedback by ID */
@@ -684,6 +723,27 @@ export const feedbackService = {
         return apiRequest<Feedback>(`${FEEDBACK_API}/api/feedback/generate`, {
             method: 'POST',
             body: JSON.stringify(payload),
+        });
+    },
+
+    /**
+     * Generate overall AI feedback for a text-based submission after submit.
+     * Sends the concatenated Q&A content as submissionContent.
+     * POST /api/feedback/generate
+     */
+    async generateSubmissionFeedback(
+        submissionId: string,
+        studentId: string,
+        submissionContent: string,
+    ): Promise<void> {
+        await apiRequest<{ data: unknown }>(`${FEEDBACK_API}/api/feedback/generate`, {
+            method: 'POST',
+            body: JSON.stringify({
+                submissionId:    Number(submissionId),
+                studentId,
+                submissionContent,
+                forceRegenerate: false,
+            }),
         });
     },
 
@@ -720,16 +780,22 @@ export const feedbackService = {
 // ─── Plagiarism Service (port 8084) ──────────────────────────
 
 export const plagiarismService = {
-    /** Get plagiarism report for a submission */
-    getReport(submissionId: string): Promise<PlagiarismReport> {
-        return apiRequest<PlagiarismReport>(
-            `${PLAGIARISM_API}/api/plagiarism?submissionId=${encodeURIComponent(submissionId)}`
+    /** Get plagiarism checks for a submission — GET /api/integrity/checks/submission/{submissionId} */
+    async getReport(submissionId: string): Promise<PlagiarismReport> {
+        // Backend returns ApiResponse<List<PlagiarismCheckResponse>> — unwrap and take the most recent
+        const res = await apiRequest<{ success: boolean; data: PlagiarismReport[] }>(
+            `${PLAGIARISM_API}/api/integrity/checks/submission/${encodeURIComponent(submissionId)}`
         );
+        const items = res.data;
+        if (!items || items.length === 0) {
+            throw new Error('No plagiarism report found for this submission');
+        }
+        return items[0];
     },
 
     /** Get report by ID */
     getReportById(id: string): Promise<PlagiarismReport> {
-        return apiRequest<PlagiarismReport>(`${PLAGIARISM_API}/api/plagiarism/${id}`);
+        return apiRequest<PlagiarismReport>(`${PLAGIARISM_API}/api/integrity/checks/${id}`);
     },
 
     /** Get all plagiarism reports (lecturer - flagged submissions) */
@@ -746,11 +812,39 @@ export const plagiarismService = {
         return apiRequest<PlagiarismReport[]>(`${PLAGIARISM_API}/api/plagiarism${qs}`);
     },
 
-    /** Trigger plagiarism check */
+    /** Trigger plagiarism check (legacy endpoint — kept for backward compat) */
     checkPlagiarism(payload: CheckPlagiarismPayload): Promise<PlagiarismReport> {
-        return apiRequest<PlagiarismReport>(`${PLAGIARISM_API}/api/plagiarism/check`, {
+        return apiRequest<PlagiarismReport>(`${PLAGIARISM_API}/api/integrity/checks`, {
             method: 'POST',
-            body: JSON.stringify(payload),
+            body: JSON.stringify({
+                submissionId: Number(payload.submissionId),
+                checkType:    'COMBINED',
+                checkInternet: true,
+            }),
+        });
+    },
+
+    /**
+     * Run a full COMBINED plagiarism check for a submitted text-answer submission.
+     * Checks both internet similarity and peer similarity.
+     * POST /api/integrity/checks
+     */
+    async runCombinedCheck(
+        submissionId: string,
+        studentId: string,
+        assignmentId: string,
+        textContent: string,
+    ): Promise<void> {
+        await apiRequest<{ data: unknown }>(`${PLAGIARISM_API}/api/integrity/checks`, {
+            method: 'POST',
+            body: JSON.stringify({
+                submissionId:  Number(submissionId),
+                studentId,
+                assignmentId,
+                checkType:     'COMBINED',
+                textContent,
+                checkInternet: true,
+            }),
         });
     },
 

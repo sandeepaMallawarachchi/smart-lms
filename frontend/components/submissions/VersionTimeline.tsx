@@ -269,7 +269,7 @@ function VersionNode({
                             </div>
                             <div className="flex items-baseline gap-1">
                                 <span className="text-lg font-bold text-gray-900">
-                                    {version.wordCount.toLocaleString()}
+                                    {(version.wordCount ?? 0).toLocaleString()}
                                 </span>
                                 {/* positiveGood=true: more words is progress */}
                                 <Delta value={wordDelta} positiveGood />

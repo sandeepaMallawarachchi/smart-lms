@@ -214,8 +214,12 @@ export default function PlagiarismReportCard({
 
     // ── State 4: Full display ──────────────────────────────────
     //
-    // Report is resolved and COMPLETED. Destructure the fields we need.
-    const { overallScore, sourcesChecked, matchesFound, topMatches, details } = report;
+    // Normalize report fields so partial/legacy payloads do not crash UI.
+    const overallScore = report.overallScore ?? 0;
+    const sourcesChecked = report.sourcesChecked ?? 0;
+    const matchesFound = report.matchesFound ?? 0;
+    const topMatches = Array.isArray(report.topMatches) ? report.topMatches : [];
+    const details = report.details;
 
     console.debug(
         '[PlagiarismReportCard] Rendering full report — score:', overallScore, '%',

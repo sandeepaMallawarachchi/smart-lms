@@ -7,6 +7,7 @@ import {
     RefreshCw, Clock, ChevronRight, X,
 } from 'lucide-react';
 import { useAssignments, useSubmissions } from '@/hooks/useSubmissions';
+import { useVersions } from '@/hooks/useVersions';
 import { useSelectedCourse } from '@/hooks/useSelectedCourse';
 import type { Assignment, Submission } from '@/types/submission.types';
 
@@ -138,6 +139,20 @@ function CardSkeleton() {
                 </div>
             </div>
         </div>
+    );
+}
+
+// ─── Version Count Badge ──────────────────────────────────────────────────────
+
+function VersionCountBadge({ submissionId }: { submissionId: string }) {
+    const { data: versions, loading } = useVersions(submissionId);
+    const count = versions?.length ?? 0;
+    if (loading) return <span className="text-gray-300 text-xs">…</span>;
+    if (count === 0) return null;
+    return (
+        <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold leading-none">
+            {count}
+        </span>
     );
 }
 
@@ -301,25 +316,15 @@ function AssignmentCard({
 
                     {/* Secondary: Versions + Plagiarism (only when a terminal submission exists) */}
                     {sub && (
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={() => router.push(`/submissions/student/version-history/${sub.id}`)}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs text-gray-500 hover:text-indigo-700 hover:bg-indigo-50 transition-colors cursor-pointer"
-                                title="Version history & compare"
-                            >
-                                <GitBranch size={12} />
-                                Versions
-                            </button>
-                            <span className="text-gray-300 text-xs">·</span>
-                            <button
-                                onClick={() => router.push(`/submissions/student/feedback/${sub.id}`)}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs text-gray-500 hover:text-amber-700 hover:bg-amber-50 transition-colors cursor-pointer"
-                                title="View feedback & plagiarism report"
-                            >
-                                <Shield size={12} />
-                                Plagiarism
-                            </button>
-                        </div>
+                        <button
+                            onClick={() => router.push(`/submissions/student/version-history/${sub.id}`)}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-gray-500 hover:text-indigo-700 hover:bg-indigo-50 transition-colors cursor-pointer"
+                            title="Version history & compare"
+                        >
+                            <GitBranch size={12} />
+                            Versions
+                            <VersionCountBadge submissionId={sub.id} />
+                        </button>
                     )}
                 </div>
             </div>

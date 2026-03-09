@@ -9,6 +9,10 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Kept for any legacy usage, but the jsonb column in PlagiarismCheck
+ * now uses @JdbcTypeCode(SqlTypes.JSON) instead of this converter.
+ */
 @Converter
 public class MapToJsonConverter implements AttributeConverter<Map<String, Object>, String> {
 
