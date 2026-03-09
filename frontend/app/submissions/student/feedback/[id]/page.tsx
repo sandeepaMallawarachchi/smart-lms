@@ -211,7 +211,12 @@ function buildReportHtml(
 <h1>Submission Report — Version ${versionNumber}</h1>
 <p class="meta">${assignmentTitle} &bull; Generated ${now}</p>
 <div class="summary">
-    <div><div style="font-size:11px;color:#6b7280;">AI PROJECTED SCORE</div><div style="font-size:24px;font-weight:800;color:${totalPct >= 80 ? '#16a34a' : totalPct >= 60 ? '#d97706' : '#dc2626'};">${displayTotal % 1 === 0 ? displayTotal.toFixed(0) : displayTotal.toFixed(1)} / ${displayTotalMax % 1 === 0 ? displayTotalMax.toFixed(0) : displayTotalMax.toFixed(1)}</div><div style="font-size:13px;color:#6b7280;">${totalPct}%</div></div>
+    <div>
+        <div style="font-size:11px;color:#6b7280;margin-bottom:4px;">FINAL GRADE</div>
+        <div style="font-size:28px;font-weight:800;color:${totalPct >= 80 ? '#16a34a' : totalPct >= 60 ? '#d97706' : '#dc2626'};">${displayTotal % 1 === 0 ? displayTotal.toFixed(0) : displayTotal.toFixed(1)} / ${displayTotalMax % 1 === 0 ? displayTotalMax.toFixed(0) : displayTotalMax.toFixed(1)}</div>
+        <div style="font-size:14px;font-weight:700;color:${totalPct >= 80 ? '#16a34a' : totalPct >= 60 ? '#d97706' : '#dc2626'};">${totalPct.toFixed(1)}%</div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:4px;">${answers.map((a, i) => `Q${i+1}: ${(a.projectedGrade ?? 0) % 1 === 0 ? (a.projectedGrade ?? 0).toFixed(0) : (a.projectedGrade ?? 0).toFixed(1)}/${(a.maxPoints ?? 0) % 1 === 0 ? (a.maxPoints ?? 0).toFixed(0) : (a.maxPoints ?? 0).toFixed(1)}`).join(' + ')} = ${displayTotal % 1 === 0 ? displayTotal.toFixed(0) : displayTotal.toFixed(1)}/${displayTotalMax % 1 === 0 ? displayTotalMax.toFixed(0) : displayTotalMax.toFixed(1)}</div>
+    </div>
     <div><div style="font-size:11px;color:#6b7280;">TOTAL WORDS</div><div style="font-size:20px;font-weight:800;">${metadata.totalWordCount ?? 0}</div></div>
     <div><div style="font-size:11px;color:#6b7280;">QUESTIONS</div><div style="font-size:20px;font-weight:800;">${answers.length}</div></div>
 </div>
@@ -480,11 +485,17 @@ export default function FeedbackPage({ params }: { params: Promise<{ id: string 
     // Derive totals by summing per-question data (source of truth)
     const totalProjectedGrade = answers.reduce((s, a) => s + (a.projectedGrade ?? 0), 0);
     const totalMaxPoints      = answers.reduce((s, a) => s + (a.maxPoints      ?? 0), 0);
-    // Fall back to metadata fields for older snapshots that may not have per-question maxPoints
-    const displayGrade   = totalMaxPoints > 0 ? totalProjectedGrade : (metadata.overallGrade ?? null);
-    const displayMaxGrade = totalMaxPoints > 0 ? totalMaxPoints      : (metadata.maxGrade    ?? null);
-    const scorePct = (displayGrade != null && displayMaxGrade && displayMaxGrade > 0)
-        ? Math.round((displayGrade / displayMaxGrade) * 100)
+    // Fall back to metadata fields for older snapshots that may not have per-question maxPoints.
+    // Default to 0 (not null) when answers exist so the banner always renders.
+    const displayGrade    = totalMaxPoints > 0
+        ? totalProjectedGrade
+        : (metadata.overallGrade ?? (answers.length > 0 ? 0 : null));
+    const displayMaxGrade = totalMaxPoints > 0
+        ? totalMaxPoints
+        : (metadata.maxGrade ?? null);
+    // One decimal place; null only when max is unknown
+    const scorePct: number | null = (displayGrade != null && displayMaxGrade != null && displayMaxGrade > 0)
+        ? Math.round((displayGrade / displayMaxGrade) * 1000) / 10
         : null;
 
     const grade = submission?.grade ?? null;
@@ -608,50 +619,86 @@ export default function FeedbackPage({ params }: { params: Promise<{ id: string 
                 </div>
             )}
 
-            {/* Score banner */}
+            {/* Final Grade banner */}
             {hasReport && displayGrade != null && displayMaxGrade != null && (
                 <div className={`rounded-xl border-2 p-6 mb-4 ${scorePct != null ? gradeBg(scorePct) : 'bg-purple-50 border-purple-200'}`}>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        {/* Big score */}
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Final Grade</p>
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
+
+                        {/* Left: big fraction + percentage */}
                         <div className="flex items-center gap-5">
-                            <div className="flex-shrink-0 w-24 h-24 rounded-full bg-white shadow-md flex flex-col items-center justify-center border-4 border-white">
+                            <div className="flex-shrink-0 w-24 h-24 rounded-full bg-white shadow-md flex flex-col items-center justify-center">
                                 <span className={`text-3xl font-extrabold leading-none ${scorePct != null ? gradeColor(scorePct) : 'text-purple-700'}`}>
                                     {displayGrade % 1 === 0 ? displayGrade.toFixed(0) : displayGrade.toFixed(1)}
                                 </span>
-                                <span className="text-xs text-gray-400 mt-0.5">/ {displayMaxGrade % 1 === 0 ? displayMaxGrade.toFixed(0) : displayMaxGrade.toFixed(1)}</span>
+                                <span className="text-xs text-gray-400 mt-0.5">
+                                    / {displayMaxGrade % 1 === 0 ? displayMaxGrade.toFixed(0) : displayMaxGrade.toFixed(1)}
+                                </span>
                             </div>
                             <div>
-                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-0.5">AI Projected Score</p>
-                                <p className={`text-2xl font-extrabold ${scorePct != null ? gradeColor(scorePct) : 'text-purple-700'}`}>
-                                    {scorePct != null ? `${scorePct}%` : '—'}
+                                <p className={`text-3xl font-extrabold ${scorePct != null ? gradeColor(scorePct) : 'text-purple-700'}`}>
+                                    {scorePct != null ? `${scorePct.toFixed(1)}%` : '—'}
                                 </p>
-                                <p className="text-xs text-gray-500 mt-0.5">
-                                    Sum of per-question marks &nbsp;·&nbsp; {answers.length} question{answers.length !== 1 ? 's' : ''}
+                                {/* Formula breakdown */}
+                                <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                                    {answers.map((a, i) => {
+                                        const got = a.projectedGrade ?? 0;
+                                        const max = a.maxPoints ?? 0;
+                                        const fmt = (n: number) => n % 1 === 0 ? n.toFixed(0) : n.toFixed(1);
+                                        return (
+                                            <span key={a.questionId ?? i}>
+                                                {i > 0 && <span className="mx-1 text-gray-400">+</span>}
+                                                <span className="font-semibold text-gray-700">{fmt(got)}</span>
+                                                <span className="text-gray-400">/{fmt(max)}</span>
+                                            </span>
+                                        );
+                                    })}
+                                    <span className="ml-2 text-gray-400">=</span>
+                                    <span className="ml-1 font-bold text-gray-700">
+                                        {displayGrade % 1 === 0 ? displayGrade.toFixed(0) : displayGrade.toFixed(1)}
+                                        &nbsp;/&nbsp;
+                                        {displayMaxGrade % 1 === 0 ? displayMaxGrade.toFixed(0) : displayMaxGrade.toFixed(1)}
+                                    </span>
                                 </p>
                             </div>
                         </div>
 
-                        {/* Per-question breakdown bar */}
+                        {/* Right: per-question bars */}
                         <div className="flex-1 max-w-xs hidden sm:block">
-                            <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Question breakdown</p>
-                            <div className="space-y-1.5">
+                            <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Per-question marks</p>
+                            <div className="space-y-2">
                                 {answers.map((a, i) => {
                                     const qMax = a.maxPoints ?? 0;
                                     const qGot = a.projectedGrade ?? 0;
                                     const qPct = qMax > 0 ? Math.round((qGot / qMax) * 100) : 0;
                                     const barColor = qPct >= 80 ? 'bg-green-500' : qPct >= 60 ? 'bg-amber-500' : 'bg-red-400';
+                                    const textColor = qPct >= 80 ? 'text-green-700' : qPct >= 60 ? 'text-amber-700' : 'text-red-600';
+                                    const fmt = (n: number) => n % 1 === 0 ? n.toFixed(0) : n.toFixed(1);
                                     return (
                                         <div key={a.questionId ?? i} className="flex items-center gap-2">
                                             <span className="text-[10px] text-gray-400 w-4 text-right flex-shrink-0">Q{i + 1}</span>
-                                            <div className="flex-1 bg-white/60 rounded-full h-2">
-                                                <div className={`h-2 rounded-full ${barColor}`} style={{ width: `${qPct}%` }} />
+                                            <div className="flex-1 bg-white/60 rounded-full h-2.5">
+                                                <div className={`h-2.5 rounded-full ${barColor}`} style={{ width: `${qPct}%` }} />
                                             </div>
-                                            <span className="text-[10px] font-semibold text-gray-600 w-14 text-right flex-shrink-0">
-                                                {qGot % 1 === 0 ? qGot.toFixed(0) : qGot.toFixed(1)} / {qMax % 1 === 0 ? qMax.toFixed(0) : qMax.toFixed(1)}
+                                            <span className={`text-xs font-bold flex-shrink-0 w-16 text-right ${textColor}`}>
+                                                {fmt(qGot)} / {fmt(qMax)}
                                             </span>
                                         </div>
                                     );
                                 })}
+                                {/* Total row */}
+                                <div className="flex items-center gap-2 pt-1 border-t border-white/50">
+                                    <span className="text-[10px] font-bold text-gray-500 w-4 text-right flex-shrink-0">Σ</span>
+                                    <div className="flex-1 bg-white/60 rounded-full h-2.5">
+                                        <div
+                                            className={`h-2.5 rounded-full ${scorePct != null && scorePct >= 80 ? 'bg-green-600' : scorePct != null && scorePct >= 60 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                            style={{ width: `${scorePct ?? 0}%` }}
+                                        />
+                                    </div>
+                                    <span className={`text-xs font-bold flex-shrink-0 w-16 text-right ${scorePct != null ? gradeColor(scorePct) : 'text-gray-700'}`}>
+                                        {displayGrade % 1 === 0 ? displayGrade.toFixed(0) : displayGrade.toFixed(1)} / {displayMaxGrade % 1 === 0 ? displayMaxGrade.toFixed(0) : displayMaxGrade.toFixed(1)}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>

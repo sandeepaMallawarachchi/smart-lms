@@ -101,6 +101,33 @@ interface VersionNodeProps {
     allowCompare: boolean;
 }
 
+// Helper: extract display metrics from a version's metadata JSONB
+function extractMetrics(v: SubmissionVersion) {
+    type Meta = {
+        totalWordCount?: number;
+        overallGrade?: number;
+        maxGrade?: number;
+        answers?: Array<{ similarityScore?: number | null; projectedGrade?: number; maxPoints?: number }>;
+    };
+    const m = (v.metadata ?? {}) as Meta;
+    const wordCount = m.totalWordCount ?? (v.wordCount ?? 0);
+    // Average similarity across all answers, or fall back to the flat field
+    const answers = m.answers ?? [];
+    const avgPlag = answers.length
+        ? answers.reduce((s, a) => s + (a.similarityScore ?? 0), 0) / answers.length
+        : (v.plagiarismScore ?? 0);
+    const plagiarismScore = Math.round(avgPlag * 10) / 10;
+    // AI score as percentage of projected grade vs max grade
+    const totalGot = answers.reduce((s, a) => s + (a.projectedGrade ?? 0), 0);
+    const totalMax = answers.reduce((s, a) => s + (a.maxPoints ?? 0), 0);
+    const aiScore = totalMax > 0
+        ? Math.round((totalGot / totalMax) * 100)
+        : (m.maxGrade && m.maxGrade > 0 ? Math.round(((m.overallGrade ?? 0) / m.maxGrade) * 100) : (v.aiScore ?? 0));
+    const isSubmitted = (v as unknown as { isSnapshot?: boolean }).isSnapshot ?? v.isSubmitted ?? false;
+    const changes = v.commitMessage ?? v.changes;
+    return { wordCount, plagiarismScore, aiScore, isSubmitted, changes };
+}
+
 function VersionNode({
     version,
     previousVersion,
@@ -113,28 +140,26 @@ function VersionNode({
     isLast,
     allowCompare,
 }: VersionNodeProps) {
+    // ── Derive display metrics from metadata ───────────────────
+    const metrics = extractMetrics(version);
+    const prevMetrics = previousVersion ? extractMetrics(previousVersion) : null;
+
     // ── Compute deltas relative to the previous version ────────
-    // When there is no previous version (first upload) deltas are 0.
-    const wordDelta = previousVersion
-        ? version.wordCount - previousVersion.wordCount
-        : 0;
-    const aiDelta = previousVersion ? version.aiScore - previousVersion.aiScore : 0;
-    const plagDelta = previousVersion
-        ? version.plagiarismScore - previousVersion.plagiarismScore
-        : 0;
+    const wordDelta = prevMetrics ? metrics.wordCount - prevMetrics.wordCount : 0;
+    const aiDelta   = prevMetrics ? metrics.aiScore - prevMetrics.aiScore : 0;
+    const plagDelta = prevMetrics ? Math.round((metrics.plagiarismScore - prevMetrics.plagiarismScore) * 10) / 10 : 0;
 
     // ── Plagiarism colour for the metric tile ──────────────────
-    // Matches the same thresholds used in SubmissionCard and PlagiarismReportCard.
     const plagColor =
-        version.plagiarismScore < 10
+        metrics.plagiarismScore < 10
             ? 'text-green-600'
-            : version.plagiarismScore < 20
+            : metrics.plagiarismScore < 20
             ? 'text-amber-600'
             : 'text-red-600';
     const plagBg =
-        version.plagiarismScore < 10
+        metrics.plagiarismScore < 10
             ? 'bg-green-50 border-green-200'
-            : version.plagiarismScore < 20
+            : metrics.plagiarismScore < 20
             ? 'bg-amber-50 border-amber-200'
             : 'bg-red-50 border-red-200';
 
@@ -143,7 +168,7 @@ function VersionNode({
         ? 'border-purple-400 shadow-lg shadow-purple-100'
         : isCompareSelected
         ? 'border-blue-400 shadow-lg shadow-blue-100'
-        : version.isSubmitted
+        : metrics.isSubmitted
         ? 'border-green-200'
         : 'border-gray-200 hover:border-purple-300';
 
@@ -166,7 +191,7 @@ function VersionNode({
                 <div className="flex flex-col items-center shrink-0">
                     <div
                         className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md ${
-                            version.isSubmitted
+                            metrics.isSubmitted
                                 ? 'bg-green-600'
                                 : isSelected || isCompareSelected
                                 ? 'bg-purple-600'
@@ -176,7 +201,7 @@ function VersionNode({
                         v{version.versionNumber}
                     </div>
                     {/* "Submitted" label below the circle for the final version */}
-                    {version.isSubmitted && (
+                    {metrics.isSubmitted && (
                         <span className="text-xs text-green-600 font-medium mt-1 whitespace-nowrap">
                             Submitted
                         </span>
@@ -198,7 +223,7 @@ function VersionNode({
                                 <h3 className="font-bold text-gray-900">
                                     Version {version.versionNumber}
                                 </h3>
-                                {version.isSubmitted && (
+                                {metrics.isSubmitted && (
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
                                         <CheckCircle2 size={12} />
                                         Submitted
@@ -216,9 +241,9 @@ function VersionNode({
                                 })}
                             </div>
                             {/* Short "changes" note the student typed when uploading */}
-                            {version.changes && (
+                            {metrics.changes && (
                                 <p className="text-sm text-gray-600 mt-1 italic">
-                                    "{version.changes}"
+                                    &quot;{metrics.changes}&quot;
                                 </p>
                             )}
                         </div>
@@ -269,7 +294,7 @@ function VersionNode({
                             </div>
                             <div className="flex items-baseline gap-1">
                                 <span className="text-lg font-bold text-gray-900">
-                                    {(version.wordCount ?? 0).toLocaleString()}
+                                    {metrics.wordCount.toLocaleString()}
                                 </span>
                                 {/* positiveGood=true: more words is progress */}
                                 <Delta value={wordDelta} positiveGood />
@@ -284,7 +309,7 @@ function VersionNode({
                             </div>
                             <div className="flex items-baseline gap-1">
                                 <span className={`text-lg font-bold ${plagColor}`}>
-                                    {version.plagiarismScore}%
+                                    {metrics.plagiarismScore}%
                                 </span>
                                 {/* positiveGood=false: lower plagiarism is better */}
                                 <Delta value={plagDelta} positiveGood={false} />
@@ -299,7 +324,7 @@ function VersionNode({
                             </div>
                             <div className="flex items-baseline gap-1">
                                 <span className="text-lg font-bold text-purple-600">
-                                    {version.aiScore}
+                                    {metrics.aiScore}%
                                 </span>
                                 {/* positiveGood=true: higher AI score is better */}
                                 <Delta value={aiDelta} positiveGood />
@@ -323,7 +348,7 @@ function VersionNode({
                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium cursor-pointer"
                             >
                                 <Eye size={13} />
-                                Files ({version.files.length})
+                                {/* Files ({version.files.length}) */}
                             </button>
                         )}
                         {onDownload && (
@@ -340,12 +365,12 @@ function VersionNode({
                             </button>
                         )}
                         {/* Badge shown in place of actions for the officially submitted version */}
-                        {version.isSubmitted && (
+                        {/* {metrics.isSubmitted && (
                             <span className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-green-100 text-green-700 rounded-lg font-medium">
                                 <GitBranch size={13} />
                                 Final submission
                             </span>
-                        )}
+                        )} */}
                     </div>
 
                     {/* ── Expanded AI feedback panel ─────────────── */}

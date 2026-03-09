@@ -50,26 +50,42 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
     } = useVersionComparison(compareAId, compareBId);
     const { downloadVersion } = useDownloadVersion();
 
+    // Helper: derive display metrics from a version's metadata
+    const getMetrics = (v: typeof versions extends (infer T)[] | null ? T : never) => {
+        type Meta = { totalWordCount?: number; overallGrade?: number; maxGrade?: number; answers?: Array<{ similarityScore?: number | null; projectedGrade?: number; maxPoints?: number }> };
+        const m = ((v as { metadata?: unknown }).metadata ?? {}) as Meta;
+        const answers = m.answers ?? [];
+        const avgPlag = answers.length
+            ? answers.reduce((s, a) => s + (a.similarityScore ?? 0), 0) / answers.length
+            : 0;
+        const totalGot = answers.reduce((s, a) => s + (a.projectedGrade ?? 0), 0);
+        const totalMax = answers.reduce((s, a) => s + (a.maxPoints ?? 0), 0);
+        // Fall back to metadata-level grade when per-question maxPoints not stored
+        const effectiveGot = totalMax > 0 ? totalGot : (m.overallGrade ?? (answers.length > 0 ? 0 : null));
+        const effectiveMax = totalMax > 0 ? totalMax : (m.maxGrade ?? null);
+        const aiScore = effectiveMax != null && effectiveMax > 0
+            ? Math.round(((effectiveGot ?? 0) / effectiveMax) * 100)
+            : 0;
+        return {
+            plagiarismScore: Math.round(avgPlag * 10) / 10,
+            aiScore,
+            gradeGot: effectiveGot,
+            gradeMax: effectiveMax,
+        };
+    };
+
     // Compute summary stats from versions
     const stats = useMemo(() => {
         if (!versions || versions.length === 0) return null;
         const asc = [...versions].sort((a, b) => a.versionNumber - b.versionNumber);
-        const first = asc[0];
-        const last = asc[asc.length - 1];
-        const withPlag = asc.filter(v => v.plagiarismScore != null);
-        const avgPlag =
-            withPlag.length > 0
-                ? Math.round(
-                      (withPlag.reduce((acc, v) => acc + (v.plagiarismScore ?? 0), 0) /
-                          withPlag.length) *
-                          10
-                  ) / 10
-                : null;
-        const aiTrend =
-            last.aiScore != null && first.aiScore != null
-                ? last.aiScore - first.aiScore
-                : null;
+        const firstM = getMetrics(asc[0]);
+        const lastM  = getMetrics(asc[asc.length - 1]);
+        const avgPlag = Math.round(
+            (asc.reduce((s, v) => s + getMetrics(v).plagiarismScore, 0) / asc.length) * 10
+        ) / 10;
+        const aiTrend = lastM.aiScore - firstM.aiScore;
         return { total: versions.length, aiTrend, avgPlag };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [versions]);
 
     // Ascending order for the score progression chart
@@ -134,15 +150,37 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
                         <p className="text-3xl font-bold text-blue-600">{stats.total}</p>
                     </div>
 
-                    <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6">
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-medium text-gray-600">Final Grade</h3>
-                            <Star className="text-green-600" size={24} />
-                        </div>
-                        <p className="text-3xl font-bold text-green-600">
-                            {submission?.grade != null ? `${submission.grade}%` : '—'}
-                        </p>
-                    </div>
+                    {(() => {
+                        // Use lecturer grade if available, otherwise AI projected grade from latest version
+                        const lecturerGrade = submission?.grade != null ? submission.grade : null;
+                        const latestVersion = versions && versions.length > 0
+                            ? [...versions].sort((a, b) => b.versionNumber - a.versionNumber)[0]
+                            : null;
+                        const latestM = latestVersion ? getMetrics(latestVersion) : null;
+                        const displayLabel = lecturerGrade != null ? `${lecturerGrade} / ${submission?.totalMarks ?? 100}` :
+                            latestM?.gradeMax != null
+                                ? `${(latestM.gradeGot ?? 0) % 1 === 0 ? (latestM.gradeGot ?? 0).toFixed(0) : (latestM.gradeGot ?? 0).toFixed(1)} / ${latestM.gradeMax % 1 === 0 ? latestM.gradeMax.toFixed(0) : latestM.gradeMax.toFixed(1)}`
+                                : '—';
+                        const displayPct = lecturerGrade != null
+                            ? `${Math.round((lecturerGrade / (submission?.totalMarks ?? 100)) * 100)}%`
+                            : latestM?.gradeMax != null && latestM.gradeMax > 0
+                                ? `${(Math.round(((latestM.gradeGot ?? 0) / latestM.gradeMax) * 1000) / 10).toFixed(1)}%`
+                                : null;
+                        return (
+                            <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6">
+                                <div className="flex items-center justify-between mb-2">
+                                    <h3 className="text-sm font-medium text-gray-600">
+                                        {lecturerGrade != null ? 'Final Grade' : 'AI Projected Grade'}
+                                    </h3>
+                                    <Star className="text-green-600" size={24} />
+                                </div>
+                                <p className="text-2xl font-bold text-green-600">{displayLabel}</p>
+                                {displayPct && (
+                                    <p className="text-sm font-semibold text-green-700 mt-1">{displayPct}</p>
+                                )}
+                            </div>
+                        );
+                    })()}
 
                     <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-6">
                         <div className="flex items-center justify-between mb-2">
@@ -277,26 +315,27 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
                                 )}
                             </div>
                             <div className="flex items-end gap-2">
-                                {sortedAsc.map((v) => (
-                                    <div key={v.id} className="flex-1">
-                                        <div className="text-center mb-1">
-                                            <span className="text-xs text-gray-500">v{v.versionNumber}</span>
-                                        </div>
-                                        <div className="h-24 bg-gray-100 rounded-lg relative overflow-hidden">
-                                            {v.aiScore != null && (
+                                {sortedAsc.map((v) => {
+                                    const m = getMetrics(v);
+                                    return (
+                                        <div key={v.id} className="flex-1">
+                                            <div className="text-center mb-1">
+                                                <span className="text-xs text-gray-500">v{v.versionNumber}</span>
+                                            </div>
+                                            <div className="h-24 bg-gray-100 rounded-lg relative overflow-hidden">
                                                 <div
                                                     className="absolute bottom-0 left-0 right-0 bg-purple-600 transition-all"
-                                                    style={{ height: `${v.aiScore}%` }}
+                                                    style={{ height: `${m.aiScore}%` }}
                                                 />
-                                            )}
-                                            <div className="absolute inset-0 flex items-end justify-center pb-2">
-                                                <span className="text-xs font-bold text-white drop-shadow">
-                                                    {v.aiScore ?? '?'}
-                                                </span>
+                                                <div className="absolute inset-0 flex items-end justify-center pb-2">
+                                                    <span className="text-xs font-bold text-white drop-shadow">
+                                                        {m.aiScore}%
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
 
@@ -307,25 +346,26 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
                                 <span className="text-sm text-gray-600">Lower is better</span>
                             </div>
                             <div className="flex items-end gap-2">
-                                {sortedAsc.map((v) => (
-                                    <div key={v.id} className="flex-1">
-                                        <div className="h-16 bg-gray-100 rounded-lg relative overflow-hidden">
-                                            {v.plagiarismScore != null && (
+                                {sortedAsc.map((v) => {
+                                    const m = getMetrics(v);
+                                    return (
+                                        <div key={v.id} className="flex-1">
+                                            <div className="h-16 bg-gray-100 rounded-lg relative overflow-hidden">
                                                 <div
                                                     className={`absolute bottom-0 left-0 right-0 transition-all ${
-                                                        v.plagiarismScore < 10 ? 'bg-green-600' : 'bg-red-600'
+                                                        m.plagiarismScore < 10 ? 'bg-green-600' : 'bg-red-600'
                                                     }`}
-                                                    style={{ height: `${Math.min(100, v.plagiarismScore * 5)}%` }}
+                                                    style={{ height: `${Math.min(100, m.plagiarismScore * 5)}%` }}
                                                 />
-                                            )}
-                                            <div className="absolute inset-0 flex items-end justify-center pb-2">
-                                                <span className="text-xs font-bold text-white drop-shadow">
-                                                    {v.plagiarismScore != null ? `${v.plagiarismScore}%` : '?'}
-                                                </span>
+                                                <div className="absolute inset-0 flex items-end justify-center pb-2">
+                                                    <span className="text-xs font-bold text-white drop-shadow">
+                                                        {m.plagiarismScore}%
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
