@@ -38,9 +38,11 @@ export default function SubmissionNotificationBell() {
   }, []);
 
   useEffect(() => {
-    fetchNotifications();
     const iv = setInterval(fetchNotifications, 30_000);
-    return () => clearInterval(iv);
+    // Use setTimeout(0) so the initial fetch doesn't call setState synchronously
+    // during the effect commit phase (avoids cascading renders).
+    const t = setTimeout(fetchNotifications, 0);
+    return () => { clearInterval(iv); clearTimeout(t); };
   }, [fetchNotifications]);
 
   // Close panel on outside click

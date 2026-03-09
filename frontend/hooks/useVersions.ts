@@ -30,7 +30,7 @@ export function useVersions(submissionId: string | null) {
         }
     }, [submissionId]);
 
-    useEffect(() => { fetch(); }, [fetch]);
+    useEffect(() => { const t = setTimeout(fetch, 0); return () => clearTimeout(t); }, [fetch]);
 
     return { ...state, refetch: fetch };
 }
@@ -59,7 +59,7 @@ export function useLatestVersion(submissionId: string | null) {
         }
     }, [submissionId]);
 
-    useEffect(() => { fetch(); }, [fetch]);
+    useEffect(() => { const t = setTimeout(fetch, 0); return () => clearTimeout(t); }, [fetch]);
 
     return { ...state, refetch: fetch };
 }
@@ -88,7 +88,7 @@ export function useVersion(submissionId: string | null, versionId: string | null
         }
     }, [submissionId, versionId]);
 
-    useEffect(() => { fetch(); }, [fetch]);
+    useEffect(() => { const t = setTimeout(fetch, 0); return () => clearTimeout(t); }, [fetch]);
 
     return { ...state, refetch: fetch };
 }
