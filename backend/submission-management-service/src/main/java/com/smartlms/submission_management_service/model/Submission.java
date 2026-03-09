@@ -105,10 +105,15 @@ public class Submission {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    /** Version number of this submission (incremented each time student resubmits). */
+    /**
+     * Version number of this submission.
+     * Starts at 0 (DRAFT, no snapshot yet).
+     * Incremented to 1 on first submit, 2 on second submit, etc.
+     * Kept in sync with SubmissionVersion.versionNumber in version_control_service.
+     */
     @Column(name = "version_number")
     @Builder.Default
-    private Integer versionNumber = 1;
+    private Integer versionNumber = 0;
 
     /** Total versions created across all submissions for same assignment+student. */
     @Column(name = "total_versions")

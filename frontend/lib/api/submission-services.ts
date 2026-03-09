@@ -231,7 +231,6 @@ export const submissionService = {
     ): Promise<Submission> {
         console.debug('[submissionService] getOrCreateDraftSubmission — assignmentId:', assignmentId, '| studentId:', studentId);
 
-        // Try to find an existing DRAFT
         // Backend returns ApiResponse<Page<Submission>> → { data: { content: Submission[] } }
         const existing = await apiRequest<unknown>(
             `${SUBMISSION_API}/api/submissions?studentId=${encodeURIComponent(studentId)}&assignmentId=${encodeURIComponent(assignmentId)}`
@@ -254,21 +253,14 @@ export const submissionService = {
 
         console.debug('[submissionService] getOrCreateDraftSubmission — found', list.length, 'submissions; statuses:', list.map(s => s.status));
 
-        // Versioning continuity rule: reuse the SAME submission across all resubmissions.
-        // Priority: DRAFT > SUBMITTED / LATE (student may edit & resubmit) > GRADED (allow viewing).
-        // We never create a second submission for the same student+assignment pair.
-        const draft = list.find((s) => s.status === 'DRAFT');
-        if (draft) {
-            console.debug('[submissionService] getOrCreateDraftSubmission — reusing existing DRAFT id:', draft.id);
-            return draft;
-        }
-        const priorSubmission = list.find((s) =>
-            s.status === 'SUBMITTED' || s.status === 'LATE' ||
-            s.status === 'GRADED'   || s.status === 'PENDING_REVIEW' || s.status === 'FLAGGED'
-        );
-        if (priorSubmission) {
-            console.debug('[submissionService] getOrCreateDraftSubmission — reusing existing submission id:', priorSubmission.id, 'status:', priorSubmission.status);
-            return priorSubmission;
+        // ONE submission row per student+assignment pair.
+        // Return any existing submission as-is — regardless of status.
+        // The working copy (Answer rows) is always editable; immutable snapshots are
+        // created only when the student clicks Submit. Never reset to DRAFT.
+        if (list.length > 0) {
+            const sub = list[0];
+            console.debug('[submissionService] getOrCreateDraftSubmission — reusing existing submission id:', sub.id, '| status:', sub.status);
+            return sub;
         }
 
         console.debug('[submissionService] getOrCreateDraftSubmission — no submission found, creating new one');
@@ -578,29 +570,42 @@ function unwrapVersion<T>(raw: unknown): T {
 export const versionService = {
     /** Get all versions for a submission */
     async getVersions(submissionId: string): Promise<SubmissionVersion[]> {
+        console.debug('[versionService] getVersions — submissionId:', submissionId);
         const raw = await apiRequest<unknown>(
             `${VERSION_API}/api/versions/submission/${encodeURIComponent(submissionId)}`
         );
         const list = unwrapVersion<SubmissionVersion[]>(raw);
-        return Array.isArray(list) ? list : [];
+        const result = Array.isArray(list) ? list : [];
+        console.debug('[versionService] getVersions — submissionId:', submissionId, '| received:', result.length, 'versions',
+            result.length > 0 ? '| versionNumbers: [' + result.map(v => 'v' + v.versionNumber).join(', ') + ']' : '');
+        return result;
     },
 
     /** Get a specific version */
     async getVersion(id: string): Promise<SubmissionVersion> {
+        console.debug('[versionService] getVersion — id:', id);
         const raw = await apiRequest<unknown>(`${VERSION_API}/api/versions/${id}`);
-        return unwrapVersion<SubmissionVersion>(raw);
+        const result = unwrapVersion<SubmissionVersion>(raw);
+        console.debug('[versionService] getVersion — id:', id, '| response: versionNumber:', result?.versionNumber,
+            '| submissionId:', result?.submissionId, '| commitHash:', result?.commitHash);
+        return result;
     },
 
     /** Get the latest version of a submission */
     async getLatestVersion(submissionId: string): Promise<SubmissionVersion> {
+        console.debug('[versionService] getLatestVersion — submissionId:', submissionId);
         const raw = await apiRequest<unknown>(
             `${VERSION_API}/api/versions/submission/${encodeURIComponent(submissionId)}/latest`
         );
-        return unwrapVersion<SubmissionVersion>(raw);
+        const result = unwrapVersion<SubmissionVersion>(raw);
+        console.debug('[versionService] getLatestVersion — submissionId:', submissionId,
+            '| response: id:', result?.id, '| versionNumber:', result?.versionNumber, '| commitHash:', result?.commitHash);
+        return result;
     },
 
     /** Compare two versions */
     async compareVersions(versionAId: string, versionBId: string): Promise<VersionComparison> {
+        console.debug('[versionService] compareVersions — sourceVersionId:', versionAId, '| targetVersionId:', versionBId);
         const raw = await apiRequest<unknown>(
             `${VERSION_API}/api/versions/diff`,
             {
@@ -608,7 +613,11 @@ export const versionService = {
                 body: JSON.stringify({ sourceVersionId: Number(versionAId), targetVersionId: Number(versionBId) }),
             }
         );
-        return unwrapVersion<VersionComparison>(raw);
+        const result = unwrapVersion<VersionComparison>(raw);
+        console.debug('[versionService] compareVersions — response: sourceV:', (result as Record<string, unknown>)?.sourceVersionNumber,
+            '| targetV:', (result as Record<string, unknown>)?.targetVersionNumber,
+            '| fileDiffs:', Array.isArray((result as Record<string, unknown>)?.fileDiffs) ? ((result as Record<string, unknown>).fileDiffs as unknown[]).length : 0);
+        return result;
     },
 
     /** Create a new version (usually triggered automatically on file upload) */
@@ -617,6 +626,11 @@ export const versionService = {
         files: File[];
         commitMessage?: string;
     }): Promise<SubmissionVersion> {
+        console.debug('[versionService] createVersion — submissionId:', payload.submissionId,
+            '| fileCount:', payload.files.length,
+            '| fileNames:', payload.files.map(f => f.name).join(', '),
+            '| totalSize:', payload.files.reduce((s, f) => s + f.size, 0), 'bytes',
+            '| commitMessage:', payload.commitMessage);
         const formData = new FormData();
         formData.append('submissionId', payload.submissionId);
         if (payload.commitMessage) {
@@ -628,7 +642,10 @@ export const versionService = {
             method: 'POST',
             body: formData,
         });
-        return unwrapVersion<SubmissionVersion>(raw);
+        const result = unwrapVersion<SubmissionVersion>(raw);
+        console.debug('[versionService] createVersion — response: id:', result?.id,
+            '| versionNumber:', result?.versionNumber, '| commitHash:', result?.commitHash);
+        return result;
     },
 
     /** Create an immutable text-answer snapshot after a successful submission. */
@@ -671,21 +688,45 @@ export const versionService = {
             maxPoints?: number;
         }>;
     }): Promise<SubmissionVersion> {
+        console.debug('[versionService] createTextSnapshot — submissionId:', payload.submissionId,
+            '| studentId:', payload.studentId, '| totalWordCount:', payload.totalWordCount,
+            '| overallGrade:', payload.overallGrade, '| maxGrade:', payload.maxGrade,
+            '| answerCount:', payload.answers?.length);
+        if (payload.answers) {
+            payload.answers.forEach((a, i) => {
+                console.debug(`[versionService] createTextSnapshot — answer[${i}]: questionId=${a.questionId}, wordCount=${a.wordCount}, grammarScore=${a.grammarScore}, similarityScore=${a.similarityScore}, projectedGrade=${a.projectedGrade}`);
+            });
+        }
         const raw = await apiRequest<unknown>(
             `${VERSION_API}/api/versions/text-snapshot`,
             { method: 'POST', body: JSON.stringify(payload) }
         );
-        return unwrapVersion<SubmissionVersion>(raw);
+        const result = unwrapVersion<SubmissionVersion>(raw);
+        console.debug('[versionService] createTextSnapshot — response: id:', result?.id,
+            '| versionNumber:', result?.versionNumber, '| commitHash:', result?.commitHash);
+        return result;
     },
 
-    /** Download a specific version as ZIP */
-    downloadVersion(versionId: string): Promise<Blob> {
+    /** Download a specific version as ZIP or JSON; returns blob + server-supplied filename */
+    downloadVersion(versionId: string): Promise<{ blob: Blob; fileName: string }> {
+        console.debug('[versionService] downloadVersion — versionId:', versionId);
         const token = getToken();
         return fetch(`${VERSION_API}/api/versions/${versionId}/download`, {
             headers: token ? { Authorization: `Bearer ${token}` } : {},
         }).then((res) => {
-            if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-            return res.blob();
+            console.debug('[versionService] downloadVersion — HTTP', res.status, '| versionId:', versionId);
+            if (!res.ok) {
+                console.error('[versionService] downloadVersion FAILED — HTTP', res.status, res.statusText);
+                throw new Error(`Download failed: ${res.status}`);
+            }
+            const disposition = res.headers.get('Content-Disposition') ?? '';
+            const match = disposition.match(/filename[^;=\n]*=["']?([^"';\n]+)["']?/);
+            const fileName = match ? match[1].trim() : `version-${versionId}.zip`;
+            console.debug('[versionService] downloadVersion — fileName:', fileName, '| contentType:', res.headers.get('Content-Type'));
+            return res.blob().then((blob) => {
+                console.debug('[versionService] downloadVersion — blob size:', blob.size, 'bytes');
+                return { blob, fileName };
+            });
         });
     },
 };
@@ -764,6 +805,7 @@ export const feedbackService = {
         answerText: string;
         questionPrompt?: string;
         expectedWordCount?: number;
+        maxPoints?: number;
     }): Promise<LiveFeedback> {
         console.debug('[feedbackService] generateLiveFeedback — questionId:', payload.questionId, '| textLen:', payload.answerText.length, '| expectedWords:', payload.expectedWordCount ?? '(none)');
         // Backend wraps in ApiResponse<LiveFeedbackResponse> → unwrap .data

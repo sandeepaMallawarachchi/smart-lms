@@ -9,7 +9,7 @@
  * Data flow on mount:
  *  1. Decode JWT from localStorage → studentId
  *  2. GET /api/assignments/{assignmentId} → Assignment with questions[]
- *  3. getOrCreateDraftSubmission(assignmentId, studentId) → Submission (DRAFT)
+ *  3. getOrCreateDraftSubmission(assignmentId, studentId) → Submission (any status)
  *  4. GET /api/submissions/{submissionId}/answers → TextAnswer[] (pre-fill editors)
  *
  * Layout:
@@ -28,7 +28,7 @@
 
 import { useState, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { submissionService, versionService, getAssignmentWithFallback } from '@/lib/api/submission-services';
+import { submissionService, getAssignmentWithFallback } from '@/lib/api/submission-services';
 import { QuestionCard } from '@/components/submissions/QuestionCard';
 import type { AssignmentWithQuestions, TextAnswer, LiveFeedback, LivePlagiarismResult } from '@/types/submission.types';
 
@@ -227,47 +227,7 @@ export default function AnswerPage({
 
                 // 3. Pre-load saved answers (+ their persisted feedback/plagiarism)
                 try {
-                    let answers = await submissionService.getAnswers(draft.id);
-
-                    // If this draft has no answers (e.g. student is editing a previously
-                    // submitted assignment — a new draft was just created), copy the answers
-                    // from the most recent SUBMITTED submission so the student can edit from
-                    // where they left off rather than starting from scratch.
-                    if (answers.length === 0) {
-                        try {
-                            const allSubs = await submissionService.getStudentSubmissions(sid);
-                            const prevSubmitted = allSubs
-                                .filter(s =>
-                                    s.assignmentId === assignmentId &&
-                                    (s.status === 'SUBMITTED' || s.status === 'GRADED') &&
-                                    s.id !== draft.id
-                                )
-                                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-                            if (prevSubmitted.length > 0) {
-                                const prevId = prevSubmitted[0].id;
-                                console.debug('[AnswerPage] New draft — copying answers from previous submission:', prevId);
-                                const prevAnswers = await submissionService.getAnswers(prevId);
-                                if (prevAnswers.length > 0) {
-                                    // Copy answers into the new draft (fire-and-forget saves)
-                                    await Promise.all(prevAnswers.map(a =>
-                                        submissionService.saveAnswer(draft.id, a.questionId, {
-                                            questionText:   a.questionText,
-                                            answerText:     a.answerText,
-                                            wordCount:      a.wordCount,
-                                            characterCount: a.characterCount,
-                                        }).catch(() => {/* silent — best effort */})
-                                    ));
-                                    // Use the previous answers for display (they carry scores)
-                                    answers = prevAnswers.map(a => ({ ...a, submissionId: draft.id }));
-                                    console.debug('[AnswerPage] Copied', prevAnswers.length, 'answers from previous submission into new draft', draft.id);
-                                }
-                            }
-                        } catch (copyErr) {
-                            // Non-fatal — student just starts with an empty draft
-                            console.debug('[AnswerPage] Could not copy previous answers:', copyErr);
-                        }
-                    }
+                    const answers = await submissionService.getAnswers(draft.id);
 
                     setSavedAnswers(answers);
 
@@ -354,73 +314,12 @@ export default function AnswerPage({
         console.debug('[AnswerPage] handleSubmit — submissionId:', submissionId, '| answeredCount:', answeredCount, '/', questions.length, '| totalWords:', totalWords);
         setSubmitting(true);
         try {
-            // Backend increments versionNumber on each submitSubmission call
             const submittedResult = await submissionService.submitSubmission(submissionId);
-            const versionNumber = submittedResult?.versionNumber ?? submittedResult?.currentVersionNumber ?? 1;
+            const versionNumber = submittedResult?.totalVersions ?? submittedResult?.versionNumber ?? 1;
             setSubmitDone(true);
             setShowConfirm(false);
             console.debug('[AnswerPage] Submit SUCCESS — submissionId:', submissionId, '| versionNumber:', versionNumber);
-
-            // Fire-and-forget: create an immutable text snapshot in version_control_service.
-            // This runs after the submission succeeds and does not block the UX.
-            (async () => {
-                try {
-                    const answerSnapshots = questions.map((q) => {
-                        const fb = feedbackMap[q.id];
-                        const pl = plagiarismMap[q.id];
-                        const grade = gradeMap[q.id];
-                        const text = answerMap[q.id] ?? '';
-                        return {
-                            questionId:              q.id,
-                            questionText:            q.text,
-                            answerText:              text,
-                            wordCount:               countWords(text),
-                            grammarScore:            fb?.grammarScore,
-                            clarityScore:            fb?.clarityScore,
-                            completenessScore:       fb?.completenessScore,
-                            relevanceScore:          fb?.relevanceScore,
-                            strengths:               fb?.strengths,
-                            improvements:            fb?.improvements,
-                            suggestions:             fb?.suggestions,
-                            similarityScore:         pl?.similarityScore,
-                            plagiarismSeverity:      pl?.severity,
-                            internetSimilarityScore: pl?.internetSimilarityScore,
-                            peerSimilarityScore:     pl?.peerSimilarityScore,
-                            riskScore:               pl?.riskScore,
-                            riskLevel:               pl?.riskLevel,
-                            internetMatches:         pl?.internetMatches?.map(m => ({
-                                title:               m.title,
-                                url:                 m.url,
-                                snippet:             m.snippet,
-                                similarityScore:     m.similarityScore,
-                                sourceDomain:        m.sourceDomain,
-                                sourceCategory:      m.sourceCategory,
-                                confidenceLevel:     m.confidenceLevel,
-                                matchedStudentText:  m.matchedStudentText,
-                            })),
-                            projectedGrade:          grade ?? undefined,
-                            maxPoints:               q.maxPoints ?? 10,
-                        };
-                    });
-
-                    const totalMax    = questions.reduce((s, q) => s + (q.maxPoints ?? 10), 0);
-                    const totalEarned = questions.reduce((s, q) => s + (gradeMap[q.id] ?? 0), 0);
-
-                    await versionService.createTextSnapshot({
-                        submissionId:   Number(submissionId),
-                        studentId,
-                        commitMessage:  `${assignment?.title ?? 'Submission'} — v${versionNumber}`,
-                        totalWordCount: totalWords,
-                        overallGrade:   Math.round(totalEarned * 10) / 10,
-                        maxGrade:       totalMax,
-                        answers:        answerSnapshots,
-                    });
-                    console.debug('[AnswerPage] Text snapshot created for submissionId:', submissionId, '| version:', versionNumber);
-                } catch (snapErr) {
-                    // Non-fatal — submission already succeeded
-                    console.warn('[AnswerPage] Text snapshot failed (non-fatal):', snapErr);
-                }
-            })();
+            // Text snapshot is now created server-side by submitSubmission — no client call needed.
 
             // Short delay so the user sees the success state before redirect.
             setTimeout(() => {

@@ -53,6 +53,8 @@ export interface UseAnswerEditorParams {
     initialText?: string;
     /** Expected word count — used in the AI feedback prompt. */
     expectedWordCount?: number;
+    /** Maximum marks available for this question — sent to AI to calibrate strictness. */
+    maxPoints?: number;
     /** Previously saved AI feedback for this answer (loaded from DB on page load). */
     initialFeedback?: LiveFeedback | null;
     /** Previously saved plagiarism result for this answer (loaded from DB on page load). */
@@ -94,7 +96,7 @@ const PLAGIARISM_DEBOUNCE_MS = 2000;
 const AUTO_SAVE_DEBOUNCE_MS = 5000;
 
 /** Minimum character length to trigger AI feedback / plagiarism (matches backend config). */
-const MIN_TEXT_LENGTH = 10;
+const MIN_TEXT_LENGTH = 2;
 
 // ─── Hook ─────────────────────────────────────────────────────
 
@@ -106,6 +108,7 @@ export function useAnswerEditor({
     assignmentId,
     initialText = '',
     expectedWordCount,
+    maxPoints,
     initialFeedback = null,
     initialPlagiarism = null,
 }: UseAnswerEditorParams): UseAnswerEditorReturn {
@@ -164,6 +167,7 @@ export function useAnswerEditor({
                 answerText: text,
                 questionPrompt: questionText,
                 expectedWordCount,
+                maxPoints,
             });
             console.debug('[useAnswerEditor] AI feedback received — questionId:', questionId,
                 '| grammar:', feedback.grammarScore,
@@ -193,7 +197,7 @@ export function useAnswerEditor({
         } finally {
             setFeedbackLoading(false);
         }
-    }, [submissionId, questionId, questionText, expectedWordCount]);
+    }, [submissionId, questionId, questionText, expectedWordCount, maxPoints]);
 
     /** Fire plagiarism check for the given text, then persist the result. */
     const requestPlagiarismCheck = useCallback(async (text: string) => {

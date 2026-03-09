@@ -94,16 +94,8 @@ public class RealtimeCheckService {
                         request.getTextContent(), 3);
                 log.debug("[RealtimeCheck] Google returned {} results", searchResults.size());
 
-                // ── Scholar search (academic sources) ──────────────────────────
-                List<Map<String, String>> scholarResults = googleSearch.searchScholar(
-                        request.getTextContent(), 2);
-                log.debug("[RealtimeCheck] Scholar returned {} results", scholarResults.size());
-                // Merge scholar results into searchResults for combined similarity
-                List<Map<String, String>> allSearchResults = new ArrayList<>(searchResults);
-                allSearchResults.addAll(scholarResults);
-
                 double internetSimilarity = textSimilarity.calculateInternetSimilarity(
-                        request.getTextContent(), allSearchResults);
+                    request.getTextContent(), searchResults);
                 internetSimilarityScore = internetSimilarity; // track separately
                 log.info("[RealtimeCheck] Internet similarity={} threshold={}", internetSimilarity, internetSimilarityThreshold);
                 // Internet results require minimum similarity before being included in the final
@@ -115,9 +107,9 @@ public class RealtimeCheckService {
 
                     // Collect per-source scores to send back in the response
                     List<Double> perSnippet = textSimilarity.calculatePerSnippetSimilarities(
-                            request.getTextContent(), allSearchResults);
-                    for (int i = 0; i < allSearchResults.size(); i++) {
-                        Map<String, String> sr = allSearchResults.get(i);
+                            request.getTextContent(), searchResults);
+                    for (int i = 0; i < searchResults.size(); i++) {
+                        Map<String, String> sr = searchResults.get(i);
                         String domain = sr.getOrDefault("domain", "");
                         String category = sr.getOrDefault("category", categorizeSource(domain));
                         double rawScore = i < perSnippet.size() ? perSnippet.get(i) : 0.0;

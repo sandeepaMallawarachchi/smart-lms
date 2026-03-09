@@ -22,6 +22,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -32,6 +33,10 @@ import lombok.NoArgsConstructor;
         indexes = {
                 @Index(name = "idx_submission_id", columnList = "submission_id"),
                 @Index(name = "idx_commit_hash", columnList = "commit_hash")
+        },
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uq_submission_version",
+                        columnNames = {"submission_id", "version_number"})
         })
 @Data
 @NoArgsConstructor

@@ -351,7 +351,7 @@ function VersionNode({
                                 {/* Files ({version.files.length}) */}
                             </button>
                         )}
-                        {onDownload && (
+                        {/* {onDownload && (
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -363,7 +363,7 @@ function VersionNode({
                                 <Download size={13} />
                                 Download
                             </button>
-                        )}
+                        )} */}
                         {/* Badge shown in place of actions for the officially submitted version */}
                         {/* {metrics.isSubmitted && (
                             <span className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-green-100 text-green-700 rounded-lg font-medium">

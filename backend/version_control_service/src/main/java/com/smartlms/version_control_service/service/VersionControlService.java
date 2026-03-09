@@ -22,6 +22,8 @@ import org.apache.commons.codec.binary.Hex;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,6 +31,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @Service
 @RequiredArgsConstructor
@@ -42,20 +46,25 @@ public class VersionControlService {
 
     @Transactional
     public VersionResponse createVersion(VersionCreateRequest request, List<Path> filePaths) {
-        log.info("Creating version for submission: {}", request.getSubmissionId());
+        log.info("[createVersion] START - submissionId={}, triggerType={}, createdBy={}, fileCount={}",
+                request.getSubmissionId(), request.getTriggerType(), request.getCreatedBy(), filePaths.size());
+        log.debug("[createVersion] commitMessage={}, metadata={}", request.getCommitMessage(), request.getMetadata());
 
         // Get next version number
         Integer nextVersionNumber = versionRepository
                 .findMaxVersionNumberBySubmissionId(request.getSubmissionId()) + 1;
+        log.debug("[createVersion] nextVersionNumber={} for submissionId={}", nextVersionNumber, request.getSubmissionId());
 
         // Get parent version if exists
         Long parentVersionId = versionRepository
                 .findLatestVersionBySubmissionId(request.getSubmissionId())
                 .map(SubmissionVersion::getId)
                 .orElse(null);
+        log.debug("[createVersion] parentVersionId={}", parentVersionId);
 
         // Determine if this should be a snapshot
         boolean isSnapshot = nextVersionNumber % properties.getSnapshotInterval() == 0;
+        log.debug("[createVersion] isSnapshot={} (interval={})", isSnapshot, properties.getSnapshotInterval());
 
         // Create version
         SubmissionVersion version = SubmissionVersion.builder()
@@ -75,10 +84,15 @@ public class VersionControlService {
             try {
                 byte[] content = Files.readAllBytes(filePath);
                 String contentHash = calculateHash(content);
+                log.debug("[createVersion] Processing file: path={}, size={} bytes, hash={}",
+                        filePath.getFileName(), content.length, contentHash.substring(0, 12) + "...");
 
                 // Check if blob already exists (deduplication)
                 FileBlob blob = blobRepository.findByContentHash(contentHash)
-                        .orElseGet(() -> createNewBlob(content, contentHash));
+                        .orElseGet(() -> {
+                            log.debug("[createVersion] Creating new blob for hash={}", contentHash.substring(0, 12) + "...");
+                            return createNewBlob(content, contentHash);
+                        });
 
                 // Create version file entry
                 VersionFile versionFile = VersionFile.builder()
@@ -98,7 +112,7 @@ public class VersionControlService {
                 blobRepository.incrementReferenceCount(blob.getId());
 
             } catch (IOException e) {
-                log.error("Error processing file: {}", filePath, e);
+                log.error("[createVersion] Error processing file: {} — {}: {}", filePath, e.getClass().getSimpleName(), e.getMessage(), e);
                 throw new VersionControlException("Failed to process file: " + filePath);
             }
         }
@@ -107,7 +121,9 @@ public class VersionControlService {
         version.setCommitHash(generateCommitHash(version));
 
         SubmissionVersion savedVersion = versionRepository.save(version);
-        log.info("Version created: {} for submission: {}", nextVersionNumber, request.getSubmissionId());
+        log.info("[createVersion] DONE - versionId={}, versionNumber={}, submissionId={}, commitHash={}, totalFiles={}, totalSizeBytes={}",
+                savedVersion.getId(), nextVersionNumber, request.getSubmissionId(),
+                savedVersion.getCommitHash(), savedVersion.getTotalFiles(), totalSize);
 
         return convertToResponse(savedVersion);
     }
@@ -123,16 +139,20 @@ public class VersionControlService {
      */
     @Transactional
     public VersionResponse createTextSnapshot(TextSnapshotRequest request) {
-        log.info("[TextSnapshot] Creating text snapshot for submissionId={} studentId={}",
-                request.getSubmissionId(), request.getStudentId());
+        log.info("[TextSnapshot] START - submissionId={}, studentId={}, totalWordCount={}, overallGrade={}, maxGrade={}, answerCount={}",
+                request.getSubmissionId(), request.getStudentId(), request.getTotalWordCount(),
+                request.getOverallGrade(), request.getMaxGrade(),
+                request.getAnswers() != null ? request.getAnswers().size() : 0);
 
         Integer nextVersionNumber = versionRepository
                 .findMaxVersionNumberBySubmissionId(request.getSubmissionId()) + 1;
+        log.debug("[TextSnapshot] nextVersionNumber={}", nextVersionNumber);
 
         Long parentVersionId = versionRepository
                 .findLatestVersionBySubmissionId(request.getSubmissionId())
                 .map(SubmissionVersion::getId)
                 .orElse(null);
+        log.debug("[TextSnapshot] parentVersionId={}", parentVersionId);
 
         // Build metadata map — stores full answer snapshots in JSONB
         java.util.Map<String, Object> metadata = new java.util.HashMap<>();
@@ -199,50 +219,73 @@ public class VersionControlService {
         version.setCommitHash(generateCommitHash(version));
 
         SubmissionVersion saved = versionRepository.save(version);
-        log.info("[TextSnapshot] Created version id={} number={} for submissionId={}",
-                saved.getId(), saved.getVersionNumber(), request.getSubmissionId());
+        log.info("[TextSnapshot] DONE - versionId={}, versionNumber={}, submissionId={}, commitHash={}, changesSummary={}",
+                saved.getId(), saved.getVersionNumber(), request.getSubmissionId(),
+                saved.getCommitHash(), changesSummary);
 
         return convertToResponse(saved);
     }
 
     @Transactional(readOnly = true)
     public VersionResponse getVersionById(Long versionId) {
-        log.info("Fetching version: {}", versionId);
+        log.info("[getVersionById] versionId={}", versionId);
         SubmissionVersion version = versionRepository.findById(versionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Version not found: " + versionId));
+                .orElseThrow(() -> {
+                    log.warn("[getVersionById] Version not found: id={}", versionId);
+                    return new ResourceNotFoundException("Version not found: " + versionId);
+                });
+        log.debug("[getVersionById] Found: submissionId={}, versionNumber={}, commitHash={}, totalFiles={}",
+                version.getSubmissionId(), version.getVersionNumber(), version.getCommitHash(), version.getTotalFiles());
         return convertToResponse(version);
     }
 
     @Transactional(readOnly = true)
     public List<VersionResponse> getVersionsBySubmissionId(Long submissionId) {
-        log.info("Fetching versions for submission: {}", submissionId);
-        return versionRepository.findBySubmissionIdOrderByVersionNumberDesc(submissionId)
-                .stream()
+        log.info("[getVersionsBySubmissionId] submissionId={}", submissionId);
+        List<SubmissionVersion> versions = versionRepository.findBySubmissionIdOrderByVersionNumberDesc(submissionId);
+        log.info("[getVersionsBySubmissionId] Found {} versions for submissionId={}", versions.size(), submissionId);
+        if (!versions.isEmpty()) {
+            log.debug("[getVersionsBySubmissionId] Version numbers: {}",
+                    versions.stream().map(v -> "v" + v.getVersionNumber()).collect(Collectors.joining(", ")));
+        }
+        return versions.stream()
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public VersionResponse getLatestVersion(Long submissionId) {
-        log.info("Fetching latest version for submission: {}", submissionId);
+        log.info("[getLatestVersion] submissionId={}", submissionId);
         SubmissionVersion version = versionRepository.findLatestVersionBySubmissionId(submissionId)
-                .orElseThrow(() -> new ResourceNotFoundException("No versions found for submission: " + submissionId));
+                .orElseThrow(() -> {
+                    log.warn("[getLatestVersion] No versions found for submissionId={}", submissionId);
+                    return new ResourceNotFoundException("No versions found for submission: " + submissionId);
+                });
+        log.info("[getLatestVersion] Found: versionId={}, versionNumber={}, commitHash={}",
+                version.getId(), version.getVersionNumber(), version.getCommitHash());
         return convertToResponse(version);
     }
 
     @Transactional(readOnly = true)
     public byte[] getFileContent(Long versionId, String filePath) {
-        log.info("Fetching file content for version: {}, file: {}", versionId, filePath);
+        log.info("[getFileContent] versionId={}, filePath={}", versionId, filePath);
 
         VersionFile versionFile = versionFileRepository.findByVersionIdAndFilePath(versionId, filePath)
-                .orElseThrow(() -> new ResourceNotFoundException("File not found in version"));
+                .orElseThrow(() -> {
+                    log.warn("[getFileContent] File not found: versionId={}, filePath={}", versionId, filePath);
+                    return new ResourceNotFoundException("File not found in version");
+                });
 
         FileBlob blob = versionFile.getBlob();
+        log.debug("[getFileContent] Found blob: id={}, storageType={}, sizeBytes={}, contentHash={}",
+                blob.getId(), blob.getStorageType(), blob.getSizeBytes(),
+                blob.getContentHash() != null ? blob.getContentHash().substring(0, 12) + "..." : "null");
 
         if (blob.getStorageType() == StorageType.FULL) {
+            log.debug("[getFileContent] Returning full content, size={} bytes", blob.getContent().length);
             return blob.getContent();
         } else {
-            // Reconstruct from delta (simplified - would need proper implementation)
+            log.debug("[getFileContent] Reconstructing from delta, baseBlobId={}", blob.getBaseBlobId());
             return reconstructFromDelta(blob);
         }
     }
@@ -298,6 +341,56 @@ public class VersionControlService {
             return baseBlob.getContent();
         }
         return deltaBlob.getContent();
+    }
+
+    /**
+     * Download a version as a ZIP (file versions) or JSON (text snapshots).
+     * Returns the raw bytes and the suggested filename.
+     */
+    @Transactional(readOnly = true)
+    public byte[] downloadVersion(Long versionId, String[] outFilename) throws IOException {
+        log.info("[downloadVersion] versionId={}", versionId);
+        SubmissionVersion version = versionRepository.findById(versionId)
+                .orElseThrow(() -> {
+                    log.warn("[downloadVersion] Version not found: id={}", versionId);
+                    return new ResourceNotFoundException("Version not found: " + versionId);
+                });
+
+        boolean isTextSnapshot = version.getMetadata() != null
+                && "TEXT_SUBMISSION".equals(version.getMetadata().get("type"));
+        log.debug("[downloadVersion] isTextSnapshot={}, fileCount={}", isTextSnapshot, version.getFiles().size());
+
+        if (isTextSnapshot || version.getFiles().isEmpty()) {
+            byte[] json = new ObjectMapper().writerWithDefaultPrettyPrinter()
+                    .writeValueAsBytes(version.getMetadata());
+            outFilename[0] = "submission-" + version.getSubmissionId()
+                    + "-v" + version.getVersionNumber() + ".json";
+            log.info("[downloadVersion] DONE - returning JSON: filename={}, size={} bytes", outFilename[0], json.length);
+            return json;
+        }
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            for (VersionFile vf : version.getFiles()) {
+                byte[] content;
+                FileBlob blob = vf.getBlob();
+                if (blob.getStorageType() == StorageType.FULL) {
+                    content = blob.getContent();
+                } else {
+                    content = reconstructFromDelta(blob);
+                }
+                log.debug("[downloadVersion] Zipping file: {}, size={} bytes", vf.getFileName(), content.length);
+                ZipEntry entry = new ZipEntry(vf.getFileName());
+                zos.putNextEntry(entry);
+                zos.write(content);
+                zos.closeEntry();
+            }
+        }
+        outFilename[0] = "submission-" + version.getSubmissionId()
+                + "-v" + version.getVersionNumber() + ".zip";
+        log.info("[downloadVersion] DONE - returning ZIP: filename={}, size={} bytes, fileCount={}",
+                outFilename[0], baos.size(), version.getFiles().size());
+        return baos.toByteArray();
     }
 
     private VersionResponse convertToResponse(SubmissionVersion version) {

@@ -27,7 +27,7 @@ public class LiveFeedbackRequest {
      * Must be at least 20 characters to get meaningful feedback.
      */
     @NotBlank(message = "Answer text is required")
-    @Size(min = 20, message = "Answer must be at least 20 characters to generate feedback")
+    @Size(min = 2, message = "Answer must be at least 2 characters to generate feedback")
     private String answerText;
 
     /** The question prompt — used by the AI to assess relevance. */
@@ -35,4 +35,7 @@ public class LiveFeedbackRequest {
 
     /** Target word count for the answer (used to assess completeness). */
     private Integer expectedWordCount;
+
+    /** Maximum marks available for this question (used to calibrate scoring strictness). */
+    private Integer maxPoints;
 }

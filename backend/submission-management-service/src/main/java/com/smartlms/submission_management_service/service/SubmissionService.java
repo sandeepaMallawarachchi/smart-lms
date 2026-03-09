@@ -14,11 +14,15 @@ import com.smartlms.submission_management_service.repository.AnswerRepository;
 import com.smartlms.submission_management_service.repository.SubmissionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -59,7 +63,11 @@ public class SubmissionService {
      */
     private final SubmissionRepository submissionRepository;
     private final AnswerRepository answerRepository;
+    private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Value("${version.service.url:http://localhost:8082}")
+    private String versionServiceUrl;
 
     /**
      * Creates a new submission in the system.
@@ -121,7 +129,7 @@ public class SubmissionService {
                 .status(SubmissionStatus.DRAFT)  // Always start as DRAFT
                 .dueDate(request.getDueDate())
                 .maxGrade(request.getMaxGrade())
-                .versionNumber(1)  // First version
+                .versionNumber(0)  // Draft — no snapshot yet; incremented to 1 on first submit
                 .build();
 
         // Save to database - JPA generates ID and timestamps
@@ -447,11 +455,13 @@ public class SubmissionService {
             throw new IllegalStateException("Cannot submit without files or text answers");
         }
 
-        // Hard deadline enforcement: block resubmission after deadline for already-submitted work.
+        // Hard deadline enforcement: block resubmission after deadline for already-submitted/graded work.
         // (Initial submission is allowed late — isLate flag is set automatically.)
         if (submission.getDueDate() != null
                 && java.time.LocalDateTime.now().isAfter(submission.getDueDate())
-                && submission.getStatus() == SubmissionStatus.SUBMITTED) {
+                && (submission.getStatus() == SubmissionStatus.SUBMITTED
+                        || submission.getStatus() == SubmissionStatus.LATE
+                        || submission.getStatus() == SubmissionStatus.GRADED)) {
             throw new IllegalStateException("Deadline has passed — resubmission is no longer allowed");
         }
 
@@ -502,7 +512,81 @@ public class SubmissionService {
                 id, submittedSubmission.getVersionNumber(),
                 submittedSubmission.getAiScore(), submittedSubmission.getPlagiarismScore());
 
+        // ── Create immutable text snapshot in version_control_service ─────────
+        createTextSnapshot(submittedSubmission, answers);
+
         return convertToResponse(submittedSubmission);
+    }
+
+    /**
+     * Calls version_control_service to create an immutable text-answer snapshot.
+     * This is called server-side (not from the frontend) to guarantee every
+     * submit/resubmit produces a version snapshot atomically.
+     */
+    private void createTextSnapshot(Submission submission, List<Answer> answers) {
+        try {
+            List<Map<String, Object>> answerSnapshots = new ArrayList<>();
+            for (Answer a : answers) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("questionId",          a.getQuestionId());
+                m.put("questionText",        a.getQuestionText());
+                m.put("answerText",          a.getAnswerText());
+                m.put("wordCount",           a.getWordCount());
+                m.put("grammarScore",        a.getGrammarScore());
+                m.put("clarityScore",        a.getClarityScore());
+                m.put("completenessScore",   a.getCompletenessScore());
+                m.put("relevanceScore",      a.getRelevanceScore());
+                m.put("strengths",           splitCsv(a.getAiStrengths()));
+                m.put("improvements",        splitCsv(a.getAiImprovements()));
+                m.put("suggestions",         splitCsv(a.getAiSuggestions()));
+                m.put("similarityScore",     a.getSimilarityScore());
+                m.put("plagiarismSeverity",  a.getPlagiarismSeverity());
+                m.put("projectedGrade",      a.getLecturerMark());
+                m.put("maxPoints",           10.0); // default mark if not assigned
+                answerSnapshots.add(m);
+            }
+
+            int totalWords = answers.stream()
+                    .filter(a -> a.getWordCount() != null)
+                    .mapToInt(Answer::getWordCount).sum();
+
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("submissionId",  submission.getId());
+            payload.put("studentId",     submission.getStudentId());
+            payload.put("commitMessage", (submission.getAssignmentTitle() != null
+                    ? submission.getAssignmentTitle() : "Submission")
+                    + " — v" + submission.getVersionNumber());
+            payload.put("totalWordCount", totalWords);
+            payload.put("overallGrade",  submission.getGrade());
+            payload.put("maxGrade",      submission.getMaxGrade());
+            payload.put("answers",       answerSnapshots);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<String> request = new HttpEntity<>(
+                    objectMapper.writeValueAsString(payload), headers);
+
+            restTemplate.postForEntity(
+                    versionServiceUrl + "/api/versions/text-snapshot",
+                    request, String.class);
+
+            log.info("Text snapshot created for submission {} version {}",
+                    submission.getId(), submission.getVersionNumber());
+        } catch (Exception e) {
+            // Log but do not fail the submission — the student already committed.
+            // A reconciliation job can recover missing snapshots later.
+            log.error("Failed to create text snapshot for submission {} version {}: {}",
+                    submission.getId(), submission.getVersionNumber(), e.getMessage());
+        }
+    }
+
+    /** Split a CSV/pipe-delimited string into a list, or return empty list if null. */
+    private List<String> splitCsv(String csv) {
+        if (csv == null || csv.isBlank()) return List.of();
+        return Arrays.stream(csv.split("\\|"))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
     }
 
     /**
