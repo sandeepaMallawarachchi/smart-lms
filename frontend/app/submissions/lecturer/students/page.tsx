@@ -92,6 +92,8 @@ export default function LecturerStudentInsightsPage() {
     const { data: submissions, loading, error, refetch } = useAllSubmissions();
     const selectedCourse = useSelectedCourse('lecture');
 
+    const [now] = useState(() => Date.now());
+
     // Build student summaries
     const students = useMemo((): StudentSummary[] => {
         const map = new Map<string, { name: string; registrationId?: string; email?: string; modules: Set<string>; subs: Submission[] }>();
@@ -111,7 +113,6 @@ export default function LecturerStudentInsightsPage() {
             const avgAi = avg(subs.filter((s) => s.aiScore != null).map((s) => s.aiScore!));
             const lateCount = subs.filter((s) => s.isLate).length;
             const failedCount = subs.filter((s) => { if (s.grade == null) return false; return (s.grade / (s.totalMarks ?? 100)) * 100 < 60; }).length;
-            const now = Date.now();
             const missedCount = subs.filter((s) => s.dueDate && new Date(s.dueDate).getTime() < now && s.status === 'DRAFT').length;
             const downwardTrend = hasDownwardTrend(subs);
             const lastActive = subs.map((s) => s.submittedAt ?? s.createdAt).filter(Boolean).sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
@@ -126,7 +127,7 @@ export default function LecturerStudentInsightsPage() {
                 lastActive,
             };
         });
-    }, [submissions]);
+    }, [submissions, now]);
 
     const filtered = useMemo(() => {
         const list = students.filter((s) => {
