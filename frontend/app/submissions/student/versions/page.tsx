@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     AlertCircle,
@@ -31,20 +31,20 @@ function SkeletonCard() {
 
 export default function VersionsIndexPage() {
     const router = useRouter();
-    const [studentId, setStudentId] = useState<string | null>(null);
 
-    // Decode student ID from JWT
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
+    // Decode student ID from JWT (synchronous – no effect needed)
+    const studentId = useMemo(() => {
+        if (typeof window === 'undefined') return null;
         try {
             const token = localStorage.getItem('authToken');
             if (token) {
                 const payload = JSON.parse(atob(token.split('.')[1]));
-                setStudentId(payload.userId ?? payload.sub ?? null);
+                return payload.userId ?? payload.sub ?? null;
             }
         } catch {
-            setStudentId(null);
+            // invalid token
         }
+        return null;
     }, []);
 
     const { data: submissions, loading, error, refetch } = useSubmissions(studentId);
