@@ -210,16 +210,14 @@ public class SubmissionService {
                     .sum();
             submission.setTotalWordCount(totalWords);
 
-            // aiGeneratedMark per answer — set only once; never overwritten on resubmit
+            // aiGeneratedMark per answer — set only once; never overwritten on resubmit.
+            // Weighted formula: relevance (40%) + completeness (30%) + clarity (15%) + grammar (15%).
+            // This prioritises concept correctness over surface-level writing quality.
             for (Answer a : answers) {
                 if (a.getAiGeneratedMark() == null) {
-                    double sum = 0; int cnt = 0;
-                    if (a.getGrammarScore()      != null) { sum += a.getGrammarScore();      cnt++; }
-                    if (a.getClarityScore()      != null) { sum += a.getClarityScore();      cnt++; }
-                    if (a.getCompletenessScore() != null) { sum += a.getCompletenessScore(); cnt++; }
-                    if (a.getRelevanceScore()    != null) { sum += a.getRelevanceScore();    cnt++; }
-                    if (cnt > 0) {
-                        a.setAiGeneratedMark(Math.round((sum / cnt) * 100.0) / 100.0);
+                    Double mark = computeWeightedMark(a);
+                    if (mark != null) {
+                        a.setAiGeneratedMark(mark);
                         answerRepository.save(a);
                     }
                 }
@@ -363,5 +361,41 @@ public class SubmissionService {
                         ? s.getLecturerGrade()
                         : s.getGrade())
                 .build();
+    }
+
+    /**
+     * Weighted AI mark formula (0–10 scale).
+     *
+     * Weights: relevance 40%, completeness 30%, clarity 15%, grammar 15%.
+     * Relevance and completeness together account for 70% because they measure
+     * whether the student answered the question correctly — the primary goal.
+     * Grammar and clarity are secondary surface-quality signals.
+     *
+     * Only dimensions that have a non-null score contribute; if none exist, returns null.
+     */
+    private Double computeWeightedMark(Answer a) {
+        // weights must sum to 1.0
+        final double W_RELEVANCE    = 0.40;
+        final double W_COMPLETENESS = 0.30;
+        final double W_CLARITY      = 0.15;
+        final double W_GRAMMAR      = 0.15;
+
+        boolean hasAny = a.getRelevanceScore() != null
+                || a.getCompletenessScore() != null
+                || a.getClarityScore()      != null
+                || a.getGrammarScore()      != null;
+        if (!hasAny) return null;
+
+        double weightedSum   = 0.0;
+        double appliedWeight = 0.0;
+
+        if (a.getRelevanceScore()    != null) { weightedSum += W_RELEVANCE    * a.getRelevanceScore();    appliedWeight += W_RELEVANCE;    }
+        if (a.getCompletenessScore() != null) { weightedSum += W_COMPLETENESS * a.getCompletenessScore(); appliedWeight += W_COMPLETENESS; }
+        if (a.getClarityScore()      != null) { weightedSum += W_CLARITY      * a.getClarityScore();      appliedWeight += W_CLARITY;      }
+        if (a.getGrammarScore()      != null) { weightedSum += W_GRAMMAR      * a.getGrammarScore();      appliedWeight += W_GRAMMAR;      }
+
+        // Normalise in case some dimensions are missing (so the result stays on 0–10)
+        double mark = appliedWeight > 0 ? weightedSum / appliedWeight : 0.0;
+        return Math.round(mark * 100.0) / 100.0;
     }
 }

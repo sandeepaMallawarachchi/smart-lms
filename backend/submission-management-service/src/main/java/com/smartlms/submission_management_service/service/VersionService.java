@@ -357,16 +357,30 @@ public class VersionService {
                 .build();
     }
 
+    /**
+     * Weighted AI mark (0–10). Mirrors the formula in SubmissionService.
+     * Weights: relevance 40%, completeness 30%, clarity 15%, grammar 15%.
+     */
     private Double computeAiMark(Answer a) {
-        // Use already-computed value if available
         if (a.getAiGeneratedMark() != null) return a.getAiGeneratedMark();
-        double sum = 0; int cnt = 0;
-        if (a.getGrammarScore()      != null) { sum += a.getGrammarScore();      cnt++; }
-        if (a.getClarityScore()      != null) { sum += a.getClarityScore();      cnt++; }
-        if (a.getCompletenessScore() != null) { sum += a.getCompletenessScore(); cnt++; }
-        if (a.getRelevanceScore()    != null) { sum += a.getRelevanceScore();    cnt++; }
-        if (cnt == 0) return null; // No AI scores → no mark; default 10 applied at display time
-        return Math.round((sum / cnt) * 100.0) / 100.0; // 0-10 scale
+
+        final double W_RELEVANCE    = 0.40;
+        final double W_COMPLETENESS = 0.30;
+        final double W_CLARITY      = 0.15;
+        final double W_GRAMMAR      = 0.15;
+
+        boolean hasAny = a.getRelevanceScore() != null || a.getCompletenessScore() != null
+                || a.getClarityScore() != null || a.getGrammarScore() != null;
+        if (!hasAny) return null;
+
+        double weightedSum = 0.0, appliedWeight = 0.0;
+        if (a.getRelevanceScore()    != null) { weightedSum += W_RELEVANCE    * a.getRelevanceScore();    appliedWeight += W_RELEVANCE;    }
+        if (a.getCompletenessScore() != null) { weightedSum += W_COMPLETENESS * a.getCompletenessScore(); appliedWeight += W_COMPLETENESS; }
+        if (a.getClarityScore()      != null) { weightedSum += W_CLARITY      * a.getClarityScore();      appliedWeight += W_CLARITY;      }
+        if (a.getGrammarScore()      != null) { weightedSum += W_GRAMMAR      * a.getGrammarScore();      appliedWeight += W_GRAMMAR;      }
+
+        double mark = appliedWeight > 0 ? weightedSum / appliedWeight : 0.0;
+        return Math.round(mark * 100.0) / 100.0;
     }
 
     private String buildCommitMessage(Submission s) {

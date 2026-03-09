@@ -8,24 +8,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Service for generating lightweight, real-time AI feedback as a student types.
  *
- * Unlike FeedbackService (which performs deep analysis and persists results),
- * this service:
- *  - Uses a shorter, faster prompt optimised for real-time latency
- *  - Does NOT persist feedback to the database
- *  - Returns a LiveFeedbackResponse immediately (synchronous)
- *  - Falls back to a sensible default response if the AI call fails
- *
- * Called by POST /api/feedback/live, which is invoked by the frontend
- * ~3 seconds after the student stops typing in a question editor.
+ * Scoring principles enforced:
+ *  - A correct, direct short answer MUST receive meaningful marks (≥5/10 relevance).
+ *  - Strengths and scores must be consistent: positive language → non-zero scores.
+ *  - Concept correctness (relevance + completeness) outweighs grammar for all answers.
+ *  - Answers that merely repeat the question text without adding information are penalised.
+ *  - Blank / gibberish text always scores 0.
  */
 @Service
 @RequiredArgsConstructor
@@ -34,39 +30,46 @@ public class LiveFeedbackService {
 
     private final HuggingFaceService huggingFaceService;
 
-    /**
-     * Generate real-time feedback for a student's in-progress text answer.
-     *
-     * @param request Contains questionId, answerText, questionPrompt, expectedWordCount
-     * @return ApiResponse wrapping a LiveFeedbackResponse with scores and suggestions
-     */
+    // ─── Positive-signal words used to detect LLM inconsistency ─────────────
+    private static final List<String> POSITIVE_SIGNAL_WORDS = Arrays.asList(
+            "correct", "accurate", "relevant", "identifies", "addresses",
+            "demonstrates", "applies", "understands", "shows", "explains",
+            "provides", "answers", "appropriate", "good", "well", "clear",
+            "direct", "concise", "precise", "valid", "proper", "reasonable"
+    );
+
+    private static final List<String> STOP_WORDS = Arrays.asList(
+            "what", "how", "why", "when", "where", "which", "who", "does", "this",
+            "that", "with", "from", "have", "will", "are", "the", "and", "for",
+            "its", "can", "explain", "describe", "define", "give", "example",
+            "list", "discuss", "name", "state", "write", "about", "used",
+            "type", "kind", "form", "means", "refer", "answer", "question"
+    );
+
+    // ─── Public entry point ───────────────────────────────────────────────────
+
     public ApiResponse<LiveFeedbackResponse> generateLiveFeedback(LiveFeedbackRequest request) {
         log.info("Generating live feedback for questionId={} textLength={}",
                 request.getQuestionId(), request.getAnswerText().length());
 
-        // Pre-validate: detect gibberish before calling the AI
         if (isGibberish(request.getAnswerText())) {
             log.info("Gibberish detected for questionId={} — returning zero scores", request.getQuestionId());
             return ApiResponse.success("Gibberish detected", buildGibberishResponse(request.getQuestionId()));
         }
 
         try {
-            String prompt = buildPrompt(request);
+            String prompt      = buildPrompt(request);
             String rawResponse = huggingFaceService.generateCompletion(prompt);
-            log.debug("Raw live feedback response (first 500 chars): {}",
+            log.debug("Raw AI response (first 500 chars): {}",
                     rawResponse.substring(0, Math.min(500, rawResponse.length())));
 
             LiveFeedbackResponse feedback = parseResponse(rawResponse, request.getQuestionId());
+            feedback = enforceConsistency(feedback, request);
 
-            // Apply short-answer floors based on keyword coverage
-            if (isShortAnswer(request)) {
-                List<String> keywords = extractKeywords(request.getQuestionPrompt());
-                int matches = countKeywordMatches(request.getAnswerText(), keywords);
-                feedback = applyShortAnswerFloors(feedback, request, matches, keywords.size());
-            }
-
-            log.info("Live feedback generated for questionId={} grammar={} clarity={}",
-                    request.getQuestionId(), feedback.getGrammarScore(), feedback.getClarityScore());
+            log.info("Live feedback done questionId={} grammar={} clarity={} completeness={} relevance={}",
+                    request.getQuestionId(),
+                    feedback.getGrammarScore(), feedback.getClarityScore(),
+                    feedback.getCompletenessScore(), feedback.getRelevanceScore());
 
             return ApiResponse.success("Live feedback generated", feedback);
 
@@ -76,13 +79,8 @@ public class LiveFeedbackService {
         }
     }
 
-    // ── Gibberish detection ───────────────────────────────────────────────────
+    // ─── Gibberish detection ─────────────────────────────────────────────────
 
-    /**
-     * Heuristic gibberish detector.
-     * A word is flagged as gibberish if it has no vowels OR has 5+ consecutive consonants.
-     * If more than 40 % of words are gibberish, the whole text is classified as gibberish.
-     */
     private boolean isGibberish(String text) {
         if (text == null || text.isBlank()) return true;
         String[] words = text.trim().split("\\s+");
@@ -92,27 +90,23 @@ public class LiveFeedbackService {
         for (String word : words) {
             String cleaned = word.toLowerCase().replaceAll("[^a-z]", "");
             if (cleaned.isEmpty()) continue;
-            boolean hasVowel = cleaned.matches(".*[aeiou].*");
-            boolean hasLongConsonantCluster = cleaned.matches(".*[^aeiou]{5,}.*");
-            if (!hasVowel || hasLongConsonantCluster) gibberishCount++;
+            boolean hasVowel              = cleaned.matches(".*[aeiou].*");
+            boolean hasLongConsonantRun   = cleaned.matches(".*[^aeiou]{5,}.*");
+            if (!hasVowel || hasLongConsonantRun) gibberishCount++;
         }
 
-        double gibberishRatio = (double) gibberishCount / words.length;
-        int pct = (int) Math.round(gibberishRatio * 100);
-        boolean isGibberish = gibberishRatio > 0.40;
-        log.info("[LiveFeedback] Gibberish check: {}/{} words flagged ({}%) — result={}",
-                gibberishCount, words.length, pct, isGibberish ? "GIBBERISH" : "OK");
-        return isGibberish;
+        double ratio = (double) gibberishCount / words.length;
+        boolean flagged = ratio > 0.40;
+        log.info("[LiveFeedback] Gibberish check: {}/{} words flagged ({:.0f}%) — {}",
+                gibberishCount, words.length, ratio * 100, flagged ? "GIBBERISH" : "OK");
+        return flagged;
     }
 
-    /** Zero-score response returned when gibberish text is detected. */
     private LiveFeedbackResponse buildGibberishResponse(String questionId) {
         return LiveFeedbackResponse.builder()
                 .questionId(questionId)
-                .grammarScore(0.0)
-                .clarityScore(0.0)
-                .completenessScore(0.0)
-                .relevanceScore(0.0)
+                .grammarScore(0.0).clarityScore(0.0)
+                .completenessScore(0.0).relevanceScore(0.0)
                 .strengths(List.of("None detected — no meaningful content found."))
                 .improvements(List.of(
                         "Your response appears to contain random text or gibberish.",
@@ -124,21 +118,16 @@ public class LiveFeedbackService {
                 .build();
     }
 
-    // ── Prompt construction ───────────────────────────────────────────────────
+    // ─── Prompt construction ─────────────────────────────────────────────────
 
-    /**
-     * Returns true when the question is worth 1–5 marks (short-answer mode).
-     * Short answers should be evaluated on concept correctness and relevance,
-     * not penalised heavily for brevity or minor grammar issues.
-     */
+    /** Short-answer: ≤ 5 marks OR answer is ≤ 40 words. */
     private boolean isShortAnswer(LiveFeedbackRequest request) {
-        return request.getMaxPoints() != null && request.getMaxPoints() <= 5;
+        int wordCount = request.getAnswerText().trim().split("\\s+").length;
+        boolean byMarks = request.getMaxPoints() != null && request.getMaxPoints() <= 5;
+        boolean byWords = wordCount <= 40;
+        return byMarks || byWords;
     }
 
-    /**
-     * Build a concise prompt that instructs the LLM to score and comment on
-     * the student's answer. Adapts strictness based on question mark value.
-     */
     private String buildPrompt(LiveFeedbackRequest request) {
         int wordCount = request.getAnswerText().trim().split("\\s+").length;
         boolean shortAnswer = isShortAnswer(request);
@@ -151,56 +140,70 @@ public class LiveFeedbackService {
                 ? "This question is worth " + request.getMaxPoints() + " mark(s).\n"
                 : "";
 
-        String completenessHint = request.getExpectedWordCount() != null
-                ? "Expected length: " + request.getExpectedWordCount() + " words. Current: " + wordCount + " words.\n"
-                : "";
+        String lengthInfo = "Answer length: " + wordCount + " word(s).\n";
 
         if (shortAnswer) {
-            // Short-answer mode: focus on concept, key terms, relevance
-            return "You are a balanced academic evaluator assessing a short-answer question.\n"
+            return "You are a fair academic evaluator scoring a short-answer question.\n"
                     + markInfo
-                    + "IMPORTANT RULES FOR SHORT ANSWERS (1-5 marks):\n"
-                    + "- A brief answer that correctly explains the core concept DESERVES a reasonable score.\n"
-                    + "- Focus on: (1) concept correctness, (2) key terms present, (3) relevance to the question.\n"
-                    + "- Do NOT heavily penalise for brevity or minor grammar mistakes.\n"
-                    + "- If the answer contains gibberish or random letters: ALL scores must be 0.\n"
-                    + "- If the answer correctly addresses the question concept: RELEVANCE should be 5-8.\n"
-                    + "- Grammar mistakes should reduce GRAMMAR score slightly but not dominate overall.\n"
-                    + "- Score 6-8 if the student clearly understands the concept, even if explanation is brief.\n"
-                    + "- Score 3-5 if the answer is partially correct or missing some key ideas.\n"
-                    + "- Score 0-2 only if the answer is completely wrong or irrelevant.\n\n"
+                    + lengthInfo
+                    + "\n"
+                    + "=== MANDATORY SCORING RULES ===\n"
+                    + "1. CONSISTENCY: Your numeric scores MUST match your qualitative comments.\n"
+                    + "   - If you write any STRENGTH that says the answer is correct, accurate, identifies\n"
+                    + "     the right concept, or directly answers the question, then RELEVANCE must be >= 5\n"
+                    + "     and COMPLETENESS must be >= 4. This rule is ABSOLUTE.\n"
+                    + "2. SHORT-ANSWER GRADING: A one-sentence correct answer deserves full credit.\n"
+                    + "   - Correct + direct + relevant = RELEVANCE 7-9, COMPLETENESS 6-8.\n"
+                    + "   - Partially correct or missing detail = RELEVANCE 4-6, COMPLETENESS 3-5.\n"
+                    + "   - Wrong or irrelevant = RELEVANCE 0-2, COMPLETENESS 0-2.\n"
+                    + "   - NEVER give RELEVANCE 0 if the answer addresses the question topic.\n"
+                    + "3. GRAMMAR: For short answers, minor grammar issues are acceptable.\n"
+                    + "   - Do NOT let grammar dominate; a correct answer with poor grammar still scores well.\n"
+                    + "   - Perfect grammar on a wrong answer should still give RELEVANCE 0-2.\n"
+                    + "4. REPETITION: If the answer just repeats words from the question without explanation,\n"
+                    + "   COMPLETENESS must be 0-3 (no new information provided).\n"
+                    + "5. BLANK/GIBBERISH: ALL scores must be 0. Do not write this for meaningful answers.\n"
+                    + "\n"
                     + questionContext
-                    + completenessHint
                     + "Student Answer: " + request.getAnswerText() + "\n\n"
-                    + "Respond ONLY in this exact format (no extra text):\n"
-                    + "GRAMMAR: <score 0-10>\n"
-                    + "CLARITY: <score 0-10>\n"
-                    + "COMPLETENESS: <score 0-10>\n"
-                    + "RELEVANCE: <score 0-10>\n"
-                    + "STRENGTH1: <one genuine strength of this answer>\n"
-                    + "STRENGTH2: <one genuine strength, or 'Answer addresses the question' if limited>\n"
-                    + "IMPROVEMENT1: <one specific area to improve>\n"
+                    + "Respond ONLY in this exact format (no extra text, no explanations):\n"
+                    + "GRAMMAR: <integer 0-10>\n"
+                    + "CLARITY: <integer 0-10>\n"
+                    + "COMPLETENESS: <integer 0-10>\n"
+                    + "RELEVANCE: <integer 0-10>\n"
+                    + "STRENGTH1: <one specific strength of this answer, referencing the content>\n"
+                    + "STRENGTH2: <one more strength, or 'Addresses the question directly' if limited>\n"
+                    + "IMPROVEMENT1: <one specific improvement>\n"
                     + "IMPROVEMENT2: <one actionable improvement>\n"
                     + "SUGGESTION1: <one suggestion to strengthen the answer>\n"
                     + "SUGGESTION2: <one suggestion for better explanation>";
         } else {
-            // Long-answer mode: balanced but not overly strict
-            return "You are a balanced academic writing evaluator. Assess this student answer fairly.\n"
+            String completenessHint = request.getExpectedWordCount() != null
+                    ? "Expected length: " + request.getExpectedWordCount() + " words. Current: " + wordCount + " words.\n"
+                    : "";
+            return "You are a fair academic evaluator scoring a long-answer question.\n"
                     + markInfo
-                    + "IMPORTANT RULES:\n"
-                    + "- If the answer contains gibberish, random letters, or no real words: ALL scores must be 0.\n"
-                    + "- If the answer does not address the question at all: RELEVANCE must be 0-2.\n"
-                    + "- If grammar is very poor or text is incoherent: GRAMMAR must be 0-3.\n"
-                    + "- Give scores of 5-7 for answers that show genuine understanding with some gaps.\n"
-                    + "- Give scores of 7-9 for answers that are well-explained and mostly complete.\n"
-                    + completenessHint + "\n"
+                    + lengthInfo
+                    + completenessHint
+                    + "\n"
+                    + "=== MANDATORY SCORING RULES ===\n"
+                    + "1. CONSISTENCY: Your numeric scores MUST match your qualitative comments.\n"
+                    + "   - If any STRENGTH says the answer is correct or relevant, RELEVANCE >= 5.\n"
+                    + "   - If the answer is completely off-topic: RELEVANCE 0-2 and strengths must reflect this.\n"
+                    + "2. SCORING GUIDE:\n"
+                    + "   - Well-explained, mostly complete = 7-9 across all dimensions.\n"
+                    + "   - Shows genuine understanding with some gaps = 5-7.\n"
+                    + "   - Very incomplete or mostly incorrect = 2-4.\n"
+                    + "   - Gibberish or blank = 0.\n"
+                    + "3. REPETITION: If the answer just copies the question, COMPLETENESS must be 0-3.\n"
+                    + "\n"
                     + questionContext
                     + "Student Answer: " + request.getAnswerText() + "\n\n"
                     + "Respond ONLY in this exact format (no extra text):\n"
-                    + "GRAMMAR: <score 0-10>\n"
-                    + "CLARITY: <score 0-10>\n"
-                    + "COMPLETENESS: <score 0-10>\n"
-                    + "RELEVANCE: <score 0-10>\n"
+                    + "GRAMMAR: <integer 0-10>\n"
+                    + "CLARITY: <integer 0-10>\n"
+                    + "COMPLETENESS: <integer 0-10>\n"
+                    + "RELEVANCE: <integer 0-10>\n"
                     + "STRENGTH1: <one genuine strength, or 'None detected' if the answer is poor>\n"
                     + "STRENGTH2: <one genuine strength, or 'None detected' if the answer is poor>\n"
                     + "IMPROVEMENT1: <one specific area to improve>\n"
@@ -210,32 +213,146 @@ public class LiveFeedbackService {
         }
     }
 
-    // ── Keyword extraction ────────────────────────────────────────────────────
-
-    private static final List<String> STOP_WORDS = Arrays.asList(
-            "what", "how", "why", "when", "where", "which", "who", "does", "this",
-            "that", "with", "from", "have", "will", "are", "the", "and", "for",
-            "its", "can", "explain", "describe", "define", "give", "example",
-            "list", "discuss", "name", "state", "write", "about", "used"
-    );
+    // ─── Post-processing: consistency enforcement ─────────────────────────────
 
     /**
-     * Extract meaningful keywords from the question prompt.
-     * Removes stop words and returns unique words of ≥4 characters.
+     * Enforces three rules that the LLM frequently violates:
+     *
+     * Rule A — Strength/score consistency:
+     *   If any strength contains positive signal language (correct, accurate, identifies, etc.)
+     *   then relevance must be ≥ 5 and completeness must be ≥ 4.
+     *
+     * Rule B — Question repetition penalty:
+     *   If the answer is mostly composed of words that appear in the question (≥ 65% overlap),
+     *   completeness is capped at 3 because no new information was provided.
+     *
+     * Rule C — Short-answer keyword floor:
+     *   For short answers, if the answer shares ≥ 30% of meaningful question keywords,
+     *   relevance gets a proportional floor (5–7 range) and completeness a smaller floor.
      */
-    private List<String> extractKeywords(String questionPrompt) {
-        if (questionPrompt == null || questionPrompt.isBlank()) return List.of();
-        return Arrays.stream(questionPrompt.toLowerCase().split("[^a-z]+"))
-                .filter(w -> w.length() >= 4)
-                .filter(w -> !STOP_WORDS.contains(w))
-                .distinct()
-                .collect(java.util.stream.Collectors.toList());
+    private LiveFeedbackResponse enforceConsistency(
+            LiveFeedbackResponse response,
+            LiveFeedbackRequest request) {
+
+        double grammar      = response.getGrammarScore();
+        double clarity      = response.getClarityScore();
+        double completeness = response.getCompletenessScore();
+        double relevance    = response.getRelevanceScore();
+
+        String questionText = request.getQuestionPrompt() != null ? request.getQuestionPrompt() : "";
+        String answerText   = request.getAnswerText();
+
+        // ── Rule B: Question repetition detection ─────────────────────────────
+        double repetitionRatio = computeRepetitionRatio(answerText, questionText);
+        log.info("[LiveFeedback] questionId={} repetitionRatio={:.2f}", request.getQuestionId(), repetitionRatio);
+        if (repetitionRatio >= 0.65) {
+            // Answer is mostly question words — no new information
+            completeness = Math.min(completeness, 3.0);
+            clarity      = Math.min(clarity,      5.0);
+            log.info("[LiveFeedback] questionId={} REPETITION DETECTED — capping completeness={} clarity={}",
+                    request.getQuestionId(), completeness, clarity);
+        }
+
+        // ── Rule A: Positive-strength consistency ─────────────────────────────
+        boolean hasPositiveStrength = hasPositiveLanguage(response.getStrengths());
+        if (hasPositiveStrength && relevance < 5.0) {
+            log.info("[LiveFeedback] questionId={} INCONSISTENCY: positive strengths but relevance={} — correcting",
+                    request.getQuestionId(), relevance);
+            relevance    = Math.max(relevance,    5.0);
+            completeness = Math.max(completeness, 4.0);
+        }
+
+        // ── Rule C: Short-answer keyword floor ───────────────────────────────
+        if (isShortAnswer(request)) {
+            List<String> keywords = extractMeaningfulWords(questionText);
+            int matches = countWordMatches(answerText, keywords);
+            double coverage = keywords.isEmpty() ? 0.0 : (double) matches / keywords.size();
+            log.info("[LiveFeedback] questionId={} shortAnswer keywordCoverage={:.0f}% ({}/{})",
+                    request.getQuestionId(), coverage * 100, matches, keywords.size());
+
+            if (coverage >= 0.30) {
+                // Concept vocabulary detected — floor relevance and completeness
+                double relevanceFloor    = 5.0 + coverage * 2.0;  // 5.6–7.0 range
+                double completenessFloor = 4.0 + coverage * 1.5;  // 4.45–5.5 range
+                relevance    = Math.max(relevance,    relevanceFloor);
+                completeness = Math.max(completeness, completenessFloor);
+                if (clarity >= 4.0) grammar = Math.max(grammar, 4.0);
+                log.info("[LiveFeedback] questionId={} short-answer floors applied: relevance={} completeness={}",
+                        request.getQuestionId(), relevance, completeness);
+            }
+
+            // Hard rule: for short answers, NEVER zero relevance unless the answer is blank
+            if (relevance < 1.0 && !answerText.isBlank() && !hasNegativeStrength(response.getStrengths())) {
+                relevance = 1.0;
+            }
+        }
+
+        // ── Cap at 10 and round to 1 decimal ─────────────────────────────────
+        return LiveFeedbackResponse.builder()
+                .questionId(response.getQuestionId())
+                .grammarScore(    round1(Math.min(10.0, grammar)))
+                .clarityScore(    round1(Math.min(10.0, clarity)))
+                .completenessScore(round1(Math.min(10.0, completeness)))
+                .relevanceScore(  round1(Math.min(10.0, relevance)))
+                .strengths(response.getStrengths())
+                .improvements(response.getImprovements())
+                .suggestions(response.getSuggestions())
+                .generatedAt(response.getGeneratedAt())
+                .build();
     }
 
     /**
-     * Count how many keywords appear in the student's answer text.
+     * Computes what fraction of the answer's unique meaningful words
+     * are also present in the question.  A high ratio (≥ 0.65) means
+     * the student is largely parroting the question rather than explaining.
      */
-    private int countKeywordMatches(String answerText, List<String> keywords) {
+    private double computeRepetitionRatio(String answerText, String questionText) {
+        if (questionText == null || questionText.isBlank()) return 0.0;
+        Set<String> questionWords = new HashSet<>(extractMeaningfulWords(questionText));
+        List<String> answerWords  = extractMeaningfulWords(answerText);
+        if (answerWords.isEmpty() || questionWords.isEmpty()) return 0.0;
+        long overlap = answerWords.stream().filter(questionWords::contains).count();
+        return (double) overlap / answerWords.size();
+    }
+
+    /** True if any strength bullet contains a word that signals the answer is correct/relevant. */
+    private boolean hasPositiveLanguage(List<String> strengths) {
+        if (strengths == null || strengths.isEmpty()) return false;
+        for (String s : strengths) {
+            if (s == null) continue;
+            String lower = s.toLowerCase();
+            if (lower.contains("none detected")) continue;
+            for (String signal : POSITIVE_SIGNAL_WORDS) {
+                if (lower.contains(signal)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** True if strength bullets clearly say there is nothing positive ("none detected", "no relevant"). */
+    private boolean hasNegativeStrength(List<String> strengths) {
+        if (strengths == null || strengths.isEmpty()) return true;
+        for (String s : strengths) {
+            if (s != null && s.toLowerCase().contains("none detected")) return true;
+        }
+        return false;
+    }
+
+    // ─── Word / keyword utilities ─────────────────────────────────────────────
+
+    /**
+     * Extracts meaningful words: lower-case, ≥ 4 characters, not stop words.
+     * Used both for keyword coverage and repetition detection.
+     */
+    private List<String> extractMeaningfulWords(String text) {
+        if (text == null || text.isBlank()) return List.of();
+        return Arrays.stream(text.toLowerCase().split("[^a-z]+"))
+                .filter(w -> w.length() >= 4)
+                .filter(w -> !STOP_WORDS.contains(w))
+                .collect(Collectors.toList());
+    }
+
+    private int countWordMatches(String answerText, List<String> keywords) {
         if (keywords.isEmpty()) return 0;
         String lower = answerText.toLowerCase();
         int matches = 0;
@@ -245,96 +362,38 @@ public class LiveFeedbackService {
         return matches;
     }
 
-    /**
-     * Apply minimum score floors for short-answer questions based on keyword coverage.
-     *
-     * If the student's answer contains ≥30% of the keywords extracted from the
-     * question, they have demonstrated concept understanding and should not receive
-     * near-zero scores regardless of how the LLM scored them.
-     */
-    private LiveFeedbackResponse applyShortAnswerFloors(
-            LiveFeedbackResponse response,
-            LiveFeedbackRequest request,
-            int keywordMatches,
-            int totalKeywords) {
-
-        if (!isShortAnswer(request)) return response;
-
-        double coverage = totalKeywords > 0 ? (double) keywordMatches / totalKeywords : 0.0;
-        log.info("[LiveFeedback] Short-answer keyword coverage: {}/{} ({:.0f}%)",
-                keywordMatches, totalKeywords, coverage * 100);
-
-        double grammar      = response.getGrammarScore();
-        double clarity      = response.getClarityScore();
-        double completeness = response.getCompletenessScore();
-        double relevance    = response.getRelevanceScore();
-
-        // Keyword coverage ≥ 30%: student clearly understands the concept
-        if (coverage >= 0.30) {
-            // Relevance floor: concept was detected — at least 5/10
-            relevance    = Math.max(relevance,    5.0 + coverage * 2.0);   // 5–7 range
-            // Completeness floor: brief-but-correct → at least 4/10
-            completeness = Math.max(completeness, 4.0 + coverage * 1.5);   // 4–5.5 range
-            // Grammar: comprehensible text shouldn't crater the score
-            if (clarity >= 4.0) {
-                grammar = Math.max(grammar, 4.0);
-            }
-        }
-
-        // Hard cap: grammar alone cannot drive relevance/completeness below 3 for short answers
-        relevance    = Math.max(relevance,    response.getRelevanceScore());
-        completeness = Math.max(completeness, response.getCompletenessScore());
-
-        // Cap at 10
-        return LiveFeedbackResponse.builder()
-                .questionId(response.getQuestionId())
-                .grammarScore(Math.min(10.0, grammar))
-                .clarityScore(Math.min(10.0, clarity))
-                .completenessScore(Math.min(10.0, completeness))
-                .relevanceScore(Math.min(10.0, relevance))
-                .strengths(response.getStrengths())
-                .improvements(response.getImprovements())
-                .suggestions(response.getSuggestions())
-                .generatedAt(response.getGeneratedAt())
-                .build();
+    private double round1(double v) {
+        return Math.round(v * 10.0) / 10.0;
     }
 
-    // ── Response parsing ──────────────────────────────────────────────────────
+    // ─── Response parsing ─────────────────────────────────────────────────────
 
-    /**
-     * Parse the LLM output into a LiveFeedbackResponse.
-     * Uses line-by-line key extraction with regex for the numeric scores.
-     * Falls back to default values for any field that cannot be parsed.
-     */
     private LiveFeedbackResponse parseResponse(String raw, String questionId) {
-        // Remove [INST]...[/INST] wrapper if the model echoed it
         String text = raw.replaceAll("(?s)\\[INST\\].*?\\[/INST\\]", "").trim();
-        log.debug("[LiveFeedback] Parsing response for questionId={} | cleanedLen={}",
-                questionId, text.length());
+        log.debug("[LiveFeedback] Parsing response for questionId={} cleanedLen={}", questionId, text.length());
 
-        double grammar       = extractScore(text, "GRAMMAR");
-        double clarity       = extractScore(text, "CLARITY");
-        double completeness  = extractScore(text, "COMPLETENESS");
-        double relevance     = extractScore(text, "RELEVANCE");
+        double grammar      = extractScore(text, "GRAMMAR");
+        double clarity      = extractScore(text, "CLARITY");
+        double completeness = extractScore(text, "COMPLETENESS");
+        double relevance    = extractScore(text, "RELEVANCE");
 
-        log.info("[LiveFeedback] Parsed scores for questionId={} | grammar={} clarity={} completeness={} relevance={}",
+        log.info("[LiveFeedback] Parsed scores questionId={} grammar={} clarity={} completeness={} relevance={}",
                 questionId, grammar, clarity, completeness, relevance);
 
         List<String> strengths    = extractLines(text, "STRENGTH");
         List<String> improvements = extractLines(text, "IMPROVEMENT");
         List<String> suggestions  = extractLines(text, "SUGGESTION");
 
-        // Ensure lists are non-empty (fallback single item if parsing fails)
         if (strengths.isEmpty()) {
-            log.warn("[LiveFeedback] No STRENGTH lines parsed from response");
+            log.warn("[LiveFeedback] No STRENGTH lines parsed");
             strengths = List.of("Answer addresses the question topic.");
         }
         if (improvements.isEmpty()) {
-            log.warn("[LiveFeedback] No IMPROVEMENT lines parsed from response");
+            log.warn("[LiveFeedback] No IMPROVEMENT lines parsed");
             improvements = List.of("Consider expanding on key points.");
         }
         if (suggestions.isEmpty()) {
-            log.warn("[LiveFeedback] No SUGGESTION lines parsed from response");
+            log.warn("[LiveFeedback] No SUGGESTION lines parsed");
             suggestions = List.of("Review for grammar and clarity.");
         }
 
@@ -351,54 +410,46 @@ public class LiveFeedbackService {
                 .build();
     }
 
-    /** Extract a 0-10 score from a line prefixed with the given key. */
     private double extractScore(String text, String key) {
-        Pattern p = Pattern.compile(key + ":\\s*(10(?:\\.0)?|[0-9](?:\\.[0-9]+)?)", Pattern.CASE_INSENSITIVE);
+        Pattern p = Pattern.compile(key + ":\\s*(10(?:\\.0+)?|[0-9](?:\\.[0-9]+)?)", Pattern.CASE_INSENSITIVE);
         Matcher m = p.matcher(text);
         if (m.find()) {
             try {
-                double val = Double.parseDouble(m.group(1));
-                return Math.min(10.0, Math.max(0.0, val));
+                return Math.min(10.0, Math.max(0.0, Double.parseDouble(m.group(1))));
             } catch (NumberFormatException ignored) { }
         }
-        return 0.0; // unknown — do not assume positive score
+        return 0.0;
     }
 
-    /** Extract numbered list items for a given prefix (e.g. STRENGTH1, STRENGTH2). */
     private List<String> extractLines(String text, String prefix) {
         List<String> results = new ArrayList<>();
         Pattern p = Pattern.compile(prefix + "\\d+:\\s*(.+)", Pattern.CASE_INSENSITIVE);
         Matcher m = p.matcher(text);
         while (m.find()) {
             String value = m.group(1).trim();
-            if (!value.isBlank()) {
-                results.add(value);
-            }
+            if (!value.isBlank()) results.add(value);
         }
         return results;
     }
 
-    // ── Fallback ──────────────────────────────────────────────────────────────
+    // ─── Fallback ─────────────────────────────────────────────────────────────
 
-    /**
-     * Returned when the AI call fails or times out.
-     * Only completeness (word count ratio) is estimated; all other scores are 0
-     * so the student does not receive misleading positive feedback.
-     */
+    @SuppressWarnings("unused")
     private LiveFeedbackResponse buildFallback(LiveFeedbackRequest request) {
         int wordCount = request.getAnswerText().trim().split("\\s+").length;
-        int expected = request.getExpectedWordCount() != null ? request.getExpectedWordCount() : 200;
+        int expected  = request.getExpectedWordCount() != null ? request.getExpectedWordCount() : 200;
         double completeness = Math.min(10.0, (wordCount / (double) expected) * 10.0);
 
         return LiveFeedbackResponse.builder()
                 .questionId(request.getQuestionId())
-                .grammarScore(0.0)
-                .clarityScore(0.0)
+                .grammarScore(0.0).clarityScore(0.0)
                 .completenessScore(Math.round(completeness * 10.0) / 10.0)
                 .relevanceScore(0.0)
-                .strengths(List.of("AI analysis temporarily unavailable — scores are not available right now."))
-                .improvements(List.of("Continue writing; analysis will retry automatically.", "Ensure your answer addresses the question directly."))
-                .suggestions(List.of("Review your answer for grammar and clarity.", "Add specific details and examples to strengthen your response."))
+                .strengths(List.of("AI analysis temporarily unavailable."))
+                .improvements(List.of("Continue writing; analysis will retry automatically.",
+                        "Ensure your answer addresses the question directly."))
+                .suggestions(List.of("Review your answer for grammar and clarity.",
+                        "Add specific details to strengthen your response."))
                 .generatedAt(LocalDateTime.now().toString())
                 .build();
     }
