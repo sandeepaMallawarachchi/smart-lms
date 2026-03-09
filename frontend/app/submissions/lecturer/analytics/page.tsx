@@ -178,10 +178,14 @@ export default function LecturerAnalyticsPage() {
     useEffect(() => {
         const graded = (rawSubmissions ?? []).filter((s) => s.status === 'GRADED');
         if (graded.length === 0) return;
-        setAnswersLoading(true);
-        Promise.all(graded.map((s) => submissionService.getAnswers(s.id).catch(() => [] as TextAnswer[])))
-            .then((results) => setAllAnswers(results.flat()))
-            .finally(() => setAnswersLoading(false));
+        let cancelled = false;
+        const t = setTimeout(() => {
+            setAnswersLoading(true);
+            Promise.all(graded.map((s) => submissionService.getAnswers(s.id).catch(() => [] as TextAnswer[])))
+                .then((results) => { if (!cancelled) setAllAnswers(results.flat()); })
+                .finally(() => { if (!cancelled) setAnswersLoading(false); });
+        }, 0);
+        return () => { cancelled = true; clearTimeout(t); };
     }, [rawSubmissions]);
 
     const questionRows = useMemo(() => {
