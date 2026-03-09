@@ -226,18 +226,18 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           description: 'Your notifications & alerts',
           href: '/projects-and-tasks/student/notifications',
         },
-        {
-          id: 'help',
-          label: 'Tips & Learning',
-          icon: <Lightbulb size={20} />,
-          description: 'How to manage tasks effectively',
-          href: '/projects-and-tasks/student/help',
-          subsections: [
-            { id: 'getting-started', label: 'Getting Started' },
-            { id: 'kanban-guide', label: 'Kanban Guide' },
-            { id: 'best-practices', label: 'Best Practices' },
-          ],
-        },
+        // {
+        //   id: 'help',
+        //   label: 'Tips & Learning',
+        //   icon: <Lightbulb size={20} />,
+        //   description: 'How to manage tasks effectively',
+        //   href: '/projects-and-tasks/student/help',
+        //   subsections: [
+        //     { id: 'getting-started', label: 'Getting Started' },
+        //     { id: 'kanban-guide', label: 'Kanban Guide' },
+        //     { id: 'best-practices', label: 'Best Practices' },
+        //   ],
+        // },
       ],
       showTip: true,
       tipContent: {

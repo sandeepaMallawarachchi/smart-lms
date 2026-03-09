@@ -19,7 +19,8 @@ export function getReminderJobId(payload: {
   reminderType: string;
 }) {
   const itemId = payload.projectId || payload.taskId || 'unknown';
-  return `reminder:${payload.studentId}:${itemId}:${payload.reminderType}`;
+  // BullMQ rejects custom job ids containing ":".
+  return `reminder__${payload.studentId}__${itemId}__${payload.reminderType}`;
 }
 
 export function getReminderJobPrefix(payload: {
@@ -28,7 +29,7 @@ export function getReminderJobPrefix(payload: {
   taskId?: string;
 }) {
   const itemId = payload.projectId || payload.taskId || 'unknown';
-  return `reminder:${payload.studentId}:${itemId}:`;
+  return `reminder__${payload.studentId}__${itemId}__`;
 }
 
 export async function removeReminderJobsByPrefix(prefix: string): Promise<number> {
@@ -40,7 +41,7 @@ export async function removeReminderJobsByPrefix(prefix: string): Promise<number
     removable.map(async (job) => {
       try {
         await job.remove();
-      } catch (error) {
+      } catch {
         // Ignore race where job may complete between listing and removal.
       }
     })

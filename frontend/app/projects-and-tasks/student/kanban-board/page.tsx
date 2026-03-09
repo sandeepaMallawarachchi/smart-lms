@@ -83,6 +83,7 @@ interface KanbanItem {
     type: 'project' | 'task';
     item: Project | Task;
     status: 'todo' | 'inprogress' | 'done';
+    completedAt?: string;
 }
 
 interface StudentData {
@@ -134,9 +135,22 @@ const getDeadlineText = (deadlineDate: string, deadlineTime: string = '23:59') =
     }
 };
 
+const formatDateTime = (input?: string) => {
+    if (!input) return 'Unknown date';
+    const parsed = new Date(input);
+    if (Number.isNaN(parsed.getTime())) return 'Unknown date';
+    return parsed.toLocaleString();
+};
+
+const getDeadlineDate = (item: Project | Task): Date | null => {
+    if (!item.deadlineDate) return null;
+    const parsed = new Date(`${item.deadlineDate}T${item.deadlineTime || '23:59'}`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 interface KanbanCardProps {
     item: KanbanItem;
-    onDragStart: (e: React.DragEvent, item: KanbanItem) => void;
+    onDragStart: (item: KanbanItem) => void;
     onClick: (item: KanbanItem) => void;
 }
 
@@ -144,18 +158,30 @@ const KanbanCard: React.FC<KanbanCardProps> = ({ item, onDragStart, onClick }) =
     const deadlineStatus = item.item.deadlineDate
         ? getDeadlineStatus(item.item.deadlineDate, item.item.deadlineTime)
         : null;
+    const deadline = getDeadlineDate(item.item);
+    const completedAtDate = item.completedAt ? new Date(item.completedAt) : null;
+    const isCompletedLate = Boolean(
+        item.status === 'done' &&
+        completedAtDate &&
+        !Number.isNaN(completedAtDate.getTime()) &&
+        deadline &&
+        completedAtDate.getTime() > deadline.getTime()
+    );
+    const doneBadgeClasses = isCompletedLate
+        ? { text: 'text-yellow-700', bg: 'bg-yellow-50', border: 'border-yellow-200' }
+        : { text: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' };
 
     return (
         <motion.div
             draggable={item.status !== 'done'}
-            onDragStart={(e) => item.status !== 'done' && onDragStart(e as any, item)}
+            onDragStart={() => item.status !== 'done' && onDragStart(item)}
             onClick={() => onClick(item)}
             whileHover={item.status !== 'done' ? { y: -4, boxShadow: '0 10px 25px rgba(59, 130, 246, 0.15)' } : {}}
             whileTap={item.status !== 'done' ? { scale: 0.98 } : {}}
             className={`
         p-4 rounded-lg border-2 cursor-grab active:cursor-grabbing 
         transition-all bg-white
-        ${deadlineStatus?.borderColor}
+        ${item.status === 'done' ? doneBadgeClasses.border : deadlineStatus?.borderColor}
         hover:shadow-lg
         ${item.status === 'done' ? 'cursor-not-allowed opacity-75' : ''}
       `}
@@ -167,17 +193,25 @@ const KanbanCard: React.FC<KanbanCardProps> = ({ item, onDragStart, onClick }) =
                         {item.name}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
-                        {item.type === 'project' ? '📋' : '✓'} {(item.item as any).course?.courseName}
+                        {item.type === 'project' ? '📋' : '✓'} {item.item.course.courseName}
                     </p>
                 </div>
             </div>
 
-            {item.item.deadlineDate && deadlineStatus && (
-                <div className={`mt-3 p-2 rounded ${deadlineStatus.bgColor} border border-current border-opacity-20`}>
-                    <p className={`text-xs font-semibold ${deadlineStatus.color}`}>
-                        {getDeadlineText(item.item.deadlineDate, item.item.deadlineTime)}
+            {item.status === 'done' ? (
+                <div className={`mt-3 p-2 rounded border ${doneBadgeClasses.bg} ${doneBadgeClasses.border}`}>
+                    <p className={`text-xs font-semibold ${doneBadgeClasses.text}`}>
+                        Completed on {formatDateTime(item.completedAt)}
                     </p>
                 </div>
+            ) : (
+                item.item.deadlineDate && deadlineStatus && (
+                    <div className={`mt-3 p-2 rounded ${deadlineStatus.bgColor} border border-current border-opacity-20`}>
+                        <p className={`text-xs font-semibold ${deadlineStatus.color}`}>
+                            {getDeadlineText(item.item.deadlineDate, item.item.deadlineTime)}
+                        </p>
+                    </div>
+                )
             )}
 
             <div className="mt-3 flex items-center gap-2 text-xs text-gray-600">
@@ -192,6 +226,7 @@ export default function StudentProjectsAndTasksPage() {
     const [student, setStudent] = useState<StudentData | null>(null);
     const [allProjects, setAllProjects] = useState<Project[]>([]);
     const [allTasks, setAllTasks] = useState<Task[]>([]);
+    const [allItems, setAllItems] = useState<KanbanItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedItem, setSelectedItem] = useState<KanbanItem | null>(null);
@@ -262,6 +297,17 @@ export default function StudentProjectsAndTasksPage() {
                     if (progressRes.ok) {
                         const progressData = await progressRes.json();
                         status = progressData.data.progress.status;
+                        const progressUpdatedAt = progressData.data.progress.updatedAt;
+
+                        projectItems.push({
+                            _id: project._id,
+                            name: project.projectName,
+                            type: 'project',
+                            item: project,
+                            status,
+                            completedAt: status === 'done' ? progressUpdatedAt : undefined,
+                        });
+                        continue;
                     }
 
                     projectItems.push({
@@ -270,6 +316,7 @@ export default function StudentProjectsAndTasksPage() {
                         type: 'project',
                         item: project,
                         status,
+                        completedAt: undefined,
                     });
                 }
 
@@ -288,6 +335,17 @@ export default function StudentProjectsAndTasksPage() {
                     if (progressRes.ok) {
                         const progressData = await progressRes.json();
                         status = progressData.data.progress.status;
+                        const progressUpdatedAt = progressData.data.progress.updatedAt;
+
+                        taskItems.push({
+                            _id: task._id,
+                            name: task.taskName,
+                            type: 'task',
+                            item: task,
+                            status,
+                            completedAt: status === 'done' ? progressUpdatedAt : undefined,
+                        });
+                        continue;
                     }
 
                     taskItems.push({
@@ -296,25 +354,17 @@ export default function StudentProjectsAndTasksPage() {
                         type: 'task',
                         item: task,
                         status,
+                        completedAt: undefined,
                     });
                 }
 
-                const todoProjects = projectItems.filter(p => p.status === 'todo');
-                const inProgressProjects = projectItems.filter(p => p.status === 'inprogress');
-                const doneProjects = projectItems.filter(p => p.status === 'done');
-
-                const todoTasks = taskItems.filter(t => t.status === 'todo');
-                const inProgressTasks = taskItems.filter(t => t.status === 'inprogress');
-                const doneTasks = taskItems.filter(t => t.status === 'done');
-
-                setTodoItems([...todoProjects, ...todoTasks]);
-                setInProgressItems([...inProgressProjects, ...inProgressTasks]);
-                setDoneItems([...doneProjects, ...doneTasks]);
+                setAllItems([...projectItems, ...taskItems]);
 
                 setError(null);
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error('Error fetching data:', err);
-                setError(err.message || 'Failed to load projects and tasks');
+                const message = err instanceof Error ? err.message : 'Failed to load projects and tasks';
+                setError(message);
             } finally {
                 setIsLoading(false);
             }
@@ -347,57 +397,14 @@ export default function StudentProjectsAndTasksPage() {
     }, []);
 
     useEffect(() => {
-        if (!selectedCourse) {
-            const projectItems: KanbanItem[] = allProjects.map((p: Project) => ({
-                _id: p._id,
-                name: p.projectName,
-                type: 'project',
-                item: p,
-                status: 'todo',
-            }));
+        const visibleItems = selectedCourse
+            ? allItems.filter((entry) => entry.item.course._id === selectedCourse._id)
+            : allItems;
 
-            const taskItems: KanbanItem[] = allTasks.map((t: Task) => ({
-                _id: t._id,
-                name: t.taskName,
-                type: 'task',
-                item: t,
-                status: 'todo',
-            }));
-
-            const allItems = [...projectItems, ...taskItems];
-            setTodoItems(allItems);
-            setInProgressItems([]);
-            setDoneItems([]);
-        } else {
-            const filteredProjects = allProjects.filter(
-                (p) => p.course._id === selectedCourse._id
-            );
-            const filteredTasks = allTasks.filter(
-                (t) => t.course._id === selectedCourse._id
-            );
-
-            const projectItems: KanbanItem[] = filteredProjects.map((p: Project) => ({
-                _id: p._id,
-                name: p.projectName,
-                type: 'project',
-                item: p,
-                status: 'todo',
-            }));
-
-            const taskItems: KanbanItem[] = filteredTasks.map((t: Task) => ({
-                _id: t._id,
-                name: t.taskName,
-                type: 'task',
-                item: t,
-                status: 'todo',
-            }));
-
-            const allItems = [...projectItems, ...taskItems];
-            setTodoItems(allItems);
-            setInProgressItems([]);
-            setDoneItems([]);
-        }
-    }, [selectedCourse, allProjects, allTasks]);
+        setTodoItems(visibleItems.filter((entry) => entry.status === 'todo'));
+        setInProgressItems(visibleItems.filter((entry) => entry.status === 'inprogress'));
+        setDoneItems(visibleItems.filter((entry) => entry.status === 'done'));
+    }, [selectedCourse, allItems]);
 
     const handleDragStart = (item: KanbanItem) => {
         if (item.status !== 'done') {
@@ -410,86 +417,135 @@ export default function StudentProjectsAndTasksPage() {
         e.dataTransfer.dropEffect = 'move';
     };
 
-    const handleDrop = (status: 'todo' | 'inprogress' | 'done') => {
+    const persistItemStatus = async (
+        item: KanbanItem,
+        status: 'todo' | 'inprogress' | 'done'
+    ): Promise<string | undefined> => {
+        const token = localStorage.getItem('authToken');
+
+        if (!token) {
+            throw new Error('No auth token found');
+        }
+
+        const endpoint =
+            item.type === 'project'
+                ? '/api/projects-and-tasks/student/project-progress'
+                : '/api/projects-and-tasks/student/task-progress';
+        const body = item.type === 'project'
+            ? { projectId: item._id, status }
+            : { taskId: item._id, status };
+
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+            const payload = await response.json().catch(() => null);
+            const message = payload?.message || `Failed to update ${item.type} status`;
+            throw new Error(message);
+        }
+
+        const payload = await response.json().catch(() => null);
+        return payload?.data?.progress?.updatedAt;
+    };
+
+    const handleDrop = async (status: 'todo' | 'inprogress' | 'done') => {
         if (!draggedItem || draggedItem.status === 'done') return;
+        if (draggedItem.status === status) {
+            setDraggedItem(null);
+            return;
+        }
 
-        setTodoItems(prev => prev.filter(item => item._id !== draggedItem._id));
-        setInProgressItems(prev => prev.filter(item => item._id !== draggedItem._id));
-        setDoneItems(prev => prev.filter(item => item._id !== draggedItem._id));
+        const previousStatus = draggedItem.status;
+        const updatedItem = {
+            ...draggedItem,
+            status,
+            completedAt: status === 'done' ? draggedItem.completedAt : undefined,
+        };
 
-        const updatedItem = { ...draggedItem, status };
-        switch (status) {
-            case 'todo':
-                setTodoItems(prev => [...prev, updatedItem]);
-                break;
-            case 'inprogress':
-                setInProgressItems(prev => [...prev, updatedItem]);
-                // Schedule reminders when moved to In Progress
-                if (updatedItem.type === 'project') {
-                    scheduleReminders(updatedItem._id);
-                } else {
-                    // schedule for tasks if they have deadlines
-                    const task = updatedItem.item as Task;
-                    if (task.deadlineDate) {
-                        scheduleReminders(updatedItem._id);
+        setAllItems((prev) =>
+            prev.map((entry) => (entry._id === updatedItem._id ? { ...entry, status } : entry))
+        );
+
+        try {
+            const persistedCompletedAt = await persistItemStatus(draggedItem, status);
+            setAllItems((prev) =>
+                prev.map((entry) =>
+                    entry._id === updatedItem._id
+                        ? {
+                            ...entry,
+                            status,
+                            completedAt: status === 'done' ? persistedCompletedAt : undefined,
+                        }
+                        : entry
+                )
+            );
+            setSelectedItem((prev) => (
+                prev && prev._id === updatedItem._id
+                    ? {
+                        ...prev,
+                        status,
+                        completedAt: status === 'done' ? persistedCompletedAt : undefined,
                     }
-                }
-                break;
-            case 'done':
-                setDoneItems(prev => [...prev, updatedItem]);
-                break;
+                    : prev
+            ));
+        } catch (err: unknown) {
+            console.error('Error updating status:', err);
+            setAllItems((prev) =>
+                prev.map((entry) =>
+                    entry._id === updatedItem._id ? { ...entry, status: previousStatus } : entry
+                )
+            );
+            setError(err instanceof Error ? err.message : 'Failed to save status change');
         }
 
         setDraggedItem(null);
     };
 
-    const scheduleReminders = async (projectId: string) => {
-        try {
-            const token = localStorage.getItem('authToken');
-
-            const response = await fetch('/api/projects-and-tasks/student/notifications/scheduled-reminders', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ projectId }),
-            });
-
-            if (response.ok) {
-                console.log('Reminders scheduled for project:', projectId);
-            }
-        } catch (error) {
-            console.error('Error scheduling reminders:', error);
-        }
-    };
-
-    const handleTaskUpdate = (projectId: string, mainTasks: any) => {
+    const handleTaskUpdate = (projectId: string, mainTasks: MainTask[], progressUpdatedAt?: string) => {
         if (!mainTasks || mainTasks.length === 0) return;
 
-        const allTasksCompleted = mainTasks.every((t: any) => t.completed);
+        const allTasksCompleted = mainTasks.every((task) => task.completed);
+        const newStatus: 'inprogress' | 'done' = allTasksCompleted ? 'done' : 'inprogress';
 
-        if (allTasksCompleted) {
-            setInProgressItems(prev => prev.filter(item => item._id !== projectId));
-            setDoneItems(prev => {
-                const doneItem = inProgressItems.find(item => item._id === projectId);
-                return doneItem ? [...prev, { ...doneItem, status: 'done' as const }] : prev;
-            });
-        }
+        setAllItems((prev) =>
+            prev.map((entry) =>
+                entry._id === projectId
+                    ? { ...entry, status: newStatus, completedAt: newStatus === 'done' ? progressUpdatedAt : undefined }
+                    : entry
+            )
+        );
+        setSelectedItem((prev) => (
+            prev && prev._id === projectId
+                ? { ...prev, status: newStatus, completedAt: newStatus === 'done' ? progressUpdatedAt : undefined }
+                : prev
+        ));
     };
 
-    const handleSubtaskUpdate = (taskId: string, subtasks: any) => {
+    const handleSubtaskUpdate = (taskId: string, subtasks: Subtask[], progressUpdatedAt?: string) => {
         if (!subtasks || subtasks.length === 0) return;
 
-        const allSubtasksCompleted = subtasks.every((st: any) => st.completed);
+        const allSubtasksCompleted = subtasks.every((subtask) => subtask.completed);
 
-        if (allSubtasksCompleted) {
-            setInProgressItems(prev => prev.filter(item => item._id !== taskId));
-            setDoneItems(prev => {
-                const doneItem = inProgressItems.find(item => item._id === taskId);
-                return doneItem ? [...prev, { ...doneItem, status: 'done' as const }] : prev;
-            });
-        }
+        const newStatus: 'inprogress' | 'done' = allSubtasksCompleted ? 'done' : 'inprogress';
+
+        setAllItems((prev) =>
+            prev.map((entry) =>
+                entry._id === taskId
+                    ? { ...entry, status: newStatus, completedAt: newStatus === 'done' ? progressUpdatedAt : undefined }
+                    : entry
+            )
+        );
+        setSelectedItem((prev) => (
+            prev && prev._id === taskId
+                ? { ...prev, status: newStatus, completedAt: newStatus === 'done' ? progressUpdatedAt : undefined }
+                : prev
+        ));
     };
 
     if (isLoading) {
@@ -584,7 +640,7 @@ export default function StudentProjectsAndTasksPage() {
                     >
                         <motion.div
                             onDragOver={handleDragOver}
-                            onDrop={() => handleDrop('todo')}
+                            onDrop={() => { void handleDrop('todo'); }}
                             className="bg-white/80 backdrop-blur-sm rounded-xl border-2 border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow min-h-[600px]"
                         >
                             <div className="flex items-center gap-2 mb-6">
@@ -628,7 +684,7 @@ export default function StudentProjectsAndTasksPage() {
 
                         <motion.div
                             onDragOver={handleDragOver}
-                            onDrop={() => handleDrop('inprogress')}
+                            onDrop={() => { void handleDrop('inprogress'); }}
                             className="bg-white/80 backdrop-blur-sm rounded-xl border-2 border-brand-blue/30 p-6 shadow-sm hover:shadow-md transition-shadow min-h-[600px]"
                         >
                             <div className="flex items-center gap-2 mb-6">
@@ -672,7 +728,7 @@ export default function StudentProjectsAndTasksPage() {
 
                         <motion.div
                             onDragOver={handleDragOver}
-                            onDrop={() => handleDrop('done')}
+                            onDrop={() => { void handleDrop('done'); }}
                             className="bg-white/80 backdrop-blur-sm rounded-xl border-2 border-green-300 p-6 shadow-sm hover:shadow-md transition-shadow min-h-[600px]"
                         >
                             <div className="flex items-center gap-2 mb-6">
