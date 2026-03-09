@@ -22,6 +22,7 @@ import {
 import { useSubmission } from '@/hooks/useSubmissions';
 import { useLatestVersion, useVersion, useVersions } from '@/hooks/useVersions';
 import type { SubmissionVersion, VersionAnswer } from '@/types/submission.types';
+import LecturerAnnotatedText from '@/components/submissions/LecturerAnnotatedText';
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -55,7 +56,7 @@ function ScoreBar({ label, value }: { label: string; value?: number | null }) {
 
 // ─── QuestionAnswerBlock ──────────────────────────────────────
 
-function QuestionAnswerBlock({ answer, index }: { answer: VersionAnswer; index: number }) {
+function QuestionAnswerBlock({ answer, index, submissionId, versionId }: { answer: VersionAnswer; index: number; submissionId: string; versionId: string }) {
     const [showAnswer, setShowAnswer] = useState(false);
     const [showSources, setShowSources] = useState(false);
 
@@ -93,8 +94,14 @@ function QuestionAnswerBlock({ answer, index }: { answer: VersionAnswer; index: 
                 </div>
 
                 {showAnswer && (
-                    <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-700 whitespace-pre-wrap border border-gray-200">
-                        {answer.answerText ?? '(no answer)'}
+                    <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <LecturerAnnotatedText
+                            text={answer.answerText ?? '(no answer)'}
+                            submissionId={submissionId}
+                            versionId={versionId}
+                            questionId={answer.questionId}
+                            readOnly
+                        />
                         <div className="mt-2 text-xs text-gray-400">{answer.wordCount ?? 0} words</div>
                     </div>
                 )}
@@ -476,7 +483,7 @@ export default function FeedbackPage({ params }: { params: Promise<{ id: string 
                         <div className="space-y-6">
                             <h2 className="text-xl font-bold text-gray-900">Answer Feedback</h2>
                             {answers.map((a, i) => (
-                                <QuestionAnswerBlock key={a.questionId} answer={a} index={i} />
+                                <QuestionAnswerBlock key={a.questionId} answer={a} index={i} submissionId={id} versionId={version!.id} />
                             ))}
                         </div>
                     ) : (

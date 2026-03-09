@@ -4,252 +4,207 @@ import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     FileText,
-    User,
     Calendar,
     GitBranch,
     Shield,
     Star,
     Eye,
     Edit,
-    Search,
     Filter,
     AlertTriangle,
     CheckCircle2,
     Clock,
     Award,
-    Download,
-    RefreshCw,
     AlertCircle,
 } from 'lucide-react';
 import { useAllSubmissions } from '@/hooks/useSubmissions';
+import {
+    PageHeader,
+    StatCard,
+    Skeleton,
+    FilterToolbar,
+    SearchInput,
+    EmptyState,
+    ErrorBanner,
+} from '@/components/submissions/lecturer/PageShell';
 import type { Submission, SubmissionStatus } from '@/types/submission.types';
 
-// ─── Helpers ──────────────────────────────────────────────────
+/* ─── Sub-components ───────────────────────────────────────── */
 
-type SortKey = 'date' | 'plagiarism' | 'ai';
-type FilterStatus = 'all' | SubmissionStatus;
+type SortKey = 'date' | 'plagiarism' | 'ai' | 'priority';
+type FilterStatus = 'all' | 'NEEDS_GRADING' | SubmissionStatus;
+
+const STATUS_CFG: Record<SubmissionStatus, { label: string; cls: string }> = {
+    SUBMITTED:      { label: 'Submitted',      cls: 'bg-blue-100 text-blue-700' },
+    PENDING_REVIEW: { label: 'Pending Review',  cls: 'bg-amber-100 text-amber-700' },
+    GRADED:         { label: 'Graded',          cls: 'bg-green-100 text-green-700' },
+    FLAGGED:        { label: 'Flagged',         cls: 'bg-red-100 text-red-700' },
+    LATE:           { label: 'Late',            cls: 'bg-purple-100 text-purple-700' },
+    DRAFT:          { label: 'Draft',           cls: 'bg-gray-100 text-gray-600' },
+};
 
 function StatusBadge({ status }: { status: SubmissionStatus }) {
-    const cfg: Record<SubmissionStatus, { label: string; icon: React.ReactNode; cls: string }> = {
-        SUBMITTED:      { label: 'Submitted',     icon: <Clock size={14} />,          cls: 'bg-blue-100 text-blue-700' },
-        PENDING_REVIEW: { label: 'Pending Review', icon: <Clock size={14} />,          cls: 'bg-amber-100 text-amber-700' },
-        GRADED:         { label: 'Graded',         icon: <CheckCircle2 size={14} />,   cls: 'bg-green-100 text-green-700' },
-        FLAGGED:        { label: 'Flagged',        icon: <AlertTriangle size={14} />,  cls: 'bg-red-100 text-red-700' },
-        LATE:           { label: 'Late',           icon: <AlertTriangle size={14} />,  cls: 'bg-purple-100 text-purple-700' },
-        DRAFT:          { label: 'Draft',          icon: <FileText size={14} />,       cls: 'bg-gray-100 text-gray-600' },
-    };
-    const { label, icon, cls } = cfg[status] ?? cfg.DRAFT;
-    return (
-        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${cls}`}>
-            {icon}
-            {label}
-        </span>
-    );
+    const { label, cls } = STATUS_CFG[status] ?? STATUS_CFG.DRAFT;
+    return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{label}</span>;
 }
 
-// ─── Skeleton row ──────────────────────────────────────────────
+type Priority = 'high' | 'medium' | 'low';
 
-function SkeletonRow() {
-    return (
-        <div className="bg-white rounded-lg border border-gray-200 p-6 animate-pulse">
-            <div className="flex gap-4">
-                <div className="w-10 h-10 bg-gray-200 rounded-full shrink-0" />
-                <div className="flex-1 space-y-3">
-                    <div className="h-5 bg-gray-200 rounded w-1/3" />
-                    <div className="h-4 bg-gray-100 rounded w-1/2" />
-                    <div className="grid grid-cols-3 gap-3 mt-2">
-                        {[1, 2, 3].map(i => <div key={i} className="h-16 bg-gray-100 rounded-lg" />)}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+function getPriority(s: Submission): Priority {
+    if ((s.plagiarismScore ?? 0) >= 25 || s.isLate) return 'high';
+    if ((s.plagiarismScore ?? 0) >= 10 || s.currentVersionNumber > 3) return 'medium';
+    return 'low';
 }
 
-// ─── Submission card ──────────────────────────────────────────
+const PRIORITY_CFG: Record<Priority, { label: string; cls: string }> = {
+    high: { label: 'High', cls: 'bg-red-100 text-red-700' },
+    medium: { label: 'Med', cls: 'bg-amber-100 text-amber-700' },
+    low: { label: 'Low', cls: 'bg-green-100 text-green-700' },
+};
 
 function SubmissionRow({
-    submission,
+    submission: s,
     onView,
     onGrade,
+    showPriority,
 }: {
     submission: Submission;
     onView: (id: string) => void;
     onGrade: (id: string) => void;
+    showPriority?: boolean;
 }) {
-    const plagHigh = (submission.plagiarismScore ?? 0) >= 20;
+    const plagHigh = (s.plagiarismScore ?? 0) >= 20;
+    const priority = getPriority(s);
+
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between">
-                {/* Left */}
-                <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                            <User className="text-blue-600" size={20} />
-                        </div>
-                        <div>
-                            <div className="flex items-center gap-2 mb-1">
-                                <h3 className="font-semibold text-gray-900">
-                                    {submission.studentId}
-                                </h3>
-                                {(submission.moduleName || submission.moduleCode) && (
-                                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                                        {submission.moduleName ?? submission.moduleCode}
-                                    </span>
-                                )}
-                            </div>
-                            <p className="text-sm text-gray-600">
-                                {submission.assignmentTitle ?? `Assignment ${submission.assignmentId}`}
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                        {submission.submittedAt && (
-                            <div className="flex items-center gap-2 text-sm">
-                                <Calendar className="text-gray-400" size={16} />
-                                <span className="text-gray-700">
-                                    {new Date(submission.submittedAt).toLocaleDateString('en-US', {
-                                        month: 'short', day: 'numeric',
-                                        hour: '2-digit', minute: '2-digit',
-                                    })}
-                                </span>
-                            </div>
+        <div className={`bg-white rounded-lg border p-4 hover:shadow-md transition-all ${s.isLate ? 'border-l-4 border-l-purple-400 border-gray-200' : plagHigh ? 'border-l-4 border-l-red-400 border-gray-200' : 'border-gray-200'}`}>
+            <div className="flex items-center justify-between gap-3">
+                {/* Left info */}
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className="font-semibold text-gray-900 text-sm">{s.studentName ?? 'Unknown Student'}</span>
+                        <StatusBadge status={s.status} />
+                        {showPriority && s.status !== 'GRADED' && (
+                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${PRIORITY_CFG[priority].cls}`}>{PRIORITY_CFG[priority].label}</span>
                         )}
-                        <div className="flex items-center gap-2 text-sm">
-                            <GitBranch className="text-purple-600" size={16} />
-                            <span className="text-gray-700">Version {submission.currentVersionNumber}</span>
-                        </div>
-                        {submission.wordCount != null && (
-                            <div className="flex items-center gap-2 text-sm">
-                                <FileText className="text-blue-600" size={16} />
-                                <span className="text-gray-700">{submission.wordCount} words</span>
-                            </div>
+                        {plagHigh && (
+                            <span className="text-xs text-red-600 font-medium flex items-center gap-0.5">
+                                <AlertTriangle size={11} /> Plagiarism
+                            </span>
                         )}
-                        {submission.totalMarks != null && (
-                            <div className="flex items-center gap-2 text-sm">
-                                <Award className="text-amber-600" size={16} />
-                                <span className="text-gray-700">{submission.totalMarks} marks</span>
-                            </div>
+                        {s.isLate && (
+                            <span className="text-xs text-purple-600 font-medium flex items-center gap-0.5">
+                                <Clock size={11} /> Late
+                            </span>
                         )}
                     </div>
-
-                    {/* Metrics */}
-                    <div className="grid grid-cols-3 gap-3">
-                        <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-                            <div className="flex items-center gap-2 mb-1">
-                                <Star className="text-purple-600" size={16} />
-                                <span className="text-xs text-gray-600">AI Score</span>
-                            </div>
-                            <div className="text-lg font-bold text-purple-600">
-                                {submission.aiScore != null ? `${submission.aiScore}/100` : '—'}
-                            </div>
-                        </div>
-
-                        <div className={`p-3 rounded-lg border ${plagHigh ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
-                            <div className="flex items-center gap-2 mb-1">
-                                <Shield className={plagHigh ? 'text-red-600' : 'text-green-600'} size={16} />
-                                <span className="text-xs text-gray-600">Plagiarism</span>
-                            </div>
-                            <div className={`text-lg font-bold ${plagHigh ? 'text-red-600' : 'text-green-600'}`}>
-                                {submission.plagiarismScore != null ? `${submission.plagiarismScore}%` : '—'}
-                            </div>
-                        </div>
-
-                        {submission.grade != null ? (
-                            <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <Award className="text-green-600" size={16} />
-                                    <span className="text-xs text-gray-600">Grade</span>
-                                </div>
-                                <div className="text-lg font-bold text-green-600">{submission.grade}%</div>
-                            </div>
-                        ) : (
-                            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <Award className="text-gray-400" size={16} />
-                                    <span className="text-xs text-gray-600">Grade</span>
-                                </div>
-                                <div className="text-sm font-medium text-gray-500">Not graded</div>
-                            </div>
+                    <p className="text-xs text-gray-600 mb-1.5 truncate">
+                        {s.assignmentTitle ?? 'Untitled Assignment'}
+                        {s.moduleCode && <span className="text-gray-400"> · {s.moduleName ?? s.moduleCode}</span>}
+                    </p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                        {s.submittedAt && (
+                            <span className="flex items-center gap-1">
+                                <Calendar size={12} />
+                                {new Date(s.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                        )}
+                        <span className="flex items-center gap-1">
+                            <GitBranch size={12} /> v{s.currentVersionNumber}
+                        </span>
+                        {s.wordCount != null && (
+                            <span className="flex items-center gap-1"><FileText size={12} /> {s.wordCount} words</span>
                         )}
                     </div>
                 </div>
 
-                {/* Right — status + actions */}
-                <div className="flex flex-col items-end gap-3 ml-4 shrink-0">
-                    <StatusBadge status={submission.status} />
-
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => onView(submission.id)}
-                            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium flex items-center gap-2 text-sm cursor-pointer"
-                        >
-                            <Eye size={16} />
-                            View
-                        </button>
-                        {submission.status !== 'GRADED' && (
-                            <button
-                                onClick={() => onGrade(submission.id)}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 text-sm cursor-pointer"
-                            >
-                                <Edit size={16} />
-                                Grade
-                            </button>
+                {/* Metrics */}
+                <div className="flex items-center gap-3 shrink-0">
+                    <div className="hidden md:flex gap-2">
+                        <MetricBadge
+                            icon={<Star size={12} className="text-purple-500" />}
+                            value={s.aiScore != null ? `${s.aiScore}` : '—'}
+                            sub="AI"
+                        />
+                        <MetricBadge
+                            icon={<Shield size={12} className={plagHigh ? 'text-red-500' : 'text-green-500'} />}
+                            value={s.plagiarismScore != null ? `${s.plagiarismScore}%` : '—'}
+                            sub="Plag"
+                            warn={plagHigh}
+                        />
+                        {s.grade != null && (
+                            <MetricBadge
+                                icon={<Award size={12} className="text-green-500" />}
+                                value={`${s.grade}%`}
+                                sub="Grade"
+                            />
                         )}
                     </div>
 
-                    {plagHigh && (
-                        <div className="flex items-center gap-1 text-xs text-red-600 font-medium">
-                            <AlertTriangle size={14} />
-                            High plagiarism
-                        </div>
-                    )}
+                    {/* Actions */}
+                    <div className="flex gap-1.5">
+                        <button
+                            onClick={() => onView(s.id)}
+                            className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
+                            title="View"
+                        >
+                            <Eye size={14} className="text-gray-600" />
+                        </button>
+                        {s.status !== 'GRADED' && (
+                            <button
+                                onClick={() => onGrade(s.id)}
+                                className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors cursor-pointer"
+                                title="Grade"
+                            >
+                                <Edit size={14} />
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
     );
 }
 
-// ─── Page ─────────────────────────────────────────────────────
+function MetricBadge({ icon, value, sub, warn }: { icon: React.ReactNode; value: string; sub: string; warn?: boolean }) {
+    return (
+        <div className={`text-center px-2 py-1 rounded border text-xs ${warn ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+            <div className="flex items-center justify-center gap-1 mb-0.5">{icon}<span className="font-bold text-gray-800">{value}</span></div>
+            <div className="text-gray-400">{sub}</div>
+        </div>
+    );
+}
+
+/* ─── Page ─────────────────────────────────────────────────── */
 
 export default function LecturerAllSubmissionsPage() {
     const router = useRouter();
-
-    const [searchQuery, setSearchQuery]         = useState('');
-    const [filterStatus, setFilterStatus]       = useState<FilterStatus>('all');
-    const [sortBy, setSortBy]                   = useState<SortKey>('date');
-
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
+    const [sortBy, setSortBy] = useState<SortKey>('date');
     const { data: submissions, loading, error, refetch } = useAllSubmissions();
 
-    // Client-side filtering and sorting on top of the full list
     const processed = useMemo(() => {
         const list = submissions ?? [];
-
-        const filtered = list.filter(s => {
+        const filtered = list.filter((s) => {
             const q = searchQuery.toLowerCase();
-            const matchesSearch =
-                !q ||
-                s.studentId.toLowerCase().includes(q) ||
-                (s.assignmentTitle ?? '').toLowerCase().includes(q) ||
-                (s.moduleCode ?? '').toLowerCase().includes(q);
-            const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
+            const matchesSearch = !q || (s.studentName ?? '').toLowerCase().includes(q) || (s.assignmentTitle ?? '').toLowerCase().includes(q) || (s.moduleName ?? s.moduleCode ?? '').toLowerCase().includes(q);
+            const matchesStatus =
+                filterStatus === 'all' ? true
+                : filterStatus === 'NEEDS_GRADING' ? ['SUBMITTED', 'PENDING_REVIEW', 'FLAGGED'].includes(s.status)
+                : s.status === filterStatus;
             return matchesSearch && matchesStatus;
         });
-
         return [...filtered].sort((a, b) => {
             switch (sortBy) {
-                case 'date':
-                    return (
-                        new Date(b.submittedAt ?? 0).getTime() -
-                        new Date(a.submittedAt ?? 0).getTime()
-                    );
-                case 'plagiarism':
-                    return (b.plagiarismScore ?? 0) - (a.plagiarismScore ?? 0);
-                case 'ai':
-                    return (b.aiScore ?? 0) - (a.aiScore ?? 0);
-                default:
-                    return 0;
+                case 'date': return new Date(b.submittedAt ?? 0).getTime() - new Date(a.submittedAt ?? 0).getTime();
+                case 'plagiarism': return (b.plagiarismScore ?? 0) - (a.plagiarismScore ?? 0);
+                case 'ai': return (b.aiScore ?? 0) - (a.aiScore ?? 0);
+                case 'priority': {
+                    const ord: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
+                    return ord[getPriority(a)] - ord[getPriority(b)];
+                }
+                default: return 0;
             }
         });
     }, [submissions, searchQuery, filterStatus, sortBy]);
@@ -257,154 +212,87 @@ export default function LecturerAllSubmissionsPage() {
     const stats = useMemo(() => {
         const list = submissions ?? [];
         return {
-            total:   list.length,
-            pending: list.filter(s => s.status === 'PENDING_REVIEW' || s.status === 'SUBMITTED').length,
-            graded:  list.filter(s => s.status === 'GRADED').length,
-            flagged: list.filter(s => s.status === 'FLAGGED').length,
-            late:    list.filter(s => s.status === 'LATE').length,
+            total: list.length,
+            pending: list.filter((s) => s.status === 'PENDING_REVIEW' || s.status === 'SUBMITTED').length,
+            graded: list.filter((s) => s.status === 'GRADED').length,
+            flagged: list.filter((s) => s.status === 'FLAGGED').length,
+            late: list.filter((s) => s.status === 'LATE').length,
         };
     }, [submissions]);
 
     return (
         <div>
-            {/* Header */}
-            <div className="flex items-start justify-between mb-8">
-                <div>
-                    <h1 className="text-4xl font-bold text-gray-900 mb-2">All Submissions</h1>
-                    <p className="text-gray-600">Review and grade student submissions</p>
-                </div>
-                <button
-                    onClick={() => refetch()}
-                    disabled={loading}
-                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50 cursor-pointer"
-                >
-                    <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                    Refresh
-                </button>
+            <PageHeader title="All Submissions" subtitle="Review and grade student submissions" icon={FileText} iconColor="text-blue-600" loading={loading} onRefresh={refetch} />
+
+            {/* Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                {loading ? (
+                    [1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-16" />)
+                ) : (
+                    <>
+                        <StatCard label="Total" value={stats.total} gradient="bg-gradient-to-br from-blue-500 to-blue-600" />
+                        <StatCard label="Needs Grading" value={stats.pending} bgClass="bg-amber-50 border-amber-200" textClass="text-amber-700" onClick={() => { setFilterStatus('NEEDS_GRADING'); setSortBy('priority'); }} active={filterStatus === 'NEEDS_GRADING'} />
+                        <StatCard label="Graded" value={stats.graded} bgClass="bg-green-50 border-green-200" textClass="text-green-700" onClick={() => setFilterStatus(filterStatus === 'GRADED' ? 'all' : 'GRADED')} active={filterStatus === 'GRADED'} />
+                        <StatCard label="Flagged" value={stats.flagged} bgClass="bg-red-50 border-red-200" textClass="text-red-700" onClick={() => setFilterStatus(filterStatus === 'FLAGGED' ? 'all' : 'FLAGGED')} active={filterStatus === 'FLAGGED'} />
+                        <StatCard label="Late" value={stats.late} bgClass="bg-purple-50 border-purple-200" textClass="text-purple-700" onClick={() => setFilterStatus(filterStatus === 'LATE' ? 'all' : 'LATE')} active={filterStatus === 'LATE'} />
+                    </>
+                )}
             </div>
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-                <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                    <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-                    <div className="text-xs text-gray-600 mt-1">Total</div>
-                </div>
-                <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
-                    <div className="text-2xl font-bold text-amber-700">{stats.pending}</div>
-                    <div className="text-xs text-amber-600 mt-1">Pending</div>
-                </div>
-                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                    <div className="text-2xl font-bold text-green-700">{stats.graded}</div>
-                    <div className="text-xs text-green-600 mt-1">Graded</div>
-                </div>
-                <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-                    <div className="text-2xl font-bold text-red-700">{stats.flagged}</div>
-                    <div className="text-xs text-red-600 mt-1">Flagged</div>
-                </div>
-                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                    <div className="text-2xl font-bold text-purple-700">{stats.late}</div>
-                    <div className="text-xs text-purple-600 mt-1">Late</div>
-                </div>
-            </div>
-
-            {/* Error banner */}
-            {error && (
-                <div className="flex items-start gap-3 p-4 mb-6 bg-amber-50 border border-amber-200 rounded-lg">
-                    <AlertCircle size={20} className="text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                        <p className="font-medium text-amber-800">Could not load live data</p>
-                        <p className="text-sm text-amber-700 mt-0.5">{error}</p>
-                        <p className="text-sm text-amber-600 mt-1">
-                            Check that your backend services are running on the correct ports.
-                        </p>
-                    </div>
-                </div>
-            )}
+            {error && <ErrorBanner message={`Could not load live data: ${error}`} />}
 
             {/* Filters */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-                <div className="flex flex-col gap-4">
-                    <div className="flex flex-col md:flex-row gap-4">
-                        <div className="flex-1 relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                            <input
-                                type="text"
-                                placeholder="Search by student ID, assignment title, or module..."
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <label className="text-sm text-gray-600 whitespace-nowrap">Sort by:</label>
-                            <select
-                                value={sortBy}
-                                onChange={e => setSortBy(e.target.value as SortKey)}
-                                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                                <option value="date">Date</option>
-                                <option value="plagiarism">Plagiarism</option>
-                                <option value="ai">AI Score</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-4">
-                        <div className="flex items-center gap-2">
-                            <Filter size={20} className="text-gray-400" />
-                            <select
-                                value={filterStatus}
-                                onChange={e => setFilterStatus(e.target.value as FilterStatus)}
-                                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                                <option value="all">All Status</option>
-                                <option value="SUBMITTED">Submitted</option>
-                                <option value="PENDING_REVIEW">Pending Review</option>
-                                <option value="GRADED">Graded</option>
-                                <option value="FLAGGED">Flagged</option>
-                                <option value="LATE">Late</option>
-                                <option value="DRAFT">Draft</option>
-                            </select>
-                        </div>
-
-                        <button className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium flex items-center gap-2 cursor-pointer">
-                            <Download size={18} />
-                            Export
-                        </button>
-                    </div>
+            <FilterToolbar>
+                <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search by student, assignment, or module…" />
+                <div className="flex items-center gap-2">
+                    <Filter size={14} className="text-gray-400" />
+                    <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as FilterStatus)} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="all">All Status</option>
+                        <option value="NEEDS_GRADING">Needs Grading</option>
+                        <option value="SUBMITTED">Submitted</option>
+                        <option value="PENDING_REVIEW">Pending Review</option>
+                        <option value="GRADED">Graded</option>
+                        <option value="FLAGGED">Flagged</option>
+                        <option value="LATE">Late</option>
+                        <option value="DRAFT">Draft</option>
+                    </select>
                 </div>
-            </div>
+                <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortKey)} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="date">Sort: Date</option>
+                    <option value="priority">Sort: Priority</option>
+                    <option value="plagiarism">Sort: Plagiarism</option>
+                    <option value="ai">Sort: AI Score</option>
+                </select>
+            </FilterToolbar>
 
-            {/* Submissions list */}
-            <div className="space-y-4">
+            {/* List */}
+            <div className="space-y-2">
                 {loading && !submissions ? (
-                    [1, 2, 3].map(i => <SkeletonRow key={i} />)
+                    [1, 2, 3].map((i) => <Skeleton key={i} className="h-20" />)
                 ) : processed.length > 0 ? (
-                    processed.map(submission => (
+                    processed.map((submission) => (
                         <SubmissionRow
                             key={submission.id}
                             submission={submission}
-                            onView={id => router.push(`/submissions/lecturer/submissions/${id}`)}
-                            onGrade={id => router.push(`/submissions/lecturer/grading/${id}`)}
+                            showPriority={sortBy === 'priority' || filterStatus === 'NEEDS_GRADING'}
+                            onView={(id) => router.push(`/submissions/lecturer/submissions/${id}`)}
+                            onGrade={(id) => router.push(`/submissions/lecturer/grading/${id}`)}
                         />
                     ))
                 ) : (
-                    <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-                        <FileText size={48} className="mx-auto text-gray-400 mb-4" />
-                        <p className="text-gray-500 text-lg">
-                            {submissions?.length === 0 ? 'No submissions yet' : 'No submissions match your filters'}
-                        </p>
-                        {(searchQuery || filterStatus !== 'all') && (
-                            <button
-                                onClick={() => { setSearchQuery(''); setFilterStatus('all'); }}
-                                className="mt-3 text-blue-600 hover:text-blue-700 text-sm font-medium cursor-pointer"
-                            >
-                                Clear filters
-                            </button>
-                        )}
-                    </div>
+                    <EmptyState
+                        icon={FileText}
+                        message={submissions?.length === 0 ? 'No submissions yet' : 'No submissions match your filters'}
+                        onClear={searchQuery || filterStatus !== 'all' ? () => { setSearchQuery(''); setFilterStatus('all'); setSortBy('date'); } : undefined}
+                    />
                 )}
             </div>
+
+            {!loading && processed.length > 0 && (
+                <p className="text-xs text-gray-400 text-right mt-2">
+                    Showing {processed.length} of {(submissions ?? []).length}
+                </p>
+            )}
         </div>
     );
 }

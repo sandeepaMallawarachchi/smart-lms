@@ -10,7 +10,6 @@ import {
     Shield,
     GitBranch,
     Eye,
-    Edit,
     TrendingUp,
     Users,
     Settings,
@@ -238,13 +237,7 @@ export const submissionsConfig: Record<'student' | 'lecture', ModuleConfig> = {
                     description: 'Student submissions',
                     href: '/submissions/lecturer/submissions',
                 },
-                {
-                    id: 'grading',
-                    label: 'Grading Interface',
-                    icon: <Edit size={22} />,
-                    description: 'Grade submissions',
-                    href: '/submissions/lecturer/grading',
-                },
+
                 {
                     id: 'plagiarism',
                     label: 'Plagiarism Detection',

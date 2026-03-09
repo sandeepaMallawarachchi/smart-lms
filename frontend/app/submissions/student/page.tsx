@@ -44,7 +44,7 @@ function avg(nums: number[]): number | null {
 
 function StatSkeleton() {
     return (
-        <div className="rounded-lg shadow-lg p-6 bg-gray-200 animate-pulse h-32"/>
+        <div className="rounded-xl shadow-lg p-6 bg-gray-200 animate-pulse h-32"/>
     );
 }
 
@@ -205,7 +205,9 @@ export default function StudentDashboardPage() {
                 ) : (
                     <>
                         <div
-                            className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+                            className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 cursor-default"
+                            onClick={() => router.push('/submissions/student/my-submissions')}
+                        >
                             <div className="flex items-center justify-between mb-4">
                                 <div>
                                     <p className="text-blue-100 text-sm font-medium">Total
@@ -213,7 +215,7 @@ export default function StudentDashboardPage() {
                                     <p className="text-4xl font-bold mt-1">{stats.totalAssignments}</p>
                                 </div>
                                 <div
-                                    className="w-14 h-14 bg-blue-400 bg-opacity-30 rounded-full flex items-center justify-center">
+                                    className="w-14 h-14 bg-white/15 backdrop-blur-sm rounded-full flex items-center justify-center">
                                     <FileText size={28}/>
                                 </div>
                             </div>
@@ -224,14 +226,14 @@ export default function StudentDashboardPage() {
                         </div>
 
                         <div
-                            className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-lg shadow-lg p-6 text-white">
+                            className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-lg p-6 text-white hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 cursor-default">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
                                     <p className="text-amber-100 text-sm font-medium">Pending</p>
                                     <p className="text-4xl font-bold mt-1">{stats.pending}</p>
                                 </div>
                                 <div
-                                    className="w-14 h-14 bg-amber-400 bg-opacity-30 rounded-full flex items-center justify-center">
+                                    className="w-14 h-14 bg-white/15 backdrop-blur-sm rounded-full flex items-center justify-center">
                                     <Clock size={28}/>
                                 </div>
                             </div>
@@ -242,7 +244,7 @@ export default function StudentDashboardPage() {
                         </div>
 
                         <div
-                            className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
+                            className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 cursor-default">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
                                     <p className="text-green-100 text-sm font-medium">Average
@@ -252,7 +254,7 @@ export default function StudentDashboardPage() {
                                     </p>
                                 </div>
                                 <div
-                                    className="w-14 h-14 bg-green-400 bg-opacity-30 rounded-full flex items-center justify-center">
+                                    className="w-14 h-14 bg-white/15 backdrop-blur-sm rounded-full flex items-center justify-center">
                                     <Award size={28}/>
                                 </div>
                             </div>
@@ -263,7 +265,7 @@ export default function StudentDashboardPage() {
                         </div>
 
                         <div
-                            className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+                            className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 cursor-default">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
                                     <p className="text-purple-100 text-sm font-medium">Submission
@@ -273,7 +275,7 @@ export default function StudentDashboardPage() {
                                     </p>
                                 </div>
                                 <div
-                                    className="w-14 h-14 bg-purple-400 bg-opacity-30 rounded-full flex items-center justify-center">
+                                    className="w-14 h-14 bg-white/15 backdrop-blur-sm rounded-full flex items-center justify-center">
                                     <Target size={28}/>
                                 </div>
                             </div>
@@ -291,8 +293,8 @@ export default function StudentDashboardPage() {
                 {/* Left Column */}
                 <div className="lg:col-span-2 space-y-8">
                     {/* Upcoming Deadlines */}
-                    <div className="bg-white rounded-lg shadow-lg border border-gray-200">
-                        <div className="p-6 border-b border-gray-200">
+                    <div className="bg-white rounded-xl shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-200">
+                        <div className="p-6 border-b border-gray-100">
                             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                                 <Calendar className="text-purple-600" size={24}/>
                                 Upcoming Deadlines
@@ -345,7 +347,7 @@ export default function StudentDashboardPage() {
                                                 </div>
                                                 <button
                                                     onClick={() => router.push(`/submissions/student/answer/${assignment.id}`)}
-                                                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 active:bg-purple-800 transition-colors text-sm font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 active:bg-purple-800 transition-all text-sm font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm hover:shadow-md"
                                                 >
                                                     <Edit size={14}/>
                                                     Answer
@@ -356,10 +358,10 @@ export default function StudentDashboardPage() {
                                 })
                             )}
                         </div>
-                        <div className="p-4 bg-gray-50 border-t border-gray-200">
+                        <div className="p-4 bg-gray-50 border-t border-gray-100 rounded-b-xl">
                             <button
                                 onClick={() => router.push('/submissions/student/my-submissions')}
-                                className="text-purple-600 hover:text-purple-700 font-medium text-sm flex items-center gap-2 cursor-pointer"
+                                className="text-purple-600 hover:text-purple-700 font-medium text-sm flex items-center gap-2 cursor-pointer hover:gap-3 transition-all"
                             >
                                 View All Assignments <span>→</span>
                             </button>
@@ -367,8 +369,8 @@ export default function StudentDashboardPage() {
                     </div>
 
                     {/* Recent Submissions */}
-                    <div className="bg-white rounded-lg shadow-lg border border-gray-200">
-                        <div className="p-6 border-b border-gray-200">
+                    <div className="bg-white rounded-xl shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-200">
+                        <div className="p-6 border-b border-gray-100">
                             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                                 <FileText className="text-purple-600" size={24}/>
                                 Recent Submissions
@@ -468,10 +470,10 @@ export default function StudentDashboardPage() {
                                 ))
                             )}
                         </div>
-                        <div className="p-4 bg-gray-50 border-t border-gray-200">
+                        <div className="p-4 bg-gray-50 border-t border-gray-100 rounded-b-xl">
                             <button
                                 onClick={() => router.push('/submissions/student/my-submissions')}
-                                className="text-purple-600 hover:text-purple-700 font-medium text-sm flex items-center gap-2 cursor-pointer"
+                                className="text-purple-600 hover:text-purple-700 font-medium text-sm flex items-center gap-2 cursor-pointer hover:gap-3 transition-all"
                             >
                                 View All Submissions <span>→</span>
                             </button>
@@ -482,7 +484,7 @@ export default function StudentDashboardPage() {
                 {/* Right Column */}
                 <div className="space-y-6">
                     {/* Academic Integrity */}
-                    <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-6">
+                    <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-all duration-200">
                         <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                             <Shield className="text-purple-600" size={20}/>
                             Academic Integrity
@@ -515,8 +517,8 @@ export default function StudentDashboardPage() {
                     </div>
 
                     {/* Recent Graded Feedback */}
-                    <div className="bg-white rounded-lg shadow-lg border border-gray-200">
-                        <div className="p-6 border-b border-gray-200">
+                    <div className="bg-white rounded-xl shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-200">
+                        <div className="p-6 border-b border-gray-100">
                             <h3 className="font-bold text-gray-900 flex items-center gap-2">
                                 <Star className="text-purple-600" size={20}/>
                                 Recent Grades
@@ -560,7 +562,7 @@ export default function StudentDashboardPage() {
                     </div>
 
                     {/* Submission Status Overview */}
-                    <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-6">
+                    <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-all duration-200">
                         <h3 className="font-bold text-gray-900 mb-4">Submission Status</h3>
                         {loading ? (
                             <div className="space-y-2 animate-pulse">

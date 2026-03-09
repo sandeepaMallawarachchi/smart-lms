@@ -27,6 +27,7 @@ import { useSubmission, useGradeSubmission } from '@/hooks/useSubmissions';
 import { getAssignmentWithFallback } from '@/lib/api/submission-services';
 import { useLatestVersion } from '@/hooks/useVersions';
 import type { AssignmentWithQuestions, Question } from '@/types/submission.types';
+import LecturerAnnotatedText from '@/components/submissions/LecturerAnnotatedText';
 
 // ─── Types ─────────────────────────────────────────────────────
 
@@ -83,11 +84,15 @@ function ReadOnlyQuestionCard({
     question,
     state,
     studentAnswerText,
+    submissionId,
+    versionId,
 }: {
     idx: number;
     question: Question;
     state: QuestionGradeState;
     studentAnswerText?: string;
+    submissionId: string;
+    versionId: string;
 }) {
     const displayMark = state.lecturerMark ?? state.aiMark;
     const isOverridden = state.lecturerMark != null;
@@ -115,8 +120,13 @@ function ReadOnlyQuestionCard({
                     <FileText size={13} className="text-gray-400" /> Student&apos;s Answer
                 </p>
                 {studentAnswerText?.trim() ? (
-                    <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
-                        {studentAnswerText}
+                    <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+                        <LecturerAnnotatedText
+                            text={studentAnswerText}
+                            submissionId={submissionId}
+                            versionId={versionId}
+                            questionId={state.questionId}
+                        />
                     </div>
                 ) : (
                     <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-400 italic">
@@ -166,12 +176,16 @@ function EditableQuestionCard({
     state,
     studentAnswerText,
     onSave,
+    submissionId,
+    versionId,
 }: {
     idx: number;
     question: Question;
     state: QuestionGradeState;
     studentAnswerText?: string;
     onSave: (questionId: string, mark: number, feedback: string) => void;
+    submissionId: string;
+    versionId: string;
 }) {
     const [isEditing, setIsEditing] = useState(false);
     const [tempMark, setTempMark] = useState<number>(state.lecturerMark ?? state.aiMark);
@@ -215,8 +229,13 @@ function EditableQuestionCard({
                     <FileText size={13} className="text-gray-400" /> Student&apos;s Answer
                 </p>
                 {studentAnswerText?.trim() ? (
-                    <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
-                        {studentAnswerText}
+                    <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+                        <LecturerAnnotatedText
+                            text={studentAnswerText}
+                            submissionId={submissionId}
+                            versionId={versionId}
+                            questionId={state.questionId}
+                        />
                     </div>
                 ) : (
                     <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-400 italic">
@@ -446,6 +465,23 @@ export default function LecturerGradingPage({
         } as Parameters<typeof gradeSubmission>[1]);
 
         if (result) {
+            // Notify the student about the grading
+            try {
+                const token = localStorage.getItem('authToken') ?? '';
+                await fetch('/api/submissions/notifications', {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        studentId: submission?.studentId,
+                        submissionId,
+                        type: 'grade_submitted',
+                        title: 'Submission Graded',
+                        message: `Your submission for "${submission?.assignmentTitle ?? 'Assignment'}" has been graded — ${grade.percentage}%.`,
+                        link: `/submissions/student/feedback/${submissionId}`,
+                    }),
+                });
+            } catch { /* notification is best-effort */ }
+
             setSubmitDone(true);
             setTimeout(() => router.push('/submissions/lecturer/submissions'), 1500);
         }
@@ -514,11 +550,11 @@ export default function LecturerGradingPage({
                         </div>
                         <div>
                             <h1 className="text-xl font-bold text-gray-900">
-                                {submission?.studentName ?? submission?.studentId ?? submissionId}
+                                {submission?.studentName ?? 'Student'}
                             </h1>
                             <p className="text-gray-500 text-sm">
                                 {submission?.assignmentTitle ?? 'Assignment'}
-                                {submission?.moduleCode ? ` · ${submission.moduleCode}` : ''}
+                                {(submission?.moduleName ?? submission?.moduleCode) ? ` · ${submission?.moduleName ?? submission?.moduleCode}` : ''}
                             </p>
                             {submission?.isLate && (
                                 <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium mt-0.5">
@@ -667,6 +703,8 @@ export default function LecturerGradingPage({
                                 state={state}
                                 studentAnswerText={studentAnswerText}
                                 onSave={handleQuestionSave}
+                                submissionId={submissionId}
+                                versionId={latestVersion?.id ?? ''}
                             />
                         ) : (
                             <ReadOnlyQuestionCard
@@ -675,6 +713,8 @@ export default function LecturerGradingPage({
                                 question={question}
                                 state={state}
                                 studentAnswerText={studentAnswerText}
+                                submissionId={submissionId}
+                                versionId={latestVersion?.id ?? ''}
                             />
                         );
                     })

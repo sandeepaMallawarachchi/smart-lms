@@ -221,7 +221,7 @@ export default function StudentAssignmentsPage() {
                                             </div>
                                             <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
                                                 <BookOpen size={16} />
-                                                <span className="font-medium">{assignment.moduleCode}</span>
+                                                <span className="font-medium">{assignment.moduleName ?? assignment.moduleCode}</span>
                                                 {assignment.moduleName && (
                                                     <>
                                                         <span>•</span>
