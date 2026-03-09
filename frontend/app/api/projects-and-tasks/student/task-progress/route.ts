@@ -155,11 +155,7 @@ export async function POST(request: NextRequest) {
                 studentId: payload.userId,
                 taskId,
                 status: status || 'todo',
-<<<<<<< HEAD
                 subtasks: subtasks || visibleTask.subtasks.map((st: any) => ({
-=======
-                subtasks: visibleTask.subtasks.map((st: any) => ({
->>>>>>> 61fd08c821d8a34314023099afc0dce05103ff1c
                     id: st.id,
                     title: st.title,
                     description: st.description,
@@ -196,11 +192,7 @@ export async function POST(request: NextRequest) {
                 studentId: payload.userId,
                 taskId,
             });
-<<<<<<< HEAD
         } else {
-=======
-        } else if (progress.status === 'inprogress') {
->>>>>>> 61fd08c821d8a34314023099afc0dce05103ff1c
             if (visibleTask.deadlineDate) {
                 await scheduleReminderJobsForStudentItem({
                     studentId: payload.userId,

@@ -3,10 +3,12 @@ export type ReminderType =
   | 'project_50'
   | 'project_75'
   | 'project_deadline'
+  | 'project_overdue'
   | 'task_25'
   | 'task_50'
   | 'task_75'
-  | 'task_deadline';
+  | 'task_deadline'
+  | 'task_overdue';
 
 export interface ReminderJobPayload {
   studentId: string;

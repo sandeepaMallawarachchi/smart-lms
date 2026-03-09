@@ -114,10 +114,7 @@ export async function PUT(
       deadlineDate?: string;
       deadlineTime?: string;
       specialNotes?: { html: string; text: string };
-<<<<<<< HEAD
-=======
       subtasks?: IncomingSubtask[];
->>>>>>> 61fd08c821d8a34314023099afc0dce05103ff1c
       isPublished?: boolean;
     };
     console.log('Request body:', body);
@@ -151,10 +148,7 @@ export async function PUT(
         deadlineDate: body.deadlineDate || '',
         deadlineTime: body.deadlineTime || '23:59',
         specialNotes: body.specialNotes || { html: '', text: '' },
-<<<<<<< HEAD
-=======
         subtasks: normalizedSubtasks,
->>>>>>> 61fd08c821d8a34314023099afc0dce05103ff1c
         isPublished: typeof body.isPublished === 'boolean' ? body.isPublished : existingTask.isPublished ?? true,
       },
       { new: true, runValidators: true }

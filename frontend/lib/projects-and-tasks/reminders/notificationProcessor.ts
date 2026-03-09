@@ -17,6 +17,14 @@ function getReminderContent(input: {
 }) {
   const prefix = input.itemType === 'project' ? 'Project' : 'Task';
 
+  if (input.reminderType.endsWith('_overdue')) {
+    return {
+      title: `${prefix}: ${input.itemName} - Overdue`,
+      message: `${input.itemName} is overdue.`,
+      description: `The deadline has passed. Submit as soon as possible. ${input.progressSummary}`,
+    };
+  }
+
   if (input.reminderType.endsWith('_25')) {
     return {
       title: `${prefix}: ${input.itemName} - Time to Start (25%)`,
@@ -150,7 +158,11 @@ export async function processReminderJob(payload: ReminderJobPayload): Promise<v
     itemName: effectiveItemName,
     reminderType: payload.reminderType,
     dedupeKey,
-    type: isProject ? 'project_reminder' : 'task_reminder',
+    type: payload.reminderType.endsWith('_overdue')
+      ? 'overdue'
+      : isProject
+        ? 'project_reminder'
+        : 'task_reminder',
     reminderPercentage: payload.reminderPercentage,
     title: content.title,
     message: content.message,

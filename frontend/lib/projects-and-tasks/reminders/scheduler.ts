@@ -22,6 +22,10 @@ function resolveReminderType(itemType: 'project' | 'task', percentage: number): 
   return `${itemType}_${percentage === 100 ? 'deadline' : percentage}` as ReminderType;
 }
 
+function resolveOverdueReminderType(itemType: 'project' | 'task'): ReminderType {
+  return `${itemType}_overdue` as ReminderType;
+}
+
 export async function cancelReminderJobsForStudentItem(input: {
   studentId: string;
   projectId?: string;
@@ -45,7 +49,6 @@ export async function scheduleReminderJobsForStudentItem(input: {
   }
 
   const now = new Date();
-  const scheduleTimes = computeReminderScheduleTimes(deadline, now);
   await cancelReminderJobsForStudentItem({
     studentId: input.studentId,
     projectId: input.itemType === 'project' ? input.itemId : undefined,
@@ -58,6 +61,50 @@ export async function scheduleReminderJobsForStudentItem(input: {
     reminderPercentage: number;
     scheduledFor: Date;
   }> = [];
+
+  // If already overdue, enqueue a single immediate overdue notification.
+  if (deadline.getTime() <= now.getTime()) {
+    const reminderType = resolveOverdueReminderType(input.itemType);
+    const jobId = getReminderJobId({
+      studentId: input.studentId,
+      projectId: input.itemType === 'project' ? input.itemId : undefined,
+      taskId: input.itemType === 'task' ? input.itemId : undefined,
+      reminderType,
+    });
+
+    await notificationQueue.add(
+      reminderType,
+      {
+        studentId: input.studentId,
+        projectId: input.itemType === 'project' ? input.itemId : undefined,
+        taskId: input.itemType === 'task' ? input.itemId : undefined,
+        itemType: input.itemType,
+        itemName: input.itemName,
+        reminderType,
+        reminderPercentage: 100,
+        deadlineDate: input.deadlineDate,
+        deadlineTime: input.deadlineTime || '23:59',
+        scheduledFor: now.toISOString(),
+      },
+      {
+        jobId,
+        delay: 0,
+        removeOnComplete: 500,
+        removeOnFail: 1000,
+      }
+    );
+
+    return [
+      {
+        jobId,
+        reminderType,
+        reminderPercentage: 100,
+        scheduledFor: now,
+      },
+    ];
+  }
+
+  const scheduleTimes = computeReminderScheduleTimes(deadline, now);
 
   for (const point of scheduleTimes) {
     const reminderType = resolveReminderType(input.itemType, point.percentage);

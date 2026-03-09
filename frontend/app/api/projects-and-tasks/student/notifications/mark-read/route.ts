@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/db';
 import { Notification } from '@/model/projects-and-tasks/notificationModel';
 import { successResponse, unauthorizedResponse, notFoundResponse, serverErrorResponse } from '@/lib/api-response';
 import { verifyToken } from '@/lib/jwt';
+import { publishNotificationEvent } from '@/lib/projects-and-tasks/notifications/realtime';
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,8 +42,15 @@ export async function POST(request: NextRequest) {
       return notFoundResponse('Notification not found');
     }
 
+    await publishNotificationEvent({
+      type: 'notification_read',
+      studentId: payload.userId,
+      notificationId: String(notificationId),
+      at: new Date().toISOString(),
+    });
+
     return successResponse('Notification marked as read', { notification }, 200);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Mark notification read error:', error);
     return serverErrorResponse('An error occurred while marking notification as read');
   }

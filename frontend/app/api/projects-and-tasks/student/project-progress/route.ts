@@ -233,11 +233,7 @@ export async function POST(request: NextRequest) {
                 studentId: payload.userId,
                 projectId,
             });
-<<<<<<< HEAD
         } else {
-=======
-        } else if (progress.status === 'inprogress') {
->>>>>>> 61fd08c821d8a34314023099afc0dce05103ff1c
             if (visibleProject.deadlineDate) {
                 await scheduleReminderJobsForStudentItem({
                     studentId: payload.userId,
