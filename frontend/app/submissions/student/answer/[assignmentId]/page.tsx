@@ -217,6 +217,7 @@ export default function AnswerPage({
                     assignmentId,
                     sid,
                     sName,
+                    asg.title,
                 );
                 setSubmissionId(draft.id);
                 console.debug('[AnswerPage] Draft submission — id:', draft.id, '| status:', draft.status);
@@ -435,8 +436,8 @@ export default function AnswerPage({
                             {assignment?.assignmentType === 'task' && (
                                 <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-100 text-teal-700">Task</span>
                             )}
-                            {assignment?.moduleCode && (
-                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">{assignment.moduleCode}</span>
+                            {(assignment?.moduleName || assignment?.moduleCode) && (
+                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">{assignment.moduleName ?? assignment.moduleCode}</span>
                             )}
                         </div>
                         <h1 className="text-2xl font-bold text-gray-900 leading-tight">

@@ -323,7 +323,7 @@ export default function StudentDashboardPage() {
                                                     <div
                                                         className="flex items-center gap-4 text-sm text-gray-600 mb-2">
                                                         <span
-                                                            className="font-medium">{assignment.moduleCode}</span>
+                                                            className="font-medium">{assignment.moduleName ?? assignment.moduleCode}</span>
                                                         <span>•</span>
                                                         <span>{assignment.totalMarks} marks</span>
                                                     </div>
@@ -410,8 +410,8 @@ export default function StudentDashboardPage() {
                                                     )}
                                                 </div>
                                                 <div className="text-sm text-gray-600 mb-3">
-                                                    {submission.moduleCode && <span
-                                                        className="font-medium">{submission.moduleCode}</span>}
+                                                    {(submission.moduleName || submission.moduleCode) && <span
+                                                        className="font-medium">{submission.moduleName ?? submission.moduleCode}</span>}
                                                     {submission.submittedAt && (
                                                         <>
                                                             <span className="mx-2">•</span>
@@ -545,7 +545,7 @@ export default function StudentDashboardPage() {
                                             <p className="text-xs text-gray-500 mt-0.5">
                                                 Grade: <span
                                                 className="font-semibold text-green-600">{item.grade}%</span>
-                                                {item.moduleCode && ` · ${item.moduleCode}`}
+                                                {(item.moduleName || item.moduleCode) && ` · ${item.moduleName ?? item.moduleCode}`}
                                             </p>
                                             {item.gradedAt && (
                                                 <p className="text-xs text-gray-400">

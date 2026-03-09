@@ -1,13 +1,15 @@
 'use client';
 
-import React, { use, useState, useMemo } from 'react';
+import React, { use, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     ArrowLeft, GitBranch, Star, TrendingUp, Shield, AlertCircle,
-    Clock, CheckCircle2, FileText, ChevronDown, ChevronUp,
+    Clock, CheckCircle2, FileText, ChevronDown, ChevronUp, X, ArrowRightLeft,
 } from 'lucide-react';
 import { useVersions } from '@/hooks/useVersions';
 import { useSubmission } from '@/hooks/useSubmissions';
+import { versionService } from '@/lib/api/submission-services';
+import { diffWords, mergeDiffTokens } from '@/lib/textDiff';
 import type { SubmissionVersion, VersionAnswer } from '@/types/submission.types';
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -44,10 +46,16 @@ function VersionCard({
     version,
     isLatest,
     onViewReport,
+    compareSelected,
+    onCompareToggle,
+    compareDisabled,
 }: {
     version: SubmissionVersion;
     isLatest: boolean;
     onViewReport: () => void;
+    compareSelected: boolean;
+    onCompareToggle: () => void;
+    compareDisabled: boolean;
 }) {
     const [expanded, setExpanded] = useState(false);
     const answers: VersionAnswer[] = version.answers ?? [];
@@ -59,9 +67,23 @@ function VersionCard({
     };
 
     return (
-        <div className={`bg-white border rounded-lg overflow-hidden ${isLatest ? 'border-purple-300 shadow-md' : 'border-gray-200'}`}>
+        <div className={`bg-white border rounded-lg overflow-hidden ${compareSelected ? 'border-purple-400 ring-2 ring-purple-200' : isLatest ? 'border-purple-300 shadow-md' : 'border-gray-200'}`}>
             {/* Header row */}
             <div className="p-5 flex flex-wrap items-center gap-4">
+                {/* Compare checkbox */}
+                <label
+                    className={`flex items-center justify-center w-6 h-6 shrink-0 cursor-pointer ${compareDisabled && !compareSelected ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    title={compareSelected ? 'Deselect for comparison' : compareDisabled ? '2 versions already selected' : 'Select for comparison'}
+                >
+                    <input
+                        type="checkbox"
+                        checked={compareSelected}
+                        onChange={onCompareToggle}
+                        disabled={compareDisabled && !compareSelected}
+                        className="w-4 h-4 accent-purple-600 cursor-pointer disabled:cursor-not-allowed"
+                    />
+                </label>
+
                 {/* Version badge */}
                 <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 ${isLatest ? 'bg-purple-600' : 'bg-gray-400'}`}>
                     <span className="text-white font-bold text-sm">v{version.versionNumber}</span>
@@ -188,6 +210,136 @@ function VersionCard({
     );
 }
 
+// ─── ComparisonView ───────────────────────────────────────────
+
+function ComparisonView({
+    left,
+    right,
+    onClose,
+}: {
+    left: SubmissionVersion;
+    right: SubmissionVersion;
+    onClose: () => void;
+}) {
+    const leftAnswers: VersionAnswer[] = left.answers ?? [];
+    const rightAnswers: VersionAnswer[] = right.answers ?? [];
+
+    // Build a merged question list to align answers
+    const questionIds = Array.from(
+        new Set([...leftAnswers.map(a => a.questionId), ...rightAnswers.map(a => a.questionId)])
+    );
+
+    const leftMap = new Map(leftAnswers.map(a => [a.questionId, a]));
+    const rightMap = new Map(rightAnswers.map(a => [a.questionId, a]));
+
+    const metricDelta = (a?: number | null, b?: number | null) => {
+        if (a == null && b == null) return null;
+        const av = a ?? 0;
+        const bv = b ?? 0;
+        const d = bv - av;
+        const sign = d > 0 ? '+' : '';
+        const color = d > 0 ? 'text-green-600' : d < 0 ? 'text-red-600' : 'text-gray-500';
+        return <span className={`text-xs font-semibold ${color}`}>{sign}{d.toFixed(1)}</span>;
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] bg-black/50 overflow-y-auto">
+            <div className="max-w-6xl mx-auto my-8 bg-white rounded-xl shadow-2xl">
+                {/* Sticky header */}
+                <div className="sticky top-0 z-10 bg-white border-b border-gray-200 rounded-t-xl px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <ArrowRightLeft size={20} className="text-purple-600" />
+                        <h2 className="text-lg font-bold text-gray-900">
+                            Version {left.versionNumber} → Version {right.versionNumber}
+                        </h2>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
+
+                {/* Summary metrics */}
+                <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                        <span className="text-gray-500 block mb-0.5">AI Score</span>
+                        <span className="font-semibold">{left.aiScore?.toFixed(0) ?? '—'}% → {right.aiScore?.toFixed(0) ?? '—'}%</span>
+                        {' '}{metricDelta(left.aiScore, right.aiScore)}
+                    </div>
+                    <div>
+                        <span className="text-gray-500 block mb-0.5">Plagiarism</span>
+                        <span className="font-semibold">{left.plagiarismScore?.toFixed(0) ?? '—'}% → {right.plagiarismScore?.toFixed(0) ?? '—'}%</span>
+                        {' '}{metricDelta(left.plagiarismScore, right.plagiarismScore)}
+                    </div>
+                    <div>
+                        <span className="text-gray-500 block mb-0.5">Final Grade</span>
+                        <span className="font-semibold">{left.finalGrade ?? '—'} → {right.finalGrade ?? '—'}</span>
+                        {' '}{metricDelta(left.finalGrade, right.finalGrade)}
+                    </div>
+                    <div>
+                        <span className="text-gray-500 block mb-0.5">Word Count</span>
+                        <span className="font-semibold">{left.totalWordCount ?? '—'} → {right.totalWordCount ?? '—'}</span>
+                        {' '}{metricDelta(left.totalWordCount, right.totalWordCount)}
+                    </div>
+                </div>
+
+                {/* Per-question diffs */}
+                <div className="divide-y divide-gray-200">
+                    {questionIds.map((qId, idx) => {
+                        const la = leftMap.get(qId);
+                        const ra = rightMap.get(qId);
+                        const oldText = la?.answerText ?? '';
+                        const newText = ra?.answerText ?? '';
+                        const tokens = mergeDiffTokens(diffWords(oldText, newText));
+
+                        return (
+                            <div key={qId} className="px-6 py-5">
+                                <p className="text-sm font-semibold text-gray-800 mb-3">
+                                    Q{idx + 1}. {ra?.questionText ?? la?.questionText ?? `Question ${idx + 1}`}
+                                </p>
+
+                                {/* Metric deltas for this question */}
+                                <div className="flex flex-wrap gap-4 mb-3 text-xs text-gray-600">
+                                    <span>Words: {la?.wordCount ?? 0} → {ra?.wordCount ?? 0} {metricDelta(la?.wordCount, ra?.wordCount)}</span>
+                                    <span>AI Mark: {la?.aiGeneratedMark?.toFixed(1) ?? '—'} → {ra?.aiGeneratedMark?.toFixed(1) ?? '—'} {metricDelta(la?.aiGeneratedMark, ra?.aiGeneratedMark)}</span>
+                                    <span>Plagiarism: {la?.plagiarismSeverity ?? 'N/A'} → {ra?.plagiarismSeverity ?? 'N/A'}</span>
+                                </div>
+
+                                {/* Diff output */}
+                                {oldText === newText ? (
+                                    <p className="text-sm text-gray-400 italic">No changes</p>
+                                ) : (
+                                    <div className="text-sm leading-relaxed p-4 bg-gray-50 rounded-lg border border-gray-200 max-h-80 overflow-y-auto whitespace-pre-wrap">
+                                        {tokens.map((t, ti) => {
+                                            if (t.type === 'added')
+                                                return <span key={ti} className="bg-green-100 text-green-800">{t.value}</span>;
+                                            if (t.type === 'removed')
+                                                return <span key={ti} className="bg-red-100 text-red-800 line-through">{t.value}</span>;
+                                            return <span key={ti}>{t.value}</span>;
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Footer */}
+                <div className="border-t border-gray-200 px-6 py-4 flex justify-end">
+                    <button
+                        onClick={onClose}
+                        className="px-5 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors cursor-pointer"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── Skeleton ─────────────────────────────────────────────────
 
 function PageSkeleton() {
@@ -213,6 +365,44 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
 
     const { data: submission } = useSubmission(id);
     const { data: versions, loading, error } = useVersions(id);
+
+    /* ── Comparison state ── */
+    const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
+    const [comparing, setComparing] = useState(false);
+    const [compareData, setCompareData] = useState<{ left: SubmissionVersion; right: SubmissionVersion } | null>(null);
+    const [compareLoading, setCompareLoading] = useState(false);
+
+    const toggleCompare = useCallback((vId: string) => {
+        setCompareIds(prev => {
+            const next = new Set(prev);
+            if (next.has(vId)) next.delete(vId);
+            else if (next.size < 2) next.add(vId);
+            return next;
+        });
+    }, []);
+
+    const startComparison = useCallback(async () => {
+        if (compareIds.size !== 2 || !versions) return;
+        const [idA, idB] = Array.from(compareIds);
+        const vA = versions.find(v => v.id === idA)!;
+        const vB = versions.find(v => v.id === idB)!;
+        // left = older version, right = newer version
+        const [leftId, rightId] = vA.versionNumber < vB.versionNumber ? [idA, idB] : [idB, idA];
+
+        setCompareLoading(true);
+        try {
+            const [left, right] = await Promise.all([
+                versionService.getVersion(id, leftId),
+                versionService.getVersion(id, rightId),
+            ]);
+            setCompareData({ left, right });
+            setComparing(true);
+        } catch {
+            // silently ignore – user can retry
+        } finally {
+            setCompareLoading(false);
+        }
+    }, [compareIds, versions, id]);
 
     // Ascending order for progression chart
     const sortedAsc = useMemo(
@@ -356,9 +546,45 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
                             onViewReport={() =>
                                 router.push(`/submissions/student/feedback/${id}?versionId=${v.id}`)
                             }
+                            compareSelected={compareIds.has(v.id)}
+                            onCompareToggle={() => toggleCompare(v.id)}
+                            compareDisabled={compareIds.size >= 2}
                         />
                     ))}
                 </div>
+            )}
+
+            {/* Floating compare bar */}
+            {compareIds.size > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-white border border-purple-300 shadow-xl rounded-full px-6 py-3 flex items-center gap-4">
+                    <span className="text-sm text-gray-700 font-medium">
+                        {compareIds.size === 1 ? '1 version selected — pick one more' : '2 versions selected'}
+                    </span>
+                    <button
+                        onClick={startComparison}
+                        disabled={compareIds.size !== 2 || compareLoading}
+                        className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-full hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer flex items-center gap-2"
+                    >
+                        <ArrowRightLeft size={16} />
+                        {compareLoading ? 'Loading…' : 'Compare'}
+                    </button>
+                    <button
+                        onClick={() => setCompareIds(new Set())}
+                        className="p-1 text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
+                        title="Clear selection"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+            )}
+
+            {/* Comparison overlay */}
+            {comparing && compareData && (
+                <ComparisonView
+                    left={compareData.left}
+                    right={compareData.right}
+                    onClose={() => { setComparing(false); setCompareData(null); }}
+                />
             )}
 
             {/* Score Progression */}

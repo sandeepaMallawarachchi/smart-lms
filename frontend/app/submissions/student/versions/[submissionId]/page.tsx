@@ -228,7 +228,7 @@ export default function VersionComparisonPage({ params }: { params: Promise<{ su
                                 {submission?.assignmentTitle ?? submission?.title ?? 'Version History'}
                             </h1>
                             {submission?.moduleName && (
-                                <p className="text-gray-600">{submission.moduleCode} — {submission.moduleName}</p>
+                                <p className="text-gray-600">{submission.moduleName ?? submission.moduleCode}</p>
                             )}
                         </div>
                         <div className="text-right">

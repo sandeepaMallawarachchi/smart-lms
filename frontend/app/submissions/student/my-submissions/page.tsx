@@ -4,11 +4,13 @@ import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Calendar, FileText, GitBranch, Shield, AlertCircle,
-    RefreshCw, Clock, ChevronRight, X,
+    RefreshCw, Clock, ChevronRight, X, Download,
 } from 'lucide-react';
 import { useAssignments, useSubmissions } from '@/hooks/useSubmissions';
 import { useVersions } from '@/hooks/useVersions';
 import { useSelectedCourse } from '@/hooks/useSelectedCourse';
+import { versionService } from '@/lib/api/submission-services';
+import { downloadSubmissionPdf } from '@/lib/generate-submission-pdf';
 import type { Assignment, Submission } from '@/types/submission.types';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -165,9 +167,29 @@ function AssignmentCard({
     item: AssignmentItem;
     router: ReturnType<typeof useRouter>;
 }) {
+    const [downloading, setDownloading] = useState(false);
     const cfg  = STATUS_CFG[item.status];
     const sub  = item.submission;
     const due  = item.dueDate ? formatDue(item.dueDate) : null;
+
+    async function handleDownloadPdf() {
+        if (!sub?.id || downloading) return;
+        setDownloading(true);
+        try {
+            const version = await versionService.getLatestVersion(sub.id);
+            downloadSubmissionPdf(
+                version,
+                item.title,
+                item.moduleName ?? item.moduleCode,
+                sub.studentName,
+            );
+        } catch (err) {
+            console.error('[MySubmissions] PDF download failed:', err);
+            alert('Failed to download PDF. Please try again.');
+        } finally {
+            setDownloading(false);
+        }
+    }
 
     // Score chips — shown when there is a submitted/graded submission
     const hasScores = sub && (
@@ -225,7 +247,7 @@ function AssignmentCard({
 
                     {/* Module */}
                     <p className="text-xs text-gray-500 mb-1">
-                        {item.moduleCode}{item.moduleName ? ` — ${item.moduleName}` : ''}
+                        {item.moduleName ?? item.moduleCode}
                     </p>
 
                     {/* Due date */}
@@ -314,17 +336,28 @@ function AssignmentCard({
                         </button>
                     )}
 
-                    {/* Secondary: Versions + Plagiarism (only when a terminal submission exists) */}
+                    {/* Secondary: Versions + Download PDF (only when a terminal submission exists) */}
                     {sub && (
-                        <button
-                            onClick={() => router.push(`/submissions/student/version-history/${sub.id}`)}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-gray-500 hover:text-indigo-700 hover:bg-indigo-50 transition-colors cursor-pointer"
-                            title="Version history & compare"
-                        >
-                            <GitBranch size={12} />
-                            Versions
-                            <VersionCountBadge submissionId={sub.id} />
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => router.push(`/submissions/student/version-history/${sub.id}`)}
+                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-gray-500 hover:text-indigo-700 hover:bg-indigo-50 transition-colors cursor-pointer"
+                                title="Version history & compare"
+                            >
+                                <GitBranch size={12} />
+                                Versions
+                                <VersionCountBadge submissionId={sub.id} />
+                            </button>
+                            <button
+                                onClick={handleDownloadPdf}
+                                disabled={downloading}
+                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer disabled:opacity-50"
+                                title="Download questions & answers as PDF"
+                            >
+                                <Download size={12} className={downloading ? 'animate-bounce' : ''} />
+                                {downloading ? 'Downloading…' : 'Download PDF'}
+                            </button>
+                        </div>
                     )}
                 </div>
             </div>

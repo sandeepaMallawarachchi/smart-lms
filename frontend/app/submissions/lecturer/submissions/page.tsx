@@ -92,9 +92,9 @@ function SubmissionRow({
                                 <h3 className="font-semibold text-gray-900">
                                     {submission.studentId}
                                 </h3>
-                                {submission.moduleCode && (
+                                {(submission.moduleName || submission.moduleCode) && (
                                     <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                                        {submission.moduleCode}
+                                        {submission.moduleName ?? submission.moduleCode}
                                     </span>
                                 )}
                             </div>

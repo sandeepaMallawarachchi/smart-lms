@@ -227,6 +227,7 @@ export const submissionService = {
         assignmentId: string,
         studentId: string,
         studentName: string = 'Student',
+        assignmentTitle?: string,
     ): Promise<Submission> {
         console.debug('[submissionService] getOrCreateDraftSubmission — assignmentId:', assignmentId, '| studentId:', studentId);
 
@@ -271,7 +272,7 @@ export const submissionService = {
                 studentId,
                 studentName,
                 assignmentId,
-                title: 'Text Submission',
+                title: assignmentTitle || 'Text Submission',
                 submissionType: 'ASSIGNMENT',
             }),
         });
@@ -452,6 +453,7 @@ function _mapSubtasksToQuestions(taskId: string, subtasks: _RawSubtask[]): Quest
 }
 
 function _mapProject(p: _RawProject): Assignment {
+    const totalMarks = (p.mainTasks ?? []).reduce((sum, mt) => sum + (mt.marks ?? 5), 0);
     return {
         id:             String(p._id),
         title:          p.projectName,
@@ -459,13 +461,14 @@ function _mapProject(p: _RawProject): Assignment {
         moduleCode:     p.course?.courseCode ?? p.courseId,
         moduleName:     p.course?.courseName,
         dueDate:        _toDeadlineISO(p.deadlineDate, p.deadlineTime),
-        totalMarks:     100,
+        totalMarks:     totalMarks || 100,
         status:         _deriveStatus(p.deadlineDate, p.deadlineTime),
         assignmentType: 'project',
     };
 }
 
 function _mapTask(t: _RawTask): Assignment {
+    const totalMarks = (t.subtasks ?? []).reduce((sum, st) => sum + (st.marks ?? 5), 0);
     return {
         id:             String(t._id),
         title:          t.taskName,
@@ -473,7 +476,7 @@ function _mapTask(t: _RawTask): Assignment {
         moduleCode:     t.course?.courseCode ?? t.courseId,
         moduleName:     t.course?.courseName,
         dueDate:        _toDeadlineISO(t.deadlineDate, t.deadlineTime),
-        totalMarks:     100,
+        totalMarks:     totalMarks || 100,
         status:         _deriveStatus(t.deadlineDate, t.deadlineTime),
         assignmentType: 'task',
     };

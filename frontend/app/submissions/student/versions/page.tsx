@@ -100,8 +100,8 @@ export default function VersionsIndexPage() {
                                     {submission.assignmentTitle ?? submission.title ?? 'Untitled Submission'}
                                 </p>
                                 <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs text-gray-500">
-                                    {submission.moduleCode && <span>{submission.moduleCode}</span>}
-                                    {submission.moduleCode && <span>•</span>}
+                                    {(submission.moduleName || submission.moduleCode) && <span>{submission.moduleName ?? submission.moduleCode}</span>}
+                                    {(submission.moduleName || submission.moduleCode) && <span>•</span>}
                                     <span className="flex items-center gap-1">
                                         <GitBranch size={11} />
                                         {submission.totalVersions} version{submission.totalVersions !== 1 ? 's' : ''}
