@@ -8,6 +8,32 @@ import {
     scheduleReminderJobsForStudentItem,
 } from '@/lib/projects-and-tasks/reminders/scheduler';
 
+type ProgressSubtask = {
+    id: string;
+    title: string;
+    description?: string;
+    marks?: number;
+    completed?: boolean;
+};
+
+function applyTaskMarks(
+    progressSubtasks: ProgressSubtask[] = [],
+    sourceSubtasks: ProgressSubtask[] = []
+): ProgressSubtask[] {
+    const sourceMap = new Map(sourceSubtasks.map((subtask) => [subtask.id, subtask]));
+    const sourceByTitle = new Map(
+        sourceSubtasks.map((subtask) => [String(subtask.title || '').trim().toLowerCase(), subtask])
+    );
+    return progressSubtasks.map((subtask) => ({
+        ...subtask,
+        marks: Number(
+            sourceMap.get(subtask.id)?.marks ||
+            sourceByTitle.get(String(subtask.title || '').trim().toLowerCase())?.marks ||
+            0
+        ),
+    }));
+}
+
 export async function GET(request: NextRequest) {
     try {
         await connectDB();
@@ -54,6 +80,7 @@ export async function GET(request: NextRequest) {
                     id: st.id,
                     title: st.title,
                     description: st.description,
+                    marks: st.marks || 0,
                     completed: false,
                 })),
             });
@@ -72,6 +99,11 @@ export async function GET(request: NextRequest) {
                 deadlineTime: visibleTask.deadlineTime || '23:59',
             });
         }
+
+        progress.subtasks = applyTaskMarks(
+            (progress.subtasks || []) as ProgressSubtask[],
+            (visibleTask.subtasks || []) as ProgressSubtask[]
+        ) as any;
 
         return successResponse('Task progress retrieved', { progress }, 200);
     } catch (error: any) {
@@ -123,10 +155,15 @@ export async function POST(request: NextRequest) {
                 studentId: payload.userId,
                 taskId,
                 status: status || 'todo',
+<<<<<<< HEAD
                 subtasks: subtasks || visibleTask.subtasks.map((st: any) => ({
+=======
+                subtasks: visibleTask.subtasks.map((st: any) => ({
+>>>>>>> 61fd08c821d8a34314023099afc0dce05103ff1c
                     id: st.id,
                     title: st.title,
                     description: st.description,
+                    marks: st.marks || 0,
                     completed: false,
                 })),
             });
@@ -135,7 +172,10 @@ export async function POST(request: NextRequest) {
                 progress.status = status;
             }
             if (subtasks) {
-                progress.subtasks = subtasks;
+                progress.subtasks = applyTaskMarks(
+                    subtasks as ProgressSubtask[],
+                    (visibleTask.subtasks || []) as ProgressSubtask[]
+                ) as any;
 
                 const allSubtasksCompleted = subtasks.every((st: any) => st.completed);
                 if (allSubtasksCompleted && subtasks.length > 0) {
@@ -144,6 +184,11 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        progress.subtasks = applyTaskMarks(
+            (progress.subtasks || []) as ProgressSubtask[],
+            (visibleTask.subtasks || []) as ProgressSubtask[]
+        ) as any;
+
         await progress.save();
 
         if (progress.status === 'done') {
@@ -151,7 +196,11 @@ export async function POST(request: NextRequest) {
                 studentId: payload.userId,
                 taskId,
             });
+<<<<<<< HEAD
         } else {
+=======
+        } else if (progress.status === 'inprogress') {
+>>>>>>> 61fd08c821d8a34314023099afc0dce05103ff1c
             if (visibleTask.deadlineDate) {
                 await scheduleReminderJobsForStudentItem({
                     studentId: payload.userId,

@@ -56,12 +56,44 @@ const mapGender = (gender?: string | null) => {
   return 'M';
 };
 
-const calcDaysEarly = (submittedAt?: string | null, dueDate?: string | null) => {
+const parseDueDateTime = (dueDate?: string | null, dueTime?: string | null) => {
+  if (!dueDate) return null;
+  const time = (dueTime && dueTime.trim()) ? dueTime.trim() : '23:59';
+  const candidate = new Date(`${dueDate}T${time}:00`);
+  if (Number.isNaN(candidate.getTime())) return null;
+  return candidate;
+};
+
+const calcDaysEarly = (submittedAt?: string | null, dueDate?: string | null, dueTime?: string | null) => {
   if (!submittedAt || !dueDate) return null;
   const submitted = new Date(submittedAt).getTime();
-  const due = new Date(dueDate).getTime();
+  const dueDateTime = parseDueDateTime(dueDate, dueTime);
+  if (!dueDateTime) return null;
+  const due = dueDateTime.getTime();
   if (!Number.isFinite(submitted) || !Number.isFinite(due)) return null;
   return (due - submitted) / DAY_MS;
+};
+
+const projectPossibleMarks = (project: any) => {
+  const mainTasks = Array.isArray(project?.mainTasks) ? project.mainTasks : [];
+  let total = 0;
+  for (const mainTask of mainTasks) {
+    total += safeNumber(Number(mainTask?.marks), 0);
+    const subtasks = Array.isArray(mainTask?.subtasks) ? mainTask.subtasks : [];
+    for (const subtask of subtasks) {
+      total += safeNumber(Number(subtask?.marks), 0);
+    }
+  }
+  return total;
+};
+
+const taskPossibleMarks = (task: any) => {
+  const subtasks = Array.isArray(task?.subtasks) ? task.subtasks : [];
+  let total = 0;
+  for (const subtask of subtasks) {
+    total += safeNumber(Number(subtask?.marks), 0);
+  }
+  return total;
 };
 
 export async function GET(request: NextRequest) {
@@ -108,32 +140,106 @@ export async function GET(request: NextRequest) {
 
     const projectMap = new Map(projects.map((p) => [p._id.toString(), p]));
     const taskMap = new Map(tasks.map((t) => [t._id.toString(), t]));
+    const projectMarksMap = new Map(projects.map((p) => [p._id.toString(), projectPossibleMarks(p)]));
+    const taskMarksMap = new Map(tasks.map((t) => [t._id.toString(), taskPossibleMarks(t)]));
 
+    const latestProjectProgress = new Map<string, any>();
+    const latestTaskProgress = new Map<string, any>();
     const progressDates: Date[] = [];
     let completedProjects = 0;
     let completedTasks = 0;
     let lateTaskOrProjectCount = 0;
+    let totalPossibleAssignedMarks = 0;
+    let totalEarnedAssignedMarks = 0;
+    const assignedScoreValues: number[] = [];
+    const completionScores: Array<{ score: number; completedAt: Date }> = [];
+    const daysEarlyValues: number[] = [];
+    let worstDelay = 0;
 
     for (const p of projectProgress) {
-      if (p.updatedAt) progressDates.push(new Date(p.updatedAt));
-      if (p.status === 'done') {
-        completedProjects++;
-        const project = projectMap.get(p.projectId);
-        if (project?.deadlineDate && p.updatedAt) {
-          const delayDays = calcDaysEarly(p.updatedAt.toISOString(), project.deadlineDate);
-          if (delayDays !== null && delayDays < 0) lateTaskOrProjectCount++;
-        }
+      const project = projectMap.get(p.projectId);
+      if (!project) continue;
+      const existing = latestProjectProgress.get(p.projectId);
+      if (!existing || (p.updatedAt && (!existing.updatedAt || new Date(p.updatedAt).getTime() > new Date(existing.updatedAt).getTime()))) {
+        latestProjectProgress.set(p.projectId, p);
       }
     }
 
     for (const t of taskProgress) {
-      if (t.updatedAt) progressDates.push(new Date(t.updatedAt));
-      if (t.status === 'done') {
-        completedTasks++;
-        const task = taskMap.get(t.taskId);
-        if (task?.deadlineDate && t.updatedAt) {
-          const delayDays = calcDaysEarly(t.updatedAt.toISOString(), task.deadlineDate);
-          if (delayDays !== null && delayDays < 0) lateTaskOrProjectCount++;
+      const task = taskMap.get(t.taskId);
+      if (!task) continue;
+      const existing = latestTaskProgress.get(t.taskId);
+      if (!existing || (t.updatedAt && (!existing.updatedAt || new Date(t.updatedAt).getTime() > new Date(existing.updatedAt).getTime()))) {
+        latestTaskProgress.set(t.taskId, t);
+      }
+    }
+
+    for (const project of projects) {
+      const projectId = project._id.toString();
+      const progress = latestProjectProgress.get(projectId);
+      const possibleMarks = safeNumber(projectMarksMap.get(projectId), 0);
+      if (progress?.updatedAt) progressDates.push(new Date(progress.updatedAt));
+
+      const isDone = progress?.status === 'done';
+      if (isDone) completedProjects++;
+
+      let daysEarly: number | null = null;
+      if (isDone && project.deadlineDate && progress?.updatedAt) {
+        daysEarly = calcDaysEarly(progress.updatedAt.toISOString(), project.deadlineDate, project.deadlineTime);
+        if (daysEarly !== null) {
+          daysEarlyValues.push(daysEarly);
+          if (daysEarly < 0) {
+            lateTaskOrProjectCount++;
+            worstDelay = Math.min(worstDelay, daysEarly);
+          }
+        }
+      }
+
+      if (possibleMarks > 0) {
+        totalPossibleAssignedMarks += possibleMarks;
+        const earnedMarks = isDone && (daysEarly === null || daysEarly >= 0) ? possibleMarks : 0;
+        totalEarnedAssignedMarks += earnedMarks;
+        assignedScoreValues.push((earnedMarks / possibleMarks) * 100);
+        if (isDone && progress?.updatedAt) {
+          completionScores.push({
+            score: (earnedMarks / possibleMarks) * 100,
+            completedAt: new Date(progress.updatedAt),
+          });
+        }
+      }
+    }
+
+    for (const task of tasks) {
+      const taskId = task._id.toString();
+      const progress = latestTaskProgress.get(taskId);
+      const possibleMarks = safeNumber(taskMarksMap.get(taskId), 0);
+      if (progress?.updatedAt) progressDates.push(new Date(progress.updatedAt));
+
+      const isDone = progress?.status === 'done';
+      if (isDone) completedTasks++;
+
+      let daysEarly: number | null = null;
+      if (isDone && task.deadlineDate && progress?.updatedAt) {
+        daysEarly = calcDaysEarly(progress.updatedAt.toISOString(), task.deadlineDate, task.deadlineTime);
+        if (daysEarly !== null) {
+          daysEarlyValues.push(daysEarly);
+          if (daysEarly < 0) {
+            lateTaskOrProjectCount++;
+            worstDelay = Math.min(worstDelay, daysEarly);
+          }
+        }
+      }
+
+      if (possibleMarks > 0) {
+        totalPossibleAssignedMarks += possibleMarks;
+        const earnedMarks = isDone && (daysEarly === null || daysEarly >= 0) ? possibleMarks : 0;
+        totalEarnedAssignedMarks += earnedMarks;
+        assignedScoreValues.push((earnedMarks / possibleMarks) * 100);
+        if (isDone && progress?.updatedAt) {
+          completionScores.push({
+            score: (earnedMarks / possibleMarks) * 100,
+            completedAt: new Date(progress.updatedAt),
+          });
         }
       }
     }
@@ -154,7 +260,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Heatmap service for activity metrics (proxy for VLE clicks)
-    const heatmapUrl = process.env.HEATMAP_SERVICE_URL || 'http://localhost:5002/heatmap';
+    const configuredHeatmapUrl = process.env.HEATMAP_SERVICE_URL;
+    if (!configuredHeatmapUrl) {
+      return serverErrorResponse('HEATMAP_SERVICE_URL is not configured');
+    }
+    const normalizedHeatmapUrl = configuredHeatmapUrl.replace(/\/$/, '');
+    const heatmapUrl = /\/heatmap$/.test(normalizedHeatmapUrl)
+      ? normalizedHeatmapUrl
+      : `${normalizedHeatmapUrl}/heatmap`;
     let heatmapData: HeatmapResponse | null = null;
     try {
       const heatmapRes = await fetch(heatmapUrl, {
@@ -183,16 +296,19 @@ export async function GET(request: NextRequest) {
 
     const engagementRegularity = avgClicksPerDay > 0 ? clicksStd / avgClicksPerDay : 0;
 
-    const avgScore = 0;
-    const scoreStd = 0;
-    const minScore = 0;
-    const maxScore = 0;
-    const firstScore = 0;
-    const scoreImprovement = 0;
+    completionScores.sort((a, b) => a.completedAt.getTime() - b.completedAt.getTime());
+    const scoreValues = completionScores.map((entry) => entry.score);
+    const avgScore = totalPossibleAssignedMarks > 0
+      ? (totalEarnedAssignedMarks / totalPossibleAssignedMarks) * 100
+      : 0;
+    const scoreStd = stdDev(assignedScoreValues);
+    const minScore = assignedScoreValues.length > 0 ? Math.min(...assignedScoreValues) : 0;
+    const maxScore = assignedScoreValues.length > 0 ? Math.max(...assignedScoreValues) : 0;
+    const firstScore = scoreValues.length > 0 ? scoreValues[0] : 0;
+    const scoreImprovement = scoreValues.length > 1 ? scoreValues[scoreValues.length - 1] - scoreValues[0] : 0;
     const completionRate = taskCompletionRate;
-    const avgDaysEarly = 0;
-    const timingConsistency = 0;
-    const worstDelay = 0;
+    const avgDaysEarly = mean(daysEarlyValues);
+    const timingConsistency = stdDev(daysEarlyValues);
     const lateSubmissionCount = lateTaskOrProjectCount;
     const numOfPrevAttempts = 0;
 

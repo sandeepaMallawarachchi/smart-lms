@@ -31,8 +31,10 @@ interface PredictiveResponse {
     name: string;
     riskLevel: string;
     riskProbability: number;
+    confidence?: number;
     completionRate: number;
     engagement: number;
+    predictionSource?: 'stored_prediction' | 'live_prediction' | 'none' | string;
   }>;
   personalizedRecommendations: Array<{
     studentId: string;
@@ -40,8 +42,10 @@ interface PredictiveResponse {
     name: string;
     riskLevel: string;
     riskProbability: number;
+    confidence?: number;
     completionRate: number;
     engagement: number;
+    predictionSource?: 'stored_prediction' | 'live_prediction' | 'none' | string;
     recommendation: string;
   }>;
 }
@@ -95,7 +99,7 @@ export default function LecturerPredictivePage() {
           <h1 className="text-3xl font-bold">Predictive Analytics</h1>
         </div>
         <p className="mt-2 text-sm text-blue-100">
-          ML risk scoring + NLP personalized recommendations for intervention planning.
+          Estimated risk scoring + NLP personalized recommendations for intervention planning.
         </p>
         <p className={`mt-3 text-sm font-semibold ${data.livePrediction.enabled ? 'text-emerald-200' : 'text-amber-200'}`}>
           {data.livePrediction.enabled
@@ -133,8 +137,12 @@ export default function LecturerPredictivePage() {
                   <p className="text-xs text-slate-500">{student.studentIdNumber}</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-red-700">{student.riskProbability}%</p>
-                  <p className="text-xs text-slate-500">{student.riskLevel.toUpperCase()}</p>
+                  <p className="font-semibold text-red-700">Estimated Risk: {student.riskProbability}%</p>
+                  <p className="text-xs text-slate-500">
+                    {student.riskLevel.toUpperCase()} · {student.predictionSource === 'live_prediction' || student.predictionSource === 'stored_prediction'
+                      ? 'ML + activity signals'
+                      : 'Activity + progress signals'}
+                  </p>
                 </div>
               </div>
             ))}
@@ -166,7 +174,12 @@ export default function LecturerPredictivePage() {
                     <span className="rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-600">{item.studentIdNumber}</span>
                     <span className="inline-flex items-center gap-1 rounded-md bg-red-100 px-2 py-1 text-xs font-semibold text-red-700">
                       <AlertTriangle size={12} />
-                      {item.riskLevel.toUpperCase()} {item.riskProbability}%
+                      {item.riskLevel.toUpperCase()} · Estimated Risk {item.riskProbability}%
+                    </span>
+                    <span className="rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-600">
+                      {item.predictionSource === 'live_prediction' || item.predictionSource === 'stored_prediction'
+                        ? 'ML + activity signals'
+                        : 'Activity + progress signals'}
                     </span>
                   </div>
                   <ChevronDown

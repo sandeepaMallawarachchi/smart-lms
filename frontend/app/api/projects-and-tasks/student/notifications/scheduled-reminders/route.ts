@@ -123,15 +123,25 @@ export async function GET(request: NextRequest) {
     const projectIds = Array.from(
       new Set(
         notifications
+<<<<<<< HEAD
           .map((n) => n.projectId)
           .filter((id): id is string => Boolean(id))
+=======
+          .map((n: any) => n.projectId)
+          .filter((id: string | undefined): id is string => Boolean(id))
+>>>>>>> 61fd08c821d8a34314023099afc0dce05103ff1c
       )
     );
     const taskIds = Array.from(
       new Set(
         notifications
+<<<<<<< HEAD
           .map((n) => n.taskId)
           .filter((id): id is string => Boolean(id))
+=======
+          .map((n: any) => n.taskId)
+          .filter((id: string | undefined): id is string => Boolean(id))
+>>>>>>> 61fd08c821d8a34314023099afc0dce05103ff1c
       )
     );
 
@@ -144,11 +154,23 @@ export async function GET(request: NextRequest) {
         : Promise.resolve([]),
     ]);
 
+<<<<<<< HEAD
     const visibleProjectSet = new Set(visibleProjects.map((project) => project._id.toString()));
     const visibleTaskSet = new Set(visibleTasks.map((task) => task._id.toString()));
 
     const filteredNotifications = notifications
       .filter((notification) => {
+=======
+    const visibleProjectSet = new Set(
+      visibleProjects.map((project: any) => project._id.toString())
+    );
+    const visibleTaskSet = new Set(
+      visibleTasks.map((task: any) => task._id.toString())
+    );
+
+    const filteredNotifications = notifications
+      .filter((notification: any) => {
+>>>>>>> 61fd08c821d8a34314023099afc0dce05103ff1c
         if (notification.projectId) return visibleProjectSet.has(notification.projectId);
         if (notification.taskId) return visibleTaskSet.has(notification.taskId);
         return true;

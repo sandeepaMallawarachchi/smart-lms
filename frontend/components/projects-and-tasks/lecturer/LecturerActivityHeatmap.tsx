@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Info, Loader, X } from 'lucide-react';
+import { Calendar, Info, Loader, X } from 'lucide-react';
 
 interface SelectedCourse {
   _id: string;
@@ -30,6 +30,9 @@ interface StudentOption {
   studentIdNumber: string;
 }
 
+const CELL_SIZE = 20;
+const CELL_GAP = 4;
+
 export default function LecturerActivityHeatmap() {
   const [selectedCourse, setSelectedCourse] = useState<SelectedCourse | null>(null);
   const [students, setStudents] = useState<StudentOption[]>([]);
@@ -38,7 +41,8 @@ export default function LecturerActivityHeatmap() {
   const [totalActivities, setTotalActivities] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hoverDay, setHoverDay] = useState<HeatmapDay | null>(null);
+  const [hoveredDay, setHoveredDay] = useState<HeatmapDay | null>(null);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [showHeatmapInfo, setShowHeatmapInfo] = useState(false);
 
   useEffect(() => {
@@ -81,9 +85,7 @@ export default function LecturerActivityHeatmap() {
           params.set('studentId', selectedStudentId);
         }
         const response = await fetch(`/api/projects-and-tasks/lecturer/analytics/heatmap?${params.toString()}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         });
 
         const data = await response.json();
@@ -106,130 +108,233 @@ export default function LecturerActivityHeatmap() {
     fetchHeatmap();
   }, [selectedCourse?._id, selectedStudentId]);
 
-  const weeks = useMemo(() => {
-    if (!heatmapData.length) return [];
-    const result: HeatmapDay[][] = [];
+  const organizeIntoWeeks = (days: HeatmapDay[]) => {
+    if (!days.length) return [] as HeatmapDay[][];
+    const weeks: HeatmapDay[][] = [];
     let currentWeek: HeatmapDay[] = [];
 
-    heatmapData.forEach((day, index) => {
+    const firstDay = new Date(days[0].date);
+    const startOffset = firstDay.getDay();
+    for (let i = 0; i < startOffset; i++) {
+      currentWeek.push({ date: '', count: 0, level: 0, items: [] });
+    }
+
+    days.forEach((day) => {
       currentWeek.push(day);
-      if ((index + 1) % 7 === 0) {
-        result.push(currentWeek);
+      if (currentWeek.length === 7) {
+        weeks.push(currentWeek);
         currentWeek = [];
       }
     });
-    if (currentWeek.length) result.push(currentWeek);
-    return result;
-  }, [heatmapData]);
 
-  const getCellColor = (level: number) => {
+    if (currentWeek.length > 0) {
+      while (currentWeek.length < 7) {
+        currentWeek.push({ date: '', count: 0, level: 0, items: [] });
+      }
+      weeks.push(currentWeek);
+    }
+
+    return weeks;
+  };
+
+  const weeks = useMemo(() => organizeIntoWeeks(heatmapData), [heatmapData]);
+
+  const monthMarkers = useMemo(() => {
+    const markers: Array<{ weekIndex: number; label: string }> = [];
+    weeks.forEach((week, index) => {
+      const firstValid = week.find((day) => day.date);
+      if (!firstValid) return;
+      const monthLabel = new Date(firstValid.date).toLocaleDateString('en-US', { month: 'short' });
+      const previous = markers[markers.length - 1];
+      if (!previous || previous.label !== monthLabel) {
+        markers.push({ weekIndex: index, label: monthLabel });
+      }
+    });
+    return markers;
+  }, [weeks]);
+
+  const getColor = (level: number) => {
     const colors = ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'];
     return colors[level] || colors[0];
   };
 
+  const formatDate = (dateStr: string) =>
+    new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  const handleMouseMove = (e: React.MouseEvent, day: HeatmapDay) => {
+    setHoveredDay(day);
+    setMousePosition({ x: e.clientX, y: e.clientY });
+  };
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Activity Heatmap</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            {selectedCourse ? selectedCourse.courseName : 'Select a module to view analytics'}
-          </p>
-        </div>
-        <div className="min-w-56">
-          <label className="block text-xs text-gray-500 mb-1">Student Filter</label>
-          <select
-            value={selectedStudentId}
-            onChange={(e) => setSelectedStudentId(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue"
-            disabled={!selectedCourse || isLoading}
-          >
-            <option value="all">All Students</option>
-            {students.map((student) => (
-              <option key={student._id} value={student._id}>
-                {student.name} ({student.studentIdNumber})
-              </option>
-            ))}
-          </select>
+    <div className="space-y-6 p-6">
+      <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <Calendar className="w-6 h-6 text-cyan-600" />
+              Semester Activity Map
+            </h2>
+            <p className="text-gray-600 mt-1">
+              {selectedCourse ? selectedCourse.courseName : 'Select a module to view analytics'}
+            </p>
+          </div>
+          <div className="w-full md:w-80">
+            <label className="block text-xs text-gray-500 mb-1">Student Filter</label>
+            <select
+              value={selectedStudentId}
+              onChange={(e) => setSelectedStudentId(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue"
+              disabled={!selectedCourse || isLoading}
+            >
+              <option value="all">All Students</option>
+              {students.map((student) => (
+                <option key={student._id} value={student._id}>
+                  {student.name} ({student.studentIdNumber})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="py-10 flex items-center justify-center">
-          <Loader size={28} className="animate-spin text-brand-blue" />
-        </div>
-      ) : error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
-      ) : !selectedCourse ? (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-          Select a module from header dropdown.
-        </div>
-      ) : (
-        <>
-          <div className="flex items-center justify-between mb-4">
+      <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Semester Activity Map</h3>
             <p className="text-sm text-gray-600">Daily activity distribution for the last 6 months</p>
-            <div className="flex items-center gap-2">
-              <p className="text-sm text-gray-600">{totalActivities} activities</p>
-              <button
-                type="button"
-                onClick={() => setShowHeatmapInfo(true)}
-                className="inline-flex items-center justify-center h-8 w-8 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                title="What is included in this heatmap?"
-              >
-                <Info size={16} />
-              </button>
-            </div>
           </div>
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-gray-600">{totalActivities} activities</p>
+            <button
+              type="button"
+              onClick={() => setShowHeatmapInfo(true)}
+              className="inline-flex items-center justify-center h-8 w-8 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+              title="What is included in this heatmap?"
+            >
+              <Info size={16} />
+            </button>
+          </div>
+        </div>
 
-          {weeks.length === 0 ? (
-            <div className="text-sm text-gray-500 py-8 text-center">No activity data for this module.</div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <div className="flex gap-1 min-w-max">
-                  {weeks.map((week, weekIndex) => (
-                    <div key={weekIndex} className="flex flex-col gap-1">
-                      {week.map((day) => (
-                        <div
-                          key={day.date}
-                          className="w-3 h-3 rounded-sm cursor-pointer"
-                          style={{ backgroundColor: getCellColor(day.level) }}
-                          onMouseEnter={() => setHoverDay(day)}
-                          onMouseLeave={() => setHoverDay(null)}
-                          title={`${day.date}: ${day.count} activities`}
-                        />
-                      ))}
-                    </div>
+        {isLoading ? (
+          <div className="py-10 flex items-center justify-center">
+            <Loader size={28} className="animate-spin text-brand-blue" />
+          </div>
+        ) : error ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        ) : !selectedCourse ? (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+            Select a module from header dropdown.
+          </div>
+        ) : weeks.length === 0 ? (
+          <div className="text-sm text-gray-500 py-8 text-center">No activity data for this module.</div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <div className="inline-block min-w-full">
+                <div className="relative mb-2 ml-8 h-4">
+                  {monthMarkers.map((marker) => (
+                    <span
+                      key={`${marker.label}-${marker.weekIndex}`}
+                      className="absolute text-xs text-gray-600 font-medium"
+                      style={{ left: `${marker.weekIndex * (CELL_SIZE + CELL_GAP)}px` }}
+                    >
+                      {marker.label}
+                    </span>
                   ))}
                 </div>
-              </div>
 
-              <div className="flex items-center gap-2 mt-4 text-xs text-gray-600">
-                <span>Less</span>
-                {[0, 1, 2, 3, 4].map((level) => (
-                  <div key={level} className="w-3 h-3 rounded-sm" style={{ backgroundColor: getCellColor(level) }} />
-                ))}
-                <span>More</span>
-              </div>
+                <div className="flex gap-1">
+                  <div className="flex flex-col gap-1 text-xs text-gray-600 mr-2">
+                    <div style={{ height: `${CELL_SIZE}px` }}>Sun</div>
+                    <div style={{ height: `${CELL_SIZE}px` }}>Mon</div>
+                    <div style={{ height: `${CELL_SIZE}px` }}>Tue</div>
+                    <div style={{ height: `${CELL_SIZE}px` }}>Wed</div>
+                    <div style={{ height: `${CELL_SIZE}px` }}>Thu</div>
+                    <div style={{ height: `${CELL_SIZE}px` }}>Fri</div>
+                    <div style={{ height: `${CELL_SIZE}px` }}>Sat</div>
+                  </div>
 
-              {hoverDay && hoverDay.items && hoverDay.items.length > 0 && (
-                <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-sm font-semibold text-gray-900 mb-2">{hoverDay.date}</p>
-                  <ul className="space-y-1 text-sm">
-                    {hoverDay.items.slice(0, 8).map((item, idx) => (
-                      <li key={`${item.id}-${idx}`} className="flex justify-between gap-3">
-                        <span className="text-gray-700 truncate">
-                          {item.type === 'project' ? '📁' : '📝'} {item.name} - {item.studentName}
-                        </span>
-                        <span className="text-xs text-gray-600 uppercase">{item.status}</span>
-                      </li>
+                  <div className="flex gap-1">
+                    {weeks.map((week, weekIdx) => (
+                      <div key={weekIdx} className="flex flex-col gap-1">
+                        {week.map((day, dayIdx) => (
+                          <div
+                            key={`${weekIdx}-${dayIdx}`}
+                            className={`rounded-sm ${day.date ? 'cursor-pointer' : ''}`}
+                            style={{
+                              width: `${CELL_SIZE}px`,
+                              height: `${CELL_SIZE}px`,
+                              backgroundColor: day.date ? getColor(day.level) : 'transparent',
+                              border: day.date ? '1px solid rgba(0,0,0,0.1)' : 'none',
+                            }}
+                            onMouseMove={(e) => day.date && handleMouseMove(e, day)}
+                            onMouseLeave={() => setHoveredDay(null)}
+                          />
+                        ))}
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-600 font-medium">Less</span>
+                  <div className="flex gap-1">
+                    {[0, 1, 2, 3, 4].map((level) => (
+                      <div
+                        key={level}
+                        className="w-4 h-4 rounded-sm border border-gray-300"
+                        style={{ backgroundColor: getColor(level) }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-sm text-gray-600 font-medium">More</span>
+                </div>
+
+                <div className="flex items-center gap-6 text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-sm bg-green-400 border border-gray-300" />
+                    <span className="text-gray-700">Historical</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {hoveredDay && hoveredDay.date && (
+        <div
+          className="fixed z-50 bg-gray-900 text-white px-4 py-3 rounded-lg shadow-2xl max-w-sm pointer-events-none"
+          style={{
+            left: `${mousePosition.x + 15}px`,
+            top: `${mousePosition.y + 15}px`,
+          }}
+        >
+          <p className="font-semibold text-sm mb-2">{formatDate(hoveredDay.date)}</p>
+          <p className="text-sm mb-2">
+            {hoveredDay.count} {hoveredDay.count === 1 ? 'activity' : 'activities'}
+          </p>
+          {(hoveredDay.items || []).length > 0 && (
+            <div className="mt-2 pt-2 border-t border-gray-700 space-y-1">
+              {(hoveredDay.items || []).slice(0, 4).map((item, idx) => (
+                <div key={`${item.id}-${idx}`} className="text-xs flex items-center gap-2">
+                  <span>{item.type === 'project' ? '📁' : '📝'}</span>
+                  <span className="truncate">{item.name}</span>
+                  <span className="text-gray-300">({item.studentName})</span>
+                </div>
+              ))}
+              {(hoveredDay.items || []).length > 4 && (
+                <p className="text-xs text-gray-400">+{(hoveredDay.items || []).length - 4} more</p>
               )}
-            </>
+            </div>
           )}
-        </>
+        </div>
       )}
 
       {showHeatmapInfo && (
@@ -246,10 +351,10 @@ export default function LecturerActivityHeatmap() {
               </button>
             </div>
             <div className="px-5 py-4 text-sm text-gray-700 space-y-2">
-              <p>This heatmap shows student task/project progress updates for the last 6 months.</p>
-              <p>Each square represents one day and color intensity indicates update volume.</p>
-              <p>Hover a day to see which student updated which project/task and current status.</p>
-              <p>This lecturer view is historical activity only. It does not include ML predictions or anomaly flags.</p>
+              <p>This heatmap shows student project/task activity for the last 6 months.</p>
+              <p>Each square represents one day. Darker green means more activity updates.</p>
+              <p>Use the student filter to inspect a single student or view all students together.</p>
+              <p>Hover any day to view activity details and student names for that date.</p>
             </div>
           </div>
         </div>

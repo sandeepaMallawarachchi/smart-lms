@@ -15,12 +15,14 @@ interface Subtask {
   id: string;
   title: string;
   description?: string;
+  marks?: number;
 }
 
 interface MainTask {
   id: string;
   title: string;
   description?: string;
+  marks?: number;
   subtasks?: Subtask[];
 }
 
@@ -51,6 +53,7 @@ interface Project {
   otherDocuments?: Document[];
   images?: Document[];
   mainTasks?: MainTask[];
+  isPublished?: boolean;
 }
 
 interface Task {
@@ -66,6 +69,7 @@ interface Task {
   otherDocuments?: Document[];
   images?: Document[];
   subtasks?: Subtask[];
+  isPublished?: boolean;
 }
 
 interface SelectedCourse {
@@ -129,6 +133,7 @@ export default function AllProjectsAndTasksPage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingData, setEditingData] = useState<any>(null);
   const [editType, setEditType] = useState<'project' | 'task'>('project');
+  const [publishingItemId, setPublishingItemId] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -349,7 +354,7 @@ export default function AllProjectsAndTasksPage() {
     setEditModalOpen(true);
   };
 
- const handleSaveEdit = async (updatedData: any) => {
+const handleSaveEdit = async (updatedData: any) => {
   try {
     // Validate we have the ID
     if (!editingData?._id) {
@@ -410,6 +415,68 @@ export default function AllProjectsAndTasksPage() {
     throw new Error(error.message || `Failed to update ${editType}`);
   }
 };
+
+  const handleTogglePublish = async (item: Project | Task, type: 'project' | 'task') => {
+    try {
+      setPublishingItemId(item._id);
+      const token = localStorage.getItem('authToken');
+      if (!token) throw new Error('Authentication required');
+
+      const endpoint =
+        type === 'project'
+          ? `/api/projects-and-tasks/lecturer/create-projects-and-tasks/project/${item._id}`
+          : `/api/projects-and-tasks/lecturer/create-projects-and-tasks/task/${item._id}`;
+
+      const payload =
+        type === 'project'
+          ? {
+              projectName: (item as Project).projectName,
+              description: (item as Project).description || { html: '', text: '' },
+              projectType: (item as Project).projectType || 'individual',
+              assignedGroupIds: (item as Project).assignedGroupIds || [],
+              deadlineDate: (item as Project).deadlineDate,
+              deadlineTime: (item as Project).deadlineTime || '23:59',
+              specialNotes: (item as Project).specialNotes || { html: '', text: '' },
+              isPublished: !(item.isPublished ?? true),
+            }
+          : {
+              taskName: (item as Task).taskName,
+              description: (item as Task).description || { html: '', text: '' },
+              deadlineDate: (item as Task).deadlineDate || '',
+              deadlineTime: (item as Task).deadlineTime || '23:59',
+              specialNotes: (item as Task).specialNotes || { html: '', text: '' },
+              isPublished: !(item.isPublished ?? true),
+            };
+
+      const response = await fetch(endpoint, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to update ${type} publish state`);
+      }
+
+      const result = await response.json();
+      const updatedItem = result.data;
+
+      if (type === 'project') {
+        setProjects((prev) => prev.map((p) => (p._id === item._id ? updatedItem : p)));
+      } else {
+        setTasks((prev) => prev.map((t) => (t._id === item._id ? updatedItem : t)));
+      }
+    } catch (toggleError: any) {
+      console.error('Publish toggle error:', toggleError);
+      setError(toggleError.message || 'Failed to update publish state');
+    } finally {
+      setPublishingItemId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
@@ -601,6 +668,15 @@ export default function AllProjectsAndTasksPage() {
                                   >
                                     {project.projectType === 'group' ? '👥 Group' : '👤 Individual'}
                                   </motion.span>
+                                  <span
+                                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                                      (project.isPublished ?? true)
+                                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                        : 'border-slate-300 bg-slate-100 text-slate-700'
+                                    }`}
+                                  >
+                                    {(project.isPublished ?? true) ? 'Published' : 'Unpublished'}
+                                  </span>
                                   {project.projectType === 'group' &&
                                     (project.assignedGroups || []).map((group) => (
                                       <span
@@ -649,6 +725,23 @@ export default function AllProjectsAndTasksPage() {
                               >
                                 <Edit size={20} className="text-brand-blue hover:text-blue-700" />
                               </motion.button>
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.96 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTogglePublish(project, 'project');
+                                }}
+                                disabled={publishingItemId === project._id}
+                                className={`ml-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                  (project.isPublished ?? true)
+                                    ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                    : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                                } disabled:cursor-not-allowed disabled:opacity-60`}
+                                title={(project.isPublished ?? true) ? 'Unpublish project' : 'Publish project'}
+                              >
+                                {(project.isPublished ?? true) ? 'Unpublish' : 'Publish'}
+                              </motion.button>
                             </div>
 
                             {project.description?.text && (
@@ -696,13 +789,16 @@ export default function AllProjectsAndTasksPage() {
                                             className="bg-white p-4 rounded-lg border-2 border-blue-200 hover:border-blue-400 transition-colors shadow-sm"
                                           >
                                             <p className="text-sm font-bold text-blue-900">📌 {task.title}</p>
+                                            <p className="text-xs font-semibold text-amber-700 mt-1">
+                                              Marks: {Number(task.marks || 0)}
+                                            </p>
                                             {task.description && <p className="text-xs text-gray-600 mt-1 italic">{task.description}</p>}
                                             {subtasks.length > 0 && (
                                               <div className="ml-4 space-y-1 mt-2 p-2 bg-blue-50 rounded">
                                                 <p className="text-xs font-semibold text-blue-800 mb-1">Sub-components:</p>
                                                 {subtasks.map((subtask, stIdx) => (
                                                   <p key={subtask.id} className="text-xs text-blue-700">
-                                                    {String.fromCharCode(97 + stIdx)}) {subtask.title}
+                                                    {String.fromCharCode(97 + stIdx)}) {subtask.title} ({Number(subtask.marks || 0)} marks)
                                                   </p>
                                                 ))}
                                               </div>
@@ -890,6 +986,17 @@ export default function AllProjectsAndTasksPage() {
                                     </div>
                                   </motion.div>
                                 )}
+                                <div className="ml-9">
+                                  <span
+                                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                                      (task.isPublished ?? true)
+                                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                        : 'border-slate-300 bg-slate-100 text-slate-700'
+                                    }`}
+                                  >
+                                    {(task.isPublished ?? true) ? 'Published' : 'Unpublished'}
+                                  </span>
+                                </div>
                               </div>
                               <motion.div
                                 animate={{ scale: 1 }}
@@ -911,6 +1018,23 @@ export default function AllProjectsAndTasksPage() {
                                 title="Edit task"
                               >
                                 <Edit size={20} className="text-brand-blue hover:text-blue-700" />
+                              </motion.button>
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.96 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTogglePublish(task, 'task');
+                                }}
+                                disabled={publishingItemId === task._id}
+                                className={`ml-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                  (task.isPublished ?? true)
+                                    ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                    : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                                } disabled:cursor-not-allowed disabled:opacity-60`}
+                                title={(task.isPublished ?? true) ? 'Unpublish task' : 'Publish task'}
+                              >
+                                {(task.isPublished ?? true) ? 'Unpublish' : 'Publish'}
                               </motion.button>
                             </div>
 
@@ -974,7 +1098,7 @@ export default function AllProjectsAndTasksPage() {
                                     <div className="space-y-1 ml-2">
                                       {subtasks.map((subtask, idx) => (
                                         <p key={subtask.id} className="text-sm text-green-900 font-medium">
-                                          {idx + 1}. {subtask.title}
+                                          {idx + 1}. {subtask.title} ({Number(subtask.marks || 0)} marks)
                                         </p>
                                       ))}
                                     </div>

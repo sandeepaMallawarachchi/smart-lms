@@ -5,6 +5,38 @@ import { Task, StudentTaskProgress } from '@/model/projects-and-tasks/lecturer/p
 import { connectDB } from '@/lib/db';
 import { scheduleReminderJobsForStudentItem, cancelReminderJobsForStudentItem } from '@/lib/projects-and-tasks/reminders/scheduler';
 
+type IncomingSubtask = { id?: string; title?: string; description?: string; marks?: number | string };
+
+function normalizeTaskSubtasks(subtasks: unknown): { ok: true; value: IncomingSubtask[] } | { ok: false; message: string } {
+  if (!Array.isArray(subtasks)) {
+    return { ok: false, message: 'Subtasks must be an array' };
+  }
+
+  let totalMarks = 0;
+  const normalized: IncomingSubtask[] = [];
+
+  for (const rawSubtask of subtasks) {
+    const subtask = (rawSubtask || {}) as IncomingSubtask;
+    const marks = Number(subtask.marks ?? 0);
+    if (!Number.isFinite(marks) || marks < 0 || marks > 100) {
+      return { ok: false, message: 'Each subtask mark must be between 0 and 100' };
+    }
+    totalMarks += marks;
+    if (totalMarks > 100) {
+      return { ok: false, message: 'Total subtask marks cannot exceed 100' };
+    }
+
+    normalized.push({
+      id: String(subtask.id || ''),
+      title: String(subtask.title || ''),
+      description: String(subtask.description || ''),
+      marks,
+    });
+  }
+
+  return { ok: true, value: normalized };
+}
+
 export async function GET(
   request: NextRequest,
   props: { params: Promise<{ taskId: string }> }
@@ -37,10 +69,10 @@ export async function GET(
       },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Fetch task error:', error);
     return NextResponse.json(
-      { message: error.message || 'Failed to fetch task' },
+      { message: error instanceof Error ? error.message : 'Failed to fetch task' },
       { status: 500 }
     );
   }
@@ -82,6 +114,10 @@ export async function PUT(
       deadlineDate?: string;
       deadlineTime?: string;
       specialNotes?: { html: string; text: string };
+<<<<<<< HEAD
+=======
+      subtasks?: IncomingSubtask[];
+>>>>>>> 61fd08c821d8a34314023099afc0dce05103ff1c
       isPublished?: boolean;
     };
     console.log('Request body:', body);
@@ -94,6 +130,16 @@ export async function PUT(
       );
     }
 
+    const subtasksSource = body.subtasks ?? existingTask.subtasks ?? [];
+    const normalizedSubtasksResult = normalizeTaskSubtasks(subtasksSource);
+    if (!normalizedSubtasksResult.ok) {
+      return NextResponse.json(
+        { message: normalizedSubtasksResult.message },
+        { status: 400 }
+      );
+    }
+    const normalizedSubtasks = normalizedSubtasksResult.value;
+
     console.log('All validations passed, updating task...');
 
     // Update task
@@ -105,6 +151,10 @@ export async function PUT(
         deadlineDate: body.deadlineDate || '',
         deadlineTime: body.deadlineTime || '23:59',
         specialNotes: body.specialNotes || { html: '', text: '' },
+<<<<<<< HEAD
+=======
+        subtasks: normalizedSubtasks,
+>>>>>>> 61fd08c821d8a34314023099afc0dce05103ff1c
         isPublished: typeof body.isPublished === 'boolean' ? body.isPublished : existingTask.isPublished ?? true,
       },
       { new: true, runValidators: true }
@@ -167,10 +217,10 @@ export async function PUT(
       },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Update task error:', error);
     return NextResponse.json(
-      { message: error.message || 'Failed to update task' },
+      { message: error instanceof Error ? error.message : 'Failed to update task' },
       { status: 500 }
     );
   }

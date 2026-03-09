@@ -97,7 +97,7 @@ export default function LecturerDashboardPage() {
     <div className="space-y-6">
       <section className="rounded-2xl bg-gradient-to-r from-slate-900 via-blue-900 to-cyan-800 p-6 text-white shadow-lg">
         <h1 className="text-3xl font-bold">Lecturer Analytics Dashboard</h1>
-        <p className="mt-1 text-sm text-cyan-100">Class-wide insight summary with risk and engagement indicators.</p>
+        <p className="mt-1 text-sm text-cyan-100">Class-wide insight summary with estimated risk, completion, and engagement indicators.</p>
       </section>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-4">
@@ -119,7 +119,7 @@ export default function LecturerDashboardPage() {
           <TrendHint positive={overview.trends.engagementChange >= 0} />
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Risk Trend</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Estimated Risk Trend</h2>
           <p className="mt-2 text-3xl font-bold text-slate-900">{overview.trends.riskChange}%</p>
           <p className="mt-2 inline-flex items-center gap-2 text-xs text-slate-500">
             {overview.trends.riskChange <= 0 ? <TrendingDown size={14} /> : <TrendingUp size={14} />}
@@ -138,7 +138,7 @@ export default function LecturerDashboardPage() {
               <thead className="bg-slate-50 text-slate-600">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Student</th>
-                  <th className="px-4 py-3 font-semibold">Risk</th>
+                  <th className="px-4 py-3 font-semibold">Estimated Risk</th>
                   <th className="px-4 py-3 font-semibold">Completion</th>
                   <th className="px-4 py-3 font-semibold">Engagement</th>
                 </tr>
@@ -180,7 +180,7 @@ export default function LecturerDashboardPage() {
                   <th className="px-4 py-3 font-semibold">Course</th>
                   <th className="px-4 py-3 font-semibold">Students</th>
                   <th className="px-4 py-3 font-semibold">Avg Completion</th>
-                  <th className="px-4 py-3 font-semibold">Avg Risk</th>
+                  <th className="px-4 py-3 font-semibold">Avg Estimated Risk</th>
                 </tr>
               </thead>
               <tbody>

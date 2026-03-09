@@ -63,7 +63,11 @@ export async function GET(request: NextRequest) {
     // Step 3: Find all projects for these courses
     const projects = await Project.find({
       courseId: { $in: courseIds },
+<<<<<<< HEAD
       isArchived: { $ne: true },
+=======
+      isArchived: { $ne: true }, 
+>>>>>>> 61fd08c821d8a34314023099afc0dce05103ff1c
       isPublished: { $ne: false },
     })
       .populate('lecturerId', 'name email position')
