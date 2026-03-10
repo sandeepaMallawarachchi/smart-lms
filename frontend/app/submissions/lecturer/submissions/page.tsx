@@ -292,7 +292,7 @@ export default function LecturerAllSubmissionsPage() {
 
             {!loading && processed.length > 0 && (
                 <p className="text-xs text-gray-400 text-right mt-2">
-                    Showing {processed.length} of {(submissions ?? []).length}
+                    Showing {processed.length} of {stats.total}
                 </p>
             )}
         </div>

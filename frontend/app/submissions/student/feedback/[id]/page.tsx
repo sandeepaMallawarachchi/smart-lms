@@ -12,7 +12,7 @@
  * never regenerated on-demand.
  */
 
-import React, { use, useState } from 'react';
+import React, { use, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
     ArrowLeft, Star, Shield, GitBranch, AlertCircle,
@@ -21,7 +21,8 @@ import {
 } from 'lucide-react';
 import { useSubmission } from '@/hooks/useSubmissions';
 import { useLatestVersion, useVersion, useVersions } from '@/hooks/useVersions';
-import type { SubmissionVersion, VersionAnswer } from '@/types/submission.types';
+import { plagiarismService } from '@/lib/api/submission-services';
+import type { SubmissionVersion, VersionAnswer, VersionPlagiarismSource } from '@/types/submission.types';
 import LecturerAnnotatedText from '@/components/submissions/LecturerAnnotatedText';
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -352,7 +353,54 @@ export default function FeedbackPage({ params }: { params: Promise<{ id: string 
     const loading = versionIdParam ? specificLoading : latestLoading;
     const error   = versionIdParam ? specificError   : latestError;
 
-    const answers = version?.answers ?? [];
+    // ── Enrich answers with plagiarism sources from integrity service ─────
+    // When version answers have plagiarism scores but no saved sources,
+    // try to fetch them from the integrity monitoring service.
+    const [enrichedSources, setEnrichedSources] = useState<Record<string, VersionPlagiarismSource[]>>({});
+
+    useEffect(() => {
+        if (!version?.answers || !id) return;
+        const needsEnrichment = version.answers.filter(
+            a => (a.similarityScore ?? 0) > 0 && (!a.plagiarismSources || a.plagiarismSources.length === 0)
+        );
+        if (needsEnrichment.length === 0) return;
+
+        let cancelled = false;
+        (async () => {
+            try {
+                const report = await plagiarismService.getReport(id);
+                if (cancelled || !report?.topMatches?.length) return;
+                // Map top-level plagiarism matches to VersionPlagiarismSource format
+                const mapped: VersionPlagiarismSource[] = report.topMatches.map((m, i) => ({
+                    id: `enriched-${i}`,
+                    sourceUrl: m.url ?? '',
+                    sourceTitle: m.source ?? m.description ?? 'Unknown source',
+                    sourceSnippet: m.description ?? undefined,
+                    matchedText: undefined,
+                    similarityPercentage: m.percentage ?? 0,
+                }));
+                if (mapped.length > 0) {
+                    // Apply to all answers that need enrichment
+                    const result: Record<string, VersionPlagiarismSource[]> = {};
+                    for (const a of needsEnrichment) {
+                        result[a.questionId] = mapped;
+                    }
+                    if (!cancelled) setEnrichedSources(result);
+                }
+            } catch {
+                // No report available — that's OK
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [version, id]);
+
+    // Merge enriched sources into answers
+    const answers: VersionAnswer[] = (version?.answers ?? []).map(a => {
+        if (a.plagiarismSources && a.plagiarismSources.length > 0) return a;
+        const extra = enrichedSources[a.questionId];
+        if (extra && extra.length > 0) return { ...a, plagiarismSources: extra };
+        return a;
+    });
     const isLatest = !versionIdParam || (versions != null && versions.length > 0 && versions[0].id === versionIdParam);
 
     if (loading && !version) return <PageSkeleton />;

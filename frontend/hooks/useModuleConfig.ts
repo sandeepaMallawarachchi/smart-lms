@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { usePathname } from 'next/navigation'
 import { 
   projectsTasksConfig, 
@@ -22,7 +22,7 @@ export function useModuleConfig(userRole: UserRole) {
     ? 'submissions'
     : null
 
-  const getBaseConfig = () => {
+  const baseConfig = useMemo(() => {
     if (userRole === 'superadmin') return null
 
     if (currentModule === 'projects-tasks') {
@@ -33,13 +33,15 @@ export function useModuleConfig(userRole: UserRole) {
       return submissionsConfig[userRole]
     }
     return null
-  }
+  }, [userRole, currentModule])
 
-  const [config, setConfig] = useState(getBaseConfig())
+  const [config, setConfig] = useState(baseConfig)
 
   useEffect(() => {
-    const base = getBaseConfig()
-    setConfig(base)
+    setConfig(baseConfig)
+  }, [baseConfig])
+
+  useEffect(() => {
 
     if (currentModule === 'submissions' && userRole !== 'superadmin') {
       let isMounted = true
@@ -50,8 +52,7 @@ export function useModuleConfig(userRole: UserRole) {
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
 
       const fetchBadges = async () => {
-        const base = getBaseConfig()
-        if (!base) return
+        if (!baseConfig) return
 
         try {
           if (userRole === 'student') {
@@ -93,20 +94,20 @@ export function useModuleConfig(userRole: UserRole) {
                 )
                 if (res.ok) {
                   const data = await res.json()
-                  const items = Array.isArray(data) ? data : (data?.data ?? data?.content ?? [])
-                  submissionCount = items.length
+                  const items: Array<{ status?: string }> = Array.isArray(data) ? data : (data?.data ?? data?.content ?? [])
+                  submissionCount = items.filter(s => s.status !== 'DRAFT').length
                 }
               } catch { /* silent */ }
             }
 
             if (isMounted) {
               setConfig({
-                ...base,
+                ...baseConfig,
                 sidebar: {
-                  ...base.sidebar,
+                  ...baseConfig.sidebar,
                   stats: { total: submissionCount, dueSoon: dueSoonCount },
-                  navItems: base.sidebar.navItems.map(
-                    (item: { id: string; [key: string]: unknown }) =>
+                  navItems: baseConfig.sidebar.navItems.map(
+                    (item) =>
                       item.id === 'my-assignments'
                         ? { ...item, badge: assignmentCount > 0 ? assignmentCount : undefined }
                         : item
@@ -127,8 +128,9 @@ export function useModuleConfig(userRole: UserRole) {
                 const items: Array<{ status?: string }> = Array.isArray(data)
                   ? data
                   : (data?.content ?? data?.data ?? [])
-                totalCount = items.length
-                pendingCount = items.filter(
+                const nonDraft = items.filter(s => s.status !== 'DRAFT')
+                totalCount = nonDraft.length
+                pendingCount = nonDraft.filter(
                   s => s.status === 'SUBMITTED' || s.status === 'PENDING_REVIEW'
                 ).length
               }
@@ -146,11 +148,11 @@ export function useModuleConfig(userRole: UserRole) {
 
             if (isMounted) {
               setConfig({
-                ...base,
+                ...baseConfig,
                 sidebar: {
-                  ...base.sidebar,
-                  navItems: base.sidebar.navItems.map(
-                    (item: { id: string; [key: string]: unknown }) => {
+                  ...baseConfig.sidebar,
+                  navItems: baseConfig.sidebar.navItems.map(
+                    (item) => {
                       if (item.id === 'submissions')
                         return { ...item, badge: totalCount > 0 ? totalCount : undefined }
                       if (item.id === 'grading')
@@ -216,7 +218,7 @@ export function useModuleConfig(userRole: UserRole) {
         isMounted = false
       }
     }
-  }, [pathname, userRole, currentModule])
+  }, [pathname, userRole, currentModule, baseConfig])
 
   if (userRole === 'superadmin') {
     return {

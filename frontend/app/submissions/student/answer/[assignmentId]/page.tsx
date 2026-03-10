@@ -31,6 +31,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
     submissionService,
     versionService,
+    plagiarismService,
     getAssignmentWithFallback,
 } from '@/lib/api/submission-services';
 import { QuestionCard } from '@/components/submissions/QuestionCard';
@@ -335,14 +336,20 @@ export default function AnswerPage({
             // ── Persist plagiarism sources to the new version ─────────────
             // The realtime plagiarism checks stored internetMatches in plagiarismMap,
             // but those aren't saved to the version snapshot automatically.
+            // If the student left the page and came back, internetMatches are lost — re-run
+            // a quick realtime check for those questions to get fresh sources.
             try {
                 const latestVersion = await versionService.getLatestVersion(submissionId);
                 if (latestVersion?.id) {
+                    const savedQuestionIds = new Set<string>();
                     const savePromises: Promise<void>[] = [];
+
+                    // 1. Save sources already in memory from the current session
                     for (const [qId, pResult] of Object.entries(plagiarismMap)) {
                         const matches = pResult?.internetMatches;
                         if (matches && matches.length > 0) {
-                            console.debug('[AnswerPage] Saving', matches.length, 'plagiarism sources for questionId:', qId, '| versionId:', latestVersion.id);
+                            savedQuestionIds.add(qId);
+                            console.debug('[AnswerPage] Saving', matches.length, 'plagiarism sources for questionId:', qId);
                             savePromises.push(
                                 versionService.savePlagiarismSources(submissionId, latestVersion.id, qId, {
                                     sources: matches.map(m => ({
@@ -356,6 +363,41 @@ export default function AnswerPage({
                             );
                         }
                     }
+
+                    // 2. For questions with plagiarism scores but no internetMatches in memory,
+                    //    re-run a quick realtime check to get fresh source details.
+                    for (const [qId, pResult] of Object.entries(plagiarismMap)) {
+                        if (savedQuestionIds.has(qId)) continue;
+                        if (!pResult || pResult.similarityScore <= 0) continue;
+                        const answerText = answerMap[qId];
+                        if (!answerText || answerText.trim().length === 0) continue;
+
+                        savePromises.push(
+                            plagiarismService.checkLiveSimilarity({
+                                sessionId: `submit-refresh-${submissionId}-${qId}`,
+                                studentId,
+                                questionId: qId,
+                                textContent: answerText,
+                                questionText: questions.find(q => q.id === qId)?.text,
+                                submissionId,
+                            }).then(freshResult => {
+                                const fm = freshResult.internetMatches;
+                                if (fm && fm.length > 0) {
+                                    console.debug('[AnswerPage] Re-fetched', fm.length, 'sources for questionId:', qId);
+                                    return versionService.savePlagiarismSources(submissionId, latestVersion.id, qId, {
+                                        sources: fm.map(m => ({
+                                            sourceUrl: m.url,
+                                            sourceTitle: m.title,
+                                            sourceSnippet: m.snippet,
+                                            matchedText: m.matchedStudentText,
+                                            similarityPercentage: m.similarityScore,
+                                        })),
+                                    });
+                                }
+                            }).catch(() => { /* non-fatal */ })
+                        );
+                    }
+
                     if (savePromises.length > 0) {
                         await Promise.all(savePromises);
                         console.debug('[AnswerPage] Plagiarism sources saved for', savePromises.length, 'questions');
