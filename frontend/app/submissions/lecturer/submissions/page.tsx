@@ -187,6 +187,8 @@ export default function LecturerAllSubmissionsPage() {
     const processed = useMemo(() => {
         const list = submissions ?? [];
         const filtered = list.filter((s) => {
+            // Hide drafts unless the lecturer explicitly filters for them
+            if (s.status === 'DRAFT' && filterStatus !== 'DRAFT') return false;
             const q = searchQuery.toLowerCase();
             const matchesSearch = !q || (s.studentName ?? '').toLowerCase().includes(q) || (s.assignmentTitle ?? '').toLowerCase().includes(q) || (s.moduleName ?? s.moduleCode ?? '').toLowerCase().includes(q);
             const matchesStatus =
@@ -210,7 +212,7 @@ export default function LecturerAllSubmissionsPage() {
     }, [submissions, searchQuery, filterStatus, sortBy]);
 
     const stats = useMemo(() => {
-        const list = submissions ?? [];
+        const list = (submissions ?? []).filter((s) => s.status !== 'DRAFT');
         return {
             total: list.length,
             pending: list.filter((s) => s.status === 'PENDING_REVIEW' || s.status === 'SUBMITTED').length,
