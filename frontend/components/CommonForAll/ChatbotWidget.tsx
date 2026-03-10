@@ -9,24 +9,30 @@ export default function ChatbotWidget() {
   const pathname = usePathname();
   const [showProjectTask, setShowProjectTask] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [isStudent, setIsStudent] = useState(false);
+
+  // Check role from localStorage (set during auth verification)
+  useEffect(() => {
+    const role = typeof window !== 'undefined' ? localStorage.getItem('userRole') : null;
+    setIsStudent(role === 'student');
+  }, []);
 
   useEffect(() => {
-    // Check if on projects-and-tasks pages
+    // Only show on learning-analytics and projects-and-tasks pages
     if (pathname?.includes('/projects-and-tasks')) {
       setShowProjectTask(true);
       setShowAnalytics(false);
-    }
-    // Check if on learning-analytics pages
-    else if (pathname?.includes('/learning-analytics')) {
+    } else if (pathname?.includes('/learning-analytics')) {
       setShowAnalytics(true);
       setShowProjectTask(false);
-    }
-    // Default: show both or none based on your preference
-    else {
+    } else {
       setShowProjectTask(false);
       setShowAnalytics(false);
     }
   }, [pathname]);
+
+  // Only render for students
+  if (!isStudent) return null;
 
   return (
     <>

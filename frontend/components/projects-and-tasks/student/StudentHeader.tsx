@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Bell,
-  Settings,
   LogOut,
   ChevronDown,
   Search,
@@ -232,16 +231,6 @@ export default function StudentHeader() {
                     {studentData?.email && (
                       <p className="text-xs text-gray-500">{studentData.email}</p>
                     )}
-                  </div>
-                  <div className="py-2">
-                    <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                      <Settings size={16} />
-                      My Profile
-                    </button>
-                    <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                      <Settings size={16} />
-                      Preferences
-                    </button>
                   </div>
                   <div className="border-t border-gray-100 p-2">
                     <button

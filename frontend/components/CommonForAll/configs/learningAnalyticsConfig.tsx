@@ -1,21 +1,14 @@
 import React from 'react';
 import {
-  LayoutGrid,
   Trello,
-  CheckCircle2,
   Clock,
   AlertCircle,
   Users,
   BarChart3,
-  Lightbulb,
   LayoutDashboard,
-  ListTodo,
-  Settings,
   FileText,
   TrendingUp,
-  Award,
   Target,
-  BookOpen,
 } from 'lucide-react';
 
 interface SubSection {
