@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/db';
 import LecturerAnnotation from '@/model/submissions/annotationModel';
+import SubmissionNotification from '@/model/submissions/submissionNotificationModel';
 import {
   successResponse,
   errorResponse,
@@ -87,6 +88,27 @@ export async function POST(request: NextRequest) {
       selectedText,
       comment,
     });
+
+    // ── Notify the student about the new annotation (best-effort) ──
+    try {
+      const SUBMISSION_API = process.env.NEXT_PUBLIC_SUBMISSION_API_URL ?? 'http://localhost:8081';
+      const subRes = await fetch(`${SUBMISSION_API}/api/submissions/${encodeURIComponent(submissionId)}`);
+      if (subRes.ok) {
+        const subJson = await subRes.json();
+        const sub = subJson?.data ?? subJson;
+        const studentId = sub?.studentId;
+        if (studentId) {
+          await SubmissionNotification.create({
+            recipientId: studentId,
+            submissionId,
+            type: 'annotation_added',
+            title: 'New Annotation',
+            message: `Your lecturer added an annotation on "${sub?.assignmentTitle ?? 'your submission'}".`,
+            link: `/submissions/student/feedback/${submissionId}`,
+          });
+        }
+      }
+    } catch { /* notification is best-effort */ }
 
     return successResponse('Annotation created', annotation, 201);
   } catch (err) {

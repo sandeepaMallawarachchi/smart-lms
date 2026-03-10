@@ -32,6 +32,8 @@ export interface Assignment {
     gradedCount?: number;
     /** 'project' | 'task' from the projects-and-tasks service; undefined for legacy assignments */
     assignmentType?: 'project' | 'task';
+    /** The lecturer who created this assignment */
+    createdBy?: string;
 }
 
 // ─── Submission ──────────────────────────────────────────────
