@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import {
     Home,
@@ -24,16 +24,42 @@ const FloatingNavMenu = () => {
     const pathname = usePathname();
     const [isExpanded, setIsExpanded] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
-    const [position, setPosition] = useState<Position>({ x: 20, y: 100 });
+    const [position, setPosition] = useState<Position>(() => {
+        if (typeof window === 'undefined') {
+            return { x: 20, y: 100 };
+        }
+
+        const savedPos = localStorage.getItem('floatingMenuPos');
+        if (!savedPos) {
+            return { x: 20, y: 100 };
+        }
+
+        try {
+            return JSON.parse(savedPos);
+        } catch {
+            console.error('Failed to parse saved position');
+            return { x: 20, y: 100 };
+        }
+    });
     const [isDragging, setIsDragging] = useState(false);
     const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
-    const [alwaysExpanded, setAlwaysExpanded] = useState(false);
+    const [alwaysExpanded, setAlwaysExpanded] = useState(() => {
+        if (typeof window === 'undefined') {
+            return false;
+        }
+
+        return localStorage.getItem('floatingMenuAlwaysExpanded') === 'true';
+    });
+    const [viewport, setViewport] = useState(() => ({
+        width: typeof window === 'undefined' ? 0 : window.innerWidth,
+        height: typeof window === 'undefined' ? 0 : window.innerHeight
+    }));
     const menuRef = useRef<HTMLDivElement>(null);
 
-    const userRole = localStorage.getItem('userRole');
+    const userRole = typeof window === 'undefined' ? null : localStorage.getItem('userRole');
 
     // Navigation items
-    const navItems = [
+    const navItems = useMemo(() => [
         {
             icon: Home,
             label: 'Home',
@@ -69,27 +95,20 @@ const FloatingNavMenu = () => {
             color: 'from-blue-500 to-cyan-600',
             shortcut: '5'
         }
-    ];
+    ], [userRole]);
 
     const isModulePage = navItems.some(item => pathname.startsWith(item.path));
 
-    // Load saved position and preferences on mount
     useEffect(() => {
-        const savedPos = localStorage.getItem('floatingMenuPos');
-        const savedExpanded = localStorage.getItem('floatingMenuAlwaysExpanded');
+        const handleResize = () => {
+            setViewport({
+                width: window.innerWidth,
+                height: window.innerHeight
+            });
+        };
 
-        if (savedPos) {
-            try {
-                setPosition(JSON.parse(savedPos));
-            } catch (e) {
-                console.error('Failed to parse saved position');
-            }
-        }
-
-        if (savedExpanded === 'true') {
-            setAlwaysExpanded(true);
-            setIsExpanded(true);
-        }
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
     }, []);
 
     // Save position when it changes
@@ -102,9 +121,6 @@ const FloatingNavMenu = () => {
     // Save always expanded preference
     useEffect(() => {
         localStorage.setItem('floatingMenuAlwaysExpanded', alwaysExpanded.toString());
-        if (alwaysExpanded) {
-            setIsExpanded(true);
-        }
     }, [alwaysExpanded]);
 
     // Keyboard shortcuts
@@ -181,7 +197,31 @@ const FloatingNavMenu = () => {
         setShowSettings(false);
     };
 
+    const handleAlwaysExpandedChange = (checked: boolean) => {
+        setAlwaysExpanded(checked);
+        setIsExpanded(prev => (checked ? true : prev));
+    };
+
+    const getMenuPlacement = () => {
+        const isBottomHalf = viewport.height > 0 && position.y > viewport.height * 0.5;
+        const isRightHalf = viewport.width > 0 && position.x > viewport.width * 0.5;
+
+        if (isBottomHalf) {
+            return {
+                className: 'bottom-16 left-1/2 -translate-x-1/2 origin-bottom animate-in slide-in-from-bottom duration-200'
+            };
+        }
+
+        return {
+            className: isRightHalf
+                ? 'right-16 top-0 origin-right animate-in slide-in-from-right duration-200'
+                : 'left-16 top-0 origin-left animate-in slide-in-from-left duration-200'
+        };
+    };
+
     if (!isModulePage) return null;
+
+    const menuPlacement = getMenuPlacement();
 
     return (
         <div
@@ -214,7 +254,7 @@ const FloatingNavMenu = () => {
 
                 {/* Expanded Menu */}
                 {isExpanded && (
-                    <div className="absolute left-16 top-0 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden animate-in slide-in-from-left duration-200">
+                    <div className={`absolute bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden ${menuPlacement.className}`}>
                         {/* Settings Header */}
                         <div className="px-3 py-2 bg-linear-to-r from-gray-50 to-white border-b border-gray-100 flex items-center justify-between">
                             <span className="text-xs font-semibold text-gray-600">Quick Nav</span>
@@ -236,7 +276,7 @@ const FloatingNavMenu = () => {
                                     <input
                                         type="checkbox"
                                         checked={alwaysExpanded}
-                                        onChange={(e) => setAlwaysExpanded(e.target.checked)}
+                                        onChange={(e) => handleAlwaysExpandedChange(e.target.checked)}
                                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                     />
                                     <span className="text-sm text-gray-700">Keep expanded</span>
