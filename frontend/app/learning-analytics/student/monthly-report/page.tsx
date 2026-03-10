@@ -466,10 +466,6 @@ export default function MonthlyReportPage() {
             <p className="text-gray-600">Comprehensive performance analysis for the past 30 days</p>
           </div>
           <div className="flex items-center gap-4">
-            <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-              <Download size={20} />
-              Export PDF
-            </button>
             <div className="text-right">
               <p className="text-sm text-gray-500">Month Ending</p>
               <p className="text-lg font-semibold text-gray-900 flex items-center gap-2">
