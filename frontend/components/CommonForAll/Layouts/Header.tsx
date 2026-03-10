@@ -15,7 +15,6 @@ interface NavItem {
 interface HeaderProps {
   logoText?: string;
   navItems?: NavItem[];
-  showForgotPassword?: boolean;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -36,7 +35,6 @@ const Header: React.FC<HeaderProps> = ({
     { label: 'About Us', href: '/about-us' },
     { label: 'Support', href: '/support' },
   ],
-  showForgotPassword = true,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -180,14 +178,6 @@ const Header: React.FC<HeaderProps> = ({
                     </div>
                     <span>LMS Login</span>
                   </Link>
-                  {showForgotPassword && (
-                    <Link
-                      href="/forgot-password"
-                      className="text-xs text-brand-yellow hover:text-brand-yellow/80 font-medium mt-1"
-                    >
-                      Forgotten your password?
-                    </Link>
-                  )}
                 </div>
               )}
 
@@ -357,14 +347,6 @@ const Header: React.FC<HeaderProps> = ({
                   </div>
                   <span className='flex gap-2'>LMS Login <LogIn /></span>
                 </Link>
-                {showForgotPassword && (
-                  <Link
-                    href="/forgot-password"
-                    className="block text-center text-xs text-brand-yellow hover:text-brand-yellow/80 font-medium"
-                  >
-                    Forgotten your password?
-                  </Link>
-                )}
               </div>
             )}
           </div>
