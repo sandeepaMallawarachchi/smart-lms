@@ -6,11 +6,11 @@ import { useRouter, usePathname } from 'next/navigation';
 import {
   LogOut,
   ChevronDown,
-  Search,
   Menu,
   BookOpen,
 } from 'lucide-react';
 import { useModuleConfig } from '@/hooks/useModuleConfig';
+import UnifiedRoleSearch from '@/components/CommonForAll/Dashboard/UnifiedRoleSearch';
 
 type UserRole = 'student' | 'lecture' | 'superadmin';
 
@@ -569,14 +569,12 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
           </div>
 
           <div className="hidden md:flex flex-1 max-w-md mx-8">
-            <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                placeholder={config.searchPlaceholder}
-                className={`w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-${config.primaryColor}-500`}
-              />
-            </div>
+            <UnifiedRoleSearch
+              userRole={userRole}
+              placeholder={config.searchPlaceholder}
+              selectedStudentCourse={selectedStudentCourse}
+              selectedLecturerCourse={selectedCourse}
+            />
           </div>
 
           <div className="flex items-center gap-6">
