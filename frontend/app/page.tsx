@@ -14,7 +14,7 @@ export default function Home() {
         navItems={[
           { label: 'Home', href: '/' },
           {
-            label: 'Main Components',
+            label: 'Programmes',
             href: '/code-engine/ide',
             hasDropdown: true,
             dropdownItems: [
