@@ -307,6 +307,7 @@ export async function PUT(
               itemName: updatedProject.projectName,
               deadlineDate: updatedProject.deadlineDate,
               deadlineTime: updatedProject.deadlineTime || '23:59',
+              startAt: existingProject.createdAt || updatedProject.createdAt,
             })
           )
         );

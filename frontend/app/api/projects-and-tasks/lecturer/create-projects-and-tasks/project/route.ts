@@ -296,6 +296,7 @@ export async function POST(request: NextRequest) {
               itemName: project.projectName,
               deadlineDate: project.deadlineDate,
               deadlineTime: project.deadlineTime || '23:59',
+              startAt: project.createdAt,
             })
           )
         );

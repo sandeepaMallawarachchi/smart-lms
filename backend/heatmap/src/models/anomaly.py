@@ -84,29 +84,65 @@ class AnomalyDetector:
 
         historical_counts = counts[historical_mask]
         non_zero = historical_counts[historical_counts > 0]
-        if len(non_zero) < 8:
+        if len(non_zero) < 3:
             return anomaly_types
 
+        median = float(np.median(non_zero))
+        mad = float(np.median(np.abs(non_zero - median)))
         q1 = np.percentile(non_zero, 25)
         q3 = np.percentile(non_zero, 75)
         iqr = q3 - q1
 
-        # Fallback when spread is too tight.
+        # Build conservative-but-usable bounds for sparse educational activity.
         if iqr <= 0:
-            upper = np.percentile(non_zero, 95)
-            lower = np.percentile(non_zero, 5)
+            upper = float(np.percentile(non_zero, 90))
+            lower = float(np.percentile(non_zero, 10))
         else:
-            lower = max(0, q1 - 1.5 * iqr)
-            upper = q3 + 1.5 * iqr
+            lower = float(max(0, q1 - 1.5 * iqr))
+            upper = float(q3 + 1.5 * iqr)
+
+        # Sparse histories need a stronger ratio-based fallback or obvious spikes
+        # such as [1, 1, 1, 8] can be missed entirely.
+        sparse_upper = float(max(median * 2.5, median + 3))
+        sparse_lower = float(max(1, median * 0.4))
 
         for idx, value in enumerate(counts):
             if not historical_mask[idx]:
                 continue
             if value <= 0:
                 continue
-            if value > upper:
+
+            is_positive = False
+            is_negative = False
+
+            if len(non_zero) < 6:
+                # For sparse histories, prefer the more sensitive bound.
+                positive_threshold = min(upper, sparse_upper) if upper > 0 else sparse_upper
+                negative_threshold = max(lower, sparse_lower)
+                is_positive = value >= positive_threshold and value > median
+                is_negative = value <= negative_threshold and value < median
+            else:
+                if len(non_zero) < 12:
+                    positive_threshold = min(upper, sparse_upper) if upper > 0 else sparse_upper
+                    negative_threshold = max(lower, sparse_lower)
+                    if mad > 0:
+                        modified_z = 0.6745 * (value - median) / mad
+                        is_positive = modified_z >= 3.0 or (value >= positive_threshold and value > median)
+                        is_negative = modified_z <= -3.0 or (value <= negative_threshold and value < median)
+                    else:
+                        is_positive = value >= positive_threshold and value > median
+                        is_negative = value <= negative_threshold and value < median
+                elif mad > 0:
+                    modified_z = 0.6745 * (value - median) / mad
+                    is_positive = modified_z >= 3.5 or value >= max(upper, median * 2.0)
+                    is_negative = modified_z <= -3.5 or (value <= lower and value < median)
+                else:
+                    is_positive = value >= max(upper, median * 2.0, median + 3)
+                    is_negative = value <= min(lower, max(1, median * 0.5)) and value < median
+
+            if is_positive:
                 anomaly_types[idx] = 'positive'
-            elif value < lower:
+            elif is_negative:
                 anomaly_types[idx] = 'negative'
 
         return anomaly_types

@@ -192,6 +192,7 @@ export async function POST(request: NextRequest) {
               itemName: task.taskName,
               deadlineDate: task.deadlineDate,
               deadlineTime: task.deadlineTime || '23:59',
+              startAt: task.createdAt,
             })
           )
         );
@@ -275,7 +276,6 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
 
 
 

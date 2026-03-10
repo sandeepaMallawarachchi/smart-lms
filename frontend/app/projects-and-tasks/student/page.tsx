@@ -90,10 +90,15 @@ const getDeadlineText = (deadlineDate?: string, deadlineTime?: string) => {
   if (!deadline) return 'No deadline';
 
   const now = new Date();
-  const daysUntil = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfDeadline = new Date(deadline);
+  startOfDeadline.setHours(0, 0, 0, 0);
+  const daysUntil = Math.round((startOfDeadline.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
 
-  if (daysUntil < 0) {
-    return `Overdue by ${Math.abs(daysUntil)} day${Math.abs(daysUntil) === 1 ? '' : 's'}`;
+  if (deadline.getTime() < now.getTime()) {
+    const overdueDays = Math.max(1, Math.ceil((now.getTime() - deadline.getTime()) / (1000 * 60 * 60 * 24)));
+    return `Overdue by ${overdueDays} day${overdueDays === 1 ? '' : 's'}`;
   }
   if (daysUntil === 0) return 'Due today';
   if (daysUntil === 1) return 'Due tomorrow';
