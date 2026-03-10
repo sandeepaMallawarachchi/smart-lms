@@ -2,19 +2,13 @@ package com.smartlms.submission_management_service.controller;
 
 import java.util.List;
 
-import com.smartlms.submission_management_service.dto.FileInfoDTO;
+import com.smartlms.submission_management_service.dto.request.GradeRequest;
 import com.smartlms.submission_management_service.dto.request.SubmissionRequest;
 import com.smartlms.submission_management_service.dto.response.ApiResponse;
 import com.smartlms.submission_management_service.dto.response.SubmissionResponse;
-import com.smartlms.submission_management_service.exception.FileStorageException;
 import com.smartlms.submission_management_service.exception.ResourceNotFoundException;
-import com.smartlms.submission_management_service.model.SubmissionFile;
-import com.smartlms.submission_management_service.service.FileStorageService;
 import com.smartlms.submission_management_service.service.SubmissionService;
-import org.springframework.core.io.Resource;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,10 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MaxUploadSizeExceededException;
-import org.springframework.web.multipart.MultipartFile;
 
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -59,9 +50,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class SubmissionController {
 
-    // Service layer dependencies injected via constructor
     private final SubmissionService submissionService;
-    private final FileStorageService fileStorageService;
 
     /**
      * Creates a new submission for a student.
@@ -180,12 +169,14 @@ public class SubmissionController {
     public ResponseEntity<ApiResponse<List<SubmissionResponse>>> getAllSubmissions(
             @RequestParam(required = false) String studentId,
             @RequestParam(required = false) String assignmentId) {
-        log.info("GET /api/submissions - Fetching submissions");
+        log.info("GET /api/submissions - studentId={} assignmentId={}", studentId, assignmentId);
 
         List<SubmissionResponse> submissions;
 
-        // Priority: studentId > assignmentId > all
-        if (studentId != null) {
+        // Support both params together (used by getOrCreateDraftSubmission on the frontend)
+        if (studentId != null && assignmentId != null) {
+            submissions = submissionService.getSubmissionsByStudentIdAndAssignmentId(studentId, assignmentId);
+        } else if (studentId != null) {
             submissions = submissionService.getSubmissionsByStudentId(studentId);
         } else if (assignmentId != null) {
             submissions = submissionService.getSubmissionsByAssignmentId(assignmentId);
@@ -309,9 +300,7 @@ public class SubmissionController {
      * POST /api/submissions/{id}/grade?grade=85.5&feedback=Good work
      *
      * @param id The ID of the submission to grade
-     * @param grade The numerical grade to assign (required)
-     * @param feedback Optional text feedback for the student
-     *
+     * @param request The numerical grade to assign (required)
      * @return ResponseEntity containing:
      *         - HTTP 200 OK status
      *         - ApiResponse with graded SubmissionResponse
@@ -335,200 +324,10 @@ public class SubmissionController {
     @PostMapping("/{id}/grade")
     public ResponseEntity<ApiResponse<SubmissionResponse>> gradeSubmission(
             @PathVariable Long id,
-            @RequestParam Double grade,
-            @RequestParam(required = false) String feedback) {
+            @RequestBody GradeRequest request) {
         log.info("POST /api/submissions/{}/grade - Grading submission", id);
-        SubmissionResponse response = submissionService.gradeSubmission(id, grade, feedback);
+        SubmissionResponse response = submissionService.gradeSubmission(id, request);
         return ResponseEntity.ok(ApiResponse.success("Submission graded successfully", response));
     }
 
-    // ==================== FILE MANAGEMENT ENDPOINTS ====================
-
-    /**
-     * Uploads a file to a submission.
-
-     * This endpoint handles file uploads for student submissions.
-     * Files are stored on the filesystem with unique identifiers.
-
-     * POST /api/submissions/{id}/files
-     * Content-Type: multipart/form-data
-     *
-     * @param id The ID of the submission to attach the file to
-     * @param file The multipart file being uploaded
-     *
-     * @return ResponseEntity containing:
-     *         - HTTP 201 CREATED status
-     *         - ApiResponse with FileInfoDTO containing file metadata
-     *
-     * @throws ResourceNotFoundException if submission doesn't exist
-     * @throws FileStorageException if file cannot be saved
-     * @throws MaxUploadSizeExceededException if file exceeds 50MB limit
-
-     * File Processing:
-     * 1. Validates filename (checks for path traversal attempts)
-     * 2. Generates unique stored filename using UUID
-     * 3. Creates submission-specific directory
-     * 4. Saves file to filesystem
-     * 5. Stores metadata in database
-     * 6. Associates file with submission
-
-     * Supported File Types:
-     * - Code files (.java, .py, .js, .cpp, etc.)
-     * - Documents (.pdf, .docx, .txt)
-     * - Archives (.zip, .rar)
-     * - Images (for documentation)
-
-     * Example: POST /api/submissions/1/files
-     * Form Data: file=@Main.java
-     *
-     * Response includes download URL for the uploaded file
-     */
-    @PostMapping("/{id}/files")
-    public ResponseEntity<ApiResponse<FileInfoDTO>> uploadFile(
-            @PathVariable Long id,
-            @RequestParam("file") MultipartFile file) {
-        log.info("POST /api/submissions/{}/files - Uploading file", id);
-        FileInfoDTO fileInfo = fileStorageService.uploadFile(id, file);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("File uploaded successfully", fileInfo));
-    }
-
-    /**
-     * Retrieves list of files attached to a submission.
-
-     * Returns metadata for all files associated with a submission,
-     * including file names, sizes, types, and download URLs.
-
-     * GET /api/submissions/{submissionId}/files
-     *
-     * @param submissionId The ID of the submission
-     *
-     * @return ResponseEntity containing:
-     *         - HTTP 200 OK status
-     *         - ApiResponse with List of FileInfoDTO
-
-     * FileInfoDTO includes:
-     * - id: Database ID of the file record
-     * - originalFilename: Name of file as uploaded
-     * - storedFilename: UUID-based filename on server
-     * - fileSize: Size in bytes
-     * - contentType: MIME type
-     * - fileExtension: File extension
-     * - uploadedAt: Timestamp of upload
-     * - downloadUrl: URL to download the file
-
-     * Example: GET /api/submissions/1/files
-     * Returns array of file metadata objects
-     */
-    @GetMapping("/{submissionId}/files")
-    public ResponseEntity<ApiResponse<List<FileInfoDTO>>> getFiles(@PathVariable Long submissionId) {
-        log.info("GET /api/submissions/{}/files - Fetching files", submissionId);
-        List<FileInfoDTO> files = fileStorageService.getFilesBySubmissionId(submissionId);
-        return ResponseEntity.ok(ApiResponse.success(files));
-    }
-
-    /**
-     * Downloads a specific file from a submission.
-
-     * This endpoint streams the file content directly to the client
-     * with appropriate headers for download.
-
-     * GET /api/submissions/{submissionId}/files/{fileId}
-     *
-     * @param submissionId The ID of the submission (for validation)
-     * @param fileId The ID of the file to download
-     * @param request HttpServletRequest for additional context
-     *
-     * @return ResponseEntity containing:
-     *         - HTTP 200 OK status
-     *         - Resource (file content as stream)
-     *         - Content-Type header set to file's MIME type
-     *         - Content-Disposition header for download
-     *
-     * @throws ResourceNotFoundException if file doesn't exist
-
-     * Response Headers:
-     * - Content-Type: Determined from file metadata (e.g., application/pdf)
-     * - Content-Disposition: attachment; filename="originalname.ext"
-
-     * Security Considerations:
-     * - Validates file belongs to specified submission
-     * - Uses stored filename to prevent path traversal
-     * - Stream-based download for memory efficiency
-
-     * Example: GET /api/submissions/1/files/5
-     * Downloads the file with ID 5 from submission 1
-
-     * Used By:
-     * - Students downloading their submitted files
-     * - Instructors downloading submissions for review
-     * - Plagiarism detection service
-     * - AI feedback service
-     */
-    @GetMapping("/{submissionId}/files/{fileId}")
-    public ResponseEntity<Resource> downloadFile(
-            @PathVariable Long submissionId,
-            @PathVariable Long fileId,
-            HttpServletRequest request) {
-        log.info("GET /api/submissions/{}/files/{} - Downloading file", submissionId, fileId);
-
-        // Load file as a resource for streaming
-        Resource resource = fileStorageService.loadFileAsResource(fileId);
-
-        // Get metadata for content type and filename
-        SubmissionFile fileMetadata = fileStorageService.getFileMetadata(fileId);
-
-        // Determine content type, default to binary if unknown
-        String contentType = fileMetadata.getContentType();
-        if (contentType == null) {
-            contentType = "application/octet-stream";
-        }
-
-        // Build response with appropriate headers for file download
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(contentType))
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + fileMetadata.getOriginalFilename() + "\"")
-                .body(resource);
-    }
-
-    /**
-     * Deletes a file from a submission.
-
-     * This endpoint removes a file both from the database and filesystem.
-
-     * DELETE /api/submissions/{submissionId}/files/{fileId}
-     *
-     * @param submissionId The ID of the submission (for validation)
-     * @param fileId The ID of the file to delete
-     *
-     * @return ResponseEntity containing:
-     *         - HTTP 200 OK status
-     *         - ApiResponse with success message
-     *
-     * @throws ResourceNotFoundException if file doesn't exist
-     * @throws FileStorageException if file cannot be deleted from filesystem
-
-     * Deletion Process:
-     * 1. Verifies file exists in database
-     * 2. Deletes physical file from filesystem
-     * 3. Removes database record
-     * 4. Updates submission's file count
-
-     * Business Rules:
-     * - Can only delete files from DRAFT submissions
-     * - Submitted files should be locked
-     * - Verify user has permission to delete
-
-     * Example: DELETE /api/submissions/1/files/5
-     * Removes file 5 from submission 1
-     */
-    @DeleteMapping("/{submissionId}/files/{fileId}")
-    public ResponseEntity<ApiResponse<Void>> deleteFile(
-            @PathVariable Long submissionId,
-            @PathVariable Long fileId) {
-        log.info("DELETE /api/submissions/{}/files/{} - Deleting file", submissionId, fileId);
-        fileStorageService.deleteFile(fileId);
-        return ResponseEntity.ok(ApiResponse.success("File deleted successfully", null));
-    }
 }

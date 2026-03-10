@@ -475,9 +475,8 @@ public class FileStorageService {
                     .submission(submission)                  // Parent relationship
                     .build();
 
-            // Step 7: Update submission (maintains bidirectional relationship)
-            submission.addFile(submissionFile);  // Helper method sets both sides
-            submissionRepository.save(submission);  // Cascades to SubmissionFile
+            // Step 7: Persist the file record directly
+            submissionFileRepository.save(submissionFile);
 
             log.info("File uploaded successfully: {}", storedFilename);
 

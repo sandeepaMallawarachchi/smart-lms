@@ -42,6 +42,13 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("File size exceeds maximum allowed limit (50MB)"));
     }
 
+    @ExceptionHandler(DeadlineNotPassedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDeadlineNotPassedException(DeadlineNotPassedException ex) {
+        log.warn("Lecturer action blocked — deadline not yet passed: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException ex) {
         log.error("Invalid argument: {}", ex.getMessage());

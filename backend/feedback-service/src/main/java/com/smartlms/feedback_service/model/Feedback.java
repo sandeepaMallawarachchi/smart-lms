@@ -3,7 +3,9 @@ package com.smartlms.feedback_service.model;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -61,8 +63,8 @@ public class Feedback {
     @Column(name = "generation_time_ms")
     private Long generationTimeMs;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "metadata", columnDefinition = "jsonb")
-    @Convert(converter = MapToJsonConverter.class)
     private Map<String, Object> metadata = new HashMap<>();
 
     @Column(name = "is_ai_generated")

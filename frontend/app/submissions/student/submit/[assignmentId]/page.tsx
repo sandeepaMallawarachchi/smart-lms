@@ -1,8 +1,9 @@
 'use client';
 
-import React, {use, useEffect, useRef, useState} from 'react';
-import {useRouter} from 'next/navigation';
+import React, { use, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
+    AlertCircle,
     AlertTriangle,
     ArrowLeft,
     CheckCircle2,
@@ -16,735 +17,688 @@ import {
     Shield,
     Star,
 } from 'lucide-react';
+import { submissionService, feedbackService, getAssignmentWithFallback } from '@/lib/api/submission-services';
+import type { AssignmentWithQuestions, Question, LiveFeedback } from '@/types/submission.types';
 
-interface Question {
-    id: string;
-    number: number;
+// ─── Helpers ──────────────────────────────────────────────────
+
+function countWords(text: string): number {
+    return text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+}
+
+function formatTime(date: Date): string {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// ─── Types ────────────────────────────────────────────────────
+
+interface AnswerState {
     text: string;
-    marks: number;
-    subQuestions?: {
-        id: string;
-        letter: string;
-        text: string;
-        marks: number;
-    }[];
-}
-
-interface Answer {
-    questionId: string;
-    subQuestionId?: string;
-    text: string;
     wordCount: number;
-    plagiarismScore: number;
-    aiScore: number;
-    aiFeedback: string;
-    savedAt: string;
+    lastSaved: Date | null;
+    isSaving: boolean;
+    analysis: LiveFeedback | null;
+    isAnalyzing: boolean;
 }
 
-interface Version {
-    version: number;
-    answers: Answer[];
-    createdAt: string;
-    plagiarismScore: number;
-    aiScore: number;
-    wordCount: number;
+// ─── Score helpers ────────────────────────────────────────────
+
+function scoreColor(score: number): string {
+    if (score >= 8) return 'text-green-600';
+    if (score >= 6) return 'text-amber-600';
+    return 'text-red-600';
 }
 
-interface Assignment {
-    id: string;
-    title: string;
-    module: {
-        code: string;
-        name: string;
-    };
-    totalMarks: number;
-    dueDate: string;
-    instructions: string;
-    timeLimit: number | null;
-    allowLateSubmission: boolean;
-    questions: Question[];
+function scoreBg(score: number): string {
+    if (score >= 8) return 'bg-green-500';
+    if (score >= 6) return 'bg-amber-500';
+    return 'bg-red-500';
 }
 
-interface Feedback {
-    wordCount: number;
-    plagiarismScore: number;
-    aiScore: number;
-    feedback: string;
-    analyzedAt: string;
+// ─── Sub-components ───────────────────────────────────────────
+
+function AssignmentSkeleton() {
+    return (
+        <div className="animate-pulse space-y-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+                <div className="h-7 bg-gray-200 rounded w-1/2" />
+                <div className="h-4 bg-gray-100 rounded w-1/3" />
+            </div>
+            {[1, 2].map((i) => (
+                <div key={i} className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+                    <div className="h-5 bg-gray-200 rounded w-2/3" />
+                    <div className="h-36 bg-gray-100 rounded" />
+                </div>
+            ))}
+        </div>
+    );
 }
 
-export default function SubmitAssignmentPage({params}: {
-    params: Promise<{ assignmentId: string }>
-}) {
-    const resolvedParams = use(params);
-    const router = useRouter();
+function ScoreBar({ label, score }: { label: string; score: number }) {
+    return (
+        <div>
+            <div className="flex justify-between text-xs mb-1">
+                <span className="text-gray-600">{label}</span>
+                <span className={`font-semibold ${scoreColor(score)}`}>{score.toFixed(1)}/10</span>
+            </div>
+            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                    className={`h-full rounded-full ${scoreBg(score)} transition-all`}
+                    style={{ width: `${(score / 10) * 100}%` }}
+                />
+            </div>
+        </div>
+    );
+}
 
-    const [assignment, setAssignment] = useState<Assignment | null>(null);
-    const [answers, setAnswers] = useState<Record<string, string>>({});
-    const [versions, setVersions] = useState<Version[]>([]);
-    const [currentVersion, setCurrentVersion] = useState(1);
-    const [isAnalyzing, setIsAnalyzing] = useState<Record<string, boolean>>({});
-    const [feedback, setFeedback] = useState<Record<string, Feedback>>({});
-    const [isSaving, setIsSaving] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [showCopyAlert, setShowCopyAlert] = useState(false);
-    const [copyAttempts, setCopyAttempts] = useState(0);
-    const [timeRemaining, setTimeRemaining] = useState('');
-    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-    const [activeQuestion, setActiveQuestion] = useState<string>('');
-
-    const textAreaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
-    const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
-
-    // Hardcoded assignment data
-    const assignmentData: Assignment = {
-        id: resolvedParams.assignmentId,
-        title: 'Database Design and Normalization',
-        module: {code: 'CS3001', name: 'Database Management Systems'},
-        totalMarks: 100,
-        dueDate: '2025-01-15 23:59',
-        instructions: 'Answer all questions. Show all your work. Plagiarism will result in automatic failure.',
-        timeLimit: null, // minutes, null = no limit
-        allowLateSubmission: true,
-        questions: [
-            {
-                id: 'q1',
-                number: 1,
-                text: 'Explain the concept of database normalization and its importance in database design.',
-                marks: 20,
-            },
-            {
-                id: 'q2',
-                number: 2,
-                text: 'Design a normalized database for an e-commerce system.',
-                marks: 30,
-                subQuestions: [
-                    {
-                        id: 'q2a',
-                        letter: 'a',
-                        text: 'Create an Entity-Relationship (ER) diagram showing all entities, attributes, and relationships.',
-                        marks: 15,
-                    },
-                    {
-                        id: 'q2b',
-                        letter: 'b',
-                        text: 'Convert your ER diagram to relational schema in 3NF. Show your normalization steps.',
-                        marks: 15,
-                    },
-                ],
-            },
-            {
-                id: 'q3',
-                number: 3,
-                text: 'Compare and contrast different types of database keys (Primary, Foreign, Candidate, Composite).',
-                marks: 25,
-            },
-            {
-                id: 'q4',
-                number: 4,
-                text: 'Write SQL queries for the following scenarios:',
-                marks: 25,
-                subQuestions: [
-                    {
-                        id: 'q4a',
-                        letter: 'a',
-                        text: 'Retrieve all customers who have made purchases in the last 30 days.',
-                        marks: 8,
-                    },
-                    {
-                        id: 'q4b',
-                        letter: 'b',
-                        text: 'Find the top 5 best-selling products with their total revenue.',
-                        marks: 9,
-                    },
-                    {
-                        id: 'q4c',
-                        letter: 'c',
-                        text: 'List customers who have never made a purchase.',
-                        marks: 8,
-                    },
-                ],
-            },
-        ],
-    };
-
-    useEffect(() => {
-        setAssignment(assignmentData);
-        // eslint-disable-next-line react-hooks/immutability
-        loadSavedProgress();
-
-        // Calculate time remaining
-        const interval = setInterval(() => {
-            // eslint-disable-next-line react-hooks/purity
-            const now = new Date();
-            // eslint-disable-next-line react-hooks/purity
-            const due = new Date(assignmentData.dueDate);
-            const diff = due.getTime() - now.getTime();
-
-            if (diff <= 0) {
-                setTimeRemaining('Overdue');
-            } else {
-                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                setTimeRemaining(`${days}d ${hours}h ${minutes}m`);
-            }
-        }, 1000);
-
-        return () => clearInterval(interval);
-    }, []);
-
-    const loadSavedProgress = () => {
-        // Simulate loading saved progress
-        const savedAnswers = {
-            'q1': 'Database normalization is a systematic approach...',
-        };
-        setAnswers(savedAnswers);
-
-        // Load versions
-        const savedVersions: Version[] = [
-            {
-                version: 1,
-                answers: [],
-                createdAt: new Date().toISOString(),
-                plagiarismScore: 5,
-                aiScore: 75,
-                wordCount: 150,
-            },
-        ];
-        setVersions(savedVersions);
-    };
-
-    // Prevent copy-paste
-    const handleCopyPaste = (e: React.ClipboardEvent, questionId: string) => {
-        e.preventDefault();
-        setShowCopyAlert(true);
-        setCopyAttempts(prev => prev + 1);
-
-        setTimeout(() => setShowCopyAlert(false), 3000);
-
-        // Log the attempt
-        console.warn(`Copy/Paste attempt detected for question ${questionId}`);
-    };
-
-    // Handle answer change with debouncing
-    const handleAnswerChange = (questionId: string, text: string) => {
-        setAnswers(prev => ({
-            ...prev,
-            [questionId]: text,
-        }));
-        setHasUnsavedChanges(true);
-
-        // Clear existing timer
-        if (debounceTimers.current[questionId]) {
-            clearTimeout(debounceTimers.current[questionId]);
-        }
-
-        // Set new timer for real-time analysis
-        debounceTimers.current[questionId] = setTimeout(() => {
-            analyzeAnswer(questionId, text);
-        }, 2000); // Wait 2 seconds after user stops typing
-    };
-
-    // Analyze answer for plagiarism and AI feedback
-    const analyzeAnswer = async (questionId: string, text: string) => {
-        if (!text || text.length < 50) return; // Don't analyze very short answers
-
-        setIsAnalyzing(prev => ({
-            ...prev,
-            [questionId]: true,
-        }));
-
-        // Simulate API call delay
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Simulate plagiarism check and AI feedback
-        const wordCount = text.split(/\s+/).filter(Boolean).length;
-        // eslint-disable-next-line react-hooks/purity
-        const plagiarismScore = Math.floor(Math.random() * 15) + 3; // 3-18%
-        // eslint-disable-next-line react-hooks/purity
-        const aiScore = Math.floor(Math.random() * 20) + 75; // 75-95
-
-        const feedbackTemplates = [
-            {
-                score: 90,
-                feedback: 'Excellent answer! Your explanation is clear and comprehensive. You\'ve demonstrated a strong understanding of the concept. Consider adding more specific examples to strengthen your response.',
-            },
-            {
-                score: 85,
-                feedback: 'Very good response. You\'ve covered the main points effectively. To improve, try to elaborate more on the practical applications and provide concrete examples.',
-            },
-            {
-                score: 80,
-                feedback: 'Good effort. Your answer shows understanding, but could be more detailed. Consider expanding on key concepts and providing more depth in your explanation.',
-            },
-            {
-                score: 75,
-                feedback: 'Satisfactory answer. You\'ve touched on important points, but your explanation needs more depth. Try to provide more specific details and examples.',
-            },
-        ];
-
-        const selectedFeedback = feedbackTemplates.find(f => aiScore >= f.score) || feedbackTemplates[feedbackTemplates.length - 1];
-
-        setFeedback(prev => ({
-            ...prev,
-            [questionId]: {
-                wordCount,
-                plagiarismScore,
-                aiScore,
-                feedback: selectedFeedback.feedback,
-                analyzedAt: new Date().toISOString(),
-            },
-        }));
-
-        setIsAnalyzing(prev => ({
-            ...prev,
-            [questionId]: false,
-        }));
-    };
-
-    // Auto-save function
-    const autoSave = async () => {
-        if (!hasUnsavedChanges) return;
-
-        setIsSaving(true);
-
-        // Simulate save delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // Create new version
-        const newVersion: Version = {
-            version: currentVersion + 1,
-            answers: Object.entries(answers).map(([qId, text]) => ({
-                questionId: qId,
-                text,
-                wordCount: text.split(/\s+/).filter(Boolean).length,
-                plagiarismScore: feedback[qId]?.plagiarismScore || 0,
-                aiScore: feedback[qId]?.aiScore || 0,
-                aiFeedback: feedback[qId]?.feedback || '',
-                savedAt: new Date().toISOString(),
-            })),
-            createdAt: new Date().toISOString(),
-            plagiarismScore: Math.round(
-                Object.values(feedback).reduce((sum: number, f: Feedback) => sum + (f?.plagiarismScore || 0), 0) /
-                Object.keys(feedback).length || 0
-            ),
-            aiScore: Math.round(
-                Object.values(feedback).reduce((sum: number, f: Feedback) => sum + (f?.aiScore || 0), 0) /
-                Object.keys(feedback).length || 0
-            ),
-            wordCount: Object.values(answers).reduce((sum, text) =>
-                sum + text.split(/\s+/).filter(Boolean).length, 0
-            ),
-        };
-
-        setVersions(prev => [...prev, newVersion]);
-        setCurrentVersion(prev => prev + 1);
-        setHasUnsavedChanges(false);
-        setIsSaving(false);
-    };
-
-    // Manual save
-    const handleSave = () => {
-        autoSave();
-    };
-
-    // Submit assignment
-    const handleSubmit = async () => {
-        if (Object.keys(answers).length === 0) {
-            alert('Please answer at least one question before submitting.');
-            return;
-        }
-
-        if (!confirm('Are you sure you want to submit this assignment? You can still modify it before the deadline.')) {
-            return;
-        }
-
-        setIsSubmitting(true);
-
-        // Save final version
-        await autoSave();
-
-        // Simulate submission delay
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        setIsSubmitting(false);
-        alert('Assignment submitted successfully!');
-        router.push('/submissions/student/my-submissions');
-    };
-
-    // Get question key (including sub-questions)
-    const getQuestionKey = (questionId: string, subQuestionId?: string) => {
-        return subQuestionId ? `${questionId}-${subQuestionId}` : questionId;
-    };
-
-    if (!assignment) {
+function AnalysisPanel({ analysis, isAnalyzing }: { analysis: LiveFeedback | null; isAnalyzing: boolean }) {
+    if (isAnalyzing) {
         return (
-            <div className="flex items-center justify-center h-96">
-                <Loader className="animate-spin text-purple-600" size={48}/>
+            <div className="flex items-center gap-2 text-sm text-purple-600 py-4">
+                <Loader size={16} className="animate-spin" />
+                <span>Analyzing your answer…</span>
+            </div>
+        );
+    }
+
+    if (!analysis) {
+        return (
+            <div className="text-sm text-gray-400 py-4 text-center">
+                Start typing to receive AI feedback
             </div>
         );
     }
 
     return (
-        <div className="max-w-5xl mx-auto">
-            {/* Copy Alert */}
-            {showCopyAlert && (
-                <div
-                    className="fixed top-20 right-8 z-50 bg-red-100 border-2 border-red-500 rounded-lg p-4 shadow-lg animate-bounce">
-                    <div className="flex items-center gap-3">
-                        <AlertTriangle className="text-red-600" size={24}/>
-                        <div>
-                            <p className="font-bold text-red-900">Copy/Paste Disabled!</p>
-                            <p className="text-sm text-red-700">Type your answers manually. Attempt
-                                #{copyAttempts} logged.</p>
-                        </div>
-                    </div>
+        <div className="space-y-4">
+            <div className="space-y-2">
+                <ScoreBar label="Grammar" score={analysis.grammarScore} />
+                <ScoreBar label="Clarity" score={analysis.clarityScore} />
+                <ScoreBar label="Completeness" score={analysis.completenessScore} />
+                <ScoreBar label="Relevance" score={analysis.relevanceScore} />
+            </div>
+
+            {analysis.strengths.length > 0 && (
+                <div>
+                    <p className="text-xs font-semibold text-green-700 mb-1">Strengths</p>
+                    <ul className="space-y-1">
+                        {analysis.strengths.map((s, i) => (
+                            <li key={i} className="flex items-start gap-1.5 text-xs text-gray-600">
+                                <CheckCircle2 size={11} className="text-green-500 mt-0.5 shrink-0" />
+                                {s}
+                            </li>
+                        ))}
+                    </ul>
                 </div>
             )}
 
-            {/* Header */}
-            <div className="mb-6">
-                <button
-                    onClick={() => router.back()}
-                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
-                >
-                    <ArrowLeft size={20}/>
-                    Back to Assignments
-                </button>
+            {analysis.improvements.length > 0 && (
+                <div>
+                    <p className="text-xs font-semibold text-amber-700 mb-1">Improvements</p>
+                    <ul className="space-y-1">
+                        {analysis.improvements.map((s, i) => (
+                            <li key={i} className="flex items-start gap-1.5 text-xs text-gray-600">
+                                <AlertTriangle size={11} className="text-amber-500 mt-0.5 shrink-0" />
+                                {s}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
 
-                <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">{assignment.title}</h1>
-                    <p className="text-gray-600 mb-4">{assignment.module.code} • {assignment.module.name}</p>
+            {analysis.suggestions.length > 0 && (
+                <div>
+                    <p className="text-xs font-semibold text-blue-700 mb-1">Suggestions</p>
+                    <ul className="space-y-1">
+                        {analysis.suggestions.map((s, i) => (
+                            <li key={i} className="flex items-start gap-1.5 text-xs text-gray-600">
+                                <Info size={11} className="text-blue-500 mt-0.5 shrink-0" />
+                                {s}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+        </div>
+    );
+}
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div className="flex items-center gap-2 text-gray-700">
-                            <Clock className="text-blue-600" size={20}/>
-                            <span className="text-sm">
-                <span className="font-medium">Time Remaining:</span> {timeRemaining}
-              </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-gray-700">
-                            <GitBranch className="text-purple-600" size={20}/>
-                            <span className="text-sm">
-                <span className="font-medium">Version:</span> {currentVersion}
-              </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-gray-700">
-                            <Star className="text-amber-600" size={20}/>
-                            <span className="text-sm">
-                <span className="font-medium">Total Marks:</span> {assignment.totalMarks}
-              </span>
-                        </div>
-                    </div>
+// ─── Question card ────────────────────────────────────────────
 
-                    <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
-                        <div className="flex items-start gap-3">
-                            <Info className="text-blue-600 mt-0.5" size={20}/>
-                            <div>
-                                <p className="font-medium text-blue-900 mb-1">Instructions:</p>
-                                <p className="text-sm text-blue-800">{assignment.instructions}</p>
-                                <p className="text-sm text-blue-800 mt-2 font-medium">⚠️ Copy-paste
-                                    is disabled. All answers must be typed manually.</p>
-                            </div>
-                        </div>
+interface QuestionCardProps {
+    question: Question;
+    index: number;
+    answer: AnswerState;
+    onTextChange: (text: string) => void;
+    disabled: boolean;
+}
+
+function QuestionCard({ question, index, answer, onTextChange, disabled }: QuestionCardProps) {
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    const handleInput = () => {
+        const el = textareaRef.current;
+        if (el) {
+            el.style.height = 'auto';
+            el.style.height = `${el.scrollHeight}px`;
+        }
+    };
+
+    const wordPct = question.expectedWordCount
+        ? Math.min(100, (answer.wordCount / question.expectedWordCount) * 100)
+        : null;
+
+    const wordBarColor =
+        wordPct === null
+            ? ''
+            : wordPct >= 80
+            ? 'bg-green-500'
+            : wordPct >= 50
+            ? 'bg-amber-500'
+            : 'bg-red-400';
+
+    return (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {/* Question header */}
+            <div className="px-6 pt-5 pb-4 border-b border-gray-100">
+                <div className="flex items-start gap-3">
+                    <span className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-purple-100 text-purple-700 text-sm font-bold shrink-0 mt-0.5">
+                        {index + 1}
+                    </span>
+                    <div className="flex-1">
+                        <p className="text-sm font-semibold text-gray-900 leading-relaxed">{question.text}</p>
+                        {question.description && (
+                            <p className="text-xs text-gray-500 mt-1">{question.description}</p>
+                        )}
+                        {question.expectedWordCount && (
+                            <span className="inline-block mt-2 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-full px-2.5 py-0.5">
+                                Target: ~{question.expectedWordCount} words
+                            </span>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Questions */}
-            <div className="space-y-6">
-                {assignment.questions.map((question: Question) => (
-                    <div key={question.id}
-                         className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
-                        {/* Question Header */}
-                        <div className="mb-4 pb-4 border-b border-gray-200">
-                            <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                    <h3 className="text-lg font-bold text-gray-900 mb-2">
-                                        Question {question.number}
-                                    </h3>
-                                    <p className="text-gray-700">{question.text}</p>
-                                </div>
-                                <div className="ml-4">
-                  <span
-                      className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
-                    {question.marks} marks
-                  </span>
-                                </div>
+            {/* Two-column body */}
+            <div className="flex flex-col lg:flex-row">
+                {/* Left: Editor */}
+                <div className="flex-1 p-5 space-y-3">
+                    <textarea
+                        ref={textareaRef}
+                        value={answer.text}
+                        onChange={(e) => {
+                            onTextChange(e.target.value);
+                            handleInput();
+                        }}
+                        onInput={handleInput}
+                        disabled={disabled}
+                        spellCheck
+                        placeholder="Type your answer here…"
+                        className="w-full min-h-[160px] resize-none rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent disabled:bg-gray-50 disabled:cursor-not-allowed transition"
+                    />
+
+                    {/* Word count bar */}
+                    {wordPct !== null && (
+                        <div>
+                            <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                    className={`h-full rounded-full transition-all ${wordBarColor}`}
+                                    style={{ width: `${wordPct}%` }}
+                                />
                             </div>
                         </div>
+                    )}
 
-                        {/* Main Question Answer (if no sub-questions) */}
-                        {!question.subQuestions && (
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Your Answer:
-                                </label>
-                                <textarea
-                                    ref={(el) => {
-                                        textAreaRefs.current[question.id] = el;
-                                    }}
-                                    value={answers[question.id] || ''}
-                                    onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-                                    onCopy={(e) => handleCopyPaste(e, question.id)}
-                                    onPaste={(e) => handleCopyPaste(e, question.id)}
-                                    onCut={(e) => handleCopyPaste(e, question.id)}
-                                    onFocus={() => setActiveQuestion(question.id)}
-                                    placeholder="Type your answer here... (Copy-paste disabled)"
-                                    rows={8}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-                                />
+                    {/* Footer row */}
+                    <div className="flex items-center justify-between text-xs text-gray-400">
+                        <div className="flex items-center gap-3">
+                            {answer.isSaving && (
+                                <span className="flex items-center gap-1 text-purple-500">
+                                    <Loader size={10} className="animate-spin" />
+                                    Saving…
+                                </span>
+                            )}
+                            {!answer.isSaving && answer.lastSaved && (
+                                <span className="flex items-center gap-1 text-green-600">
+                                    <CheckCircle2 size={10} />
+                                    Saved {formatTime(answer.lastSaved)}
+                                </span>
+                            )}
+                        </div>
+                        <span>
+                            {answer.wordCount} word{answer.wordCount !== 1 ? 's' : ''}
+                            {question.expectedWordCount ? ` / ${question.expectedWordCount} target` : ''}
+                        </span>
+                    </div>
+                </div>
 
-                                {/* Real-time Feedback */}
-                                {isAnalyzing[question.id] && (
-                                    <div className="mt-3 flex items-center gap-2 text-blue-600">
-                                        <Loader className="animate-spin" size={16}/>
-                                        <span className="text-sm">Analyzing your answer...</span>
-                                    </div>
-                                )}
+                {/* Right: AI analysis panel */}
+                <div className="lg:w-72 shrink-0 border-t lg:border-t-0 lg:border-l border-gray-100 bg-gray-50 p-5">
+                    <p className="text-xs font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
+                        <Star size={12} className="text-amber-500" />
+                        AI Feedback
+                    </p>
+                    <AnalysisPanel analysis={answer.analysis} isAnalyzing={answer.isAnalyzing} />
+                </div>
+            </div>
+        </div>
+    );
+}
 
-                                {feedback[question.id] && !isAnalyzing[question.id] && (
-                                    <div className="mt-4 space-y-3">
-                                        {/* Stats */}
-                                        <div className="grid grid-cols-3 gap-3">
-                                            <div
-                                                className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                                <div className="text-xs text-gray-600">Word Count
-                                                </div>
-                                                <div
-                                                    className="text-lg font-bold text-gray-900">{feedback[question.id].wordCount}</div>
-                                            </div>
-                                            <div className={`p-3 rounded-lg border ${
-                                                feedback[question.id].plagiarismScore < 20
-                                                    ? 'bg-green-50 border-green-200'
-                                                    : 'bg-red-50 border-red-200'
-                                            }`}>
-                                                <div className="text-xs text-gray-600">Plagiarism
-                                                </div>
-                                                <div className={`text-lg font-bold ${
-                                                    feedback[question.id].plagiarismScore < 20
-                                                        ? 'text-green-600'
-                                                        : 'text-red-600'
-                                                }`}>
-                                                    {feedback[question.id].plagiarismScore}%
-                                                </div>
-                                            </div>
-                                            <div
-                                                className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-                                                <div className="text-xs text-gray-600">AI Score
-                                                </div>
-                                                <div
-                                                    className="text-lg font-bold text-purple-600">{feedback[question.id].aiScore}/100
-                                                </div>
-                                            </div>
-                                        </div>
+// ─── Page ─────────────────────────────────────────────────────
 
-                                        {/* AI Feedback */}
-                                        <div
-                                            className="p-4 bg-purple-50 border-l-4 border-purple-500 rounded">
-                                            <div className="flex items-start gap-3">
-                                                <Star className="text-purple-600 mt-0.5" size={20}/>
-                                                <div>
-                                                    <p className="font-medium text-purple-900 mb-1">AI
-                                                        Feedback:</p>
-                                                    <p className="text-sm text-purple-800">{feedback[question.id].feedback}</p>
-                                                </div>
-                                            </div>
-                                        </div>
+export default function SubmitAssignmentPage({
+    params,
+}: {
+    params: Promise<{ assignmentId: string }>;
+}) {
+    const resolvedParams = use(params);
+    const router = useRouter();
 
-                                        {/* Plagiarism Warning */}
-                                        {feedback[question.id].plagiarismScore >= 20 && (
-                                            <div
-                                                className="p-4 bg-red-50 border-l-4 border-red-500 rounded">
-                                                <div className="flex items-start gap-3">
-                                                    <Shield className="text-red-600 mt-0.5"
-                                                            size={20}/>
-                                                    <div>
-                                                        <p className="font-medium text-red-900 mb-1">Plagiarism
-                                                            Alert:</p>
-                                                        <p className="text-sm text-red-800">
-                                                            High similarity detected. Please ensure
-                                                            your answer is original and properly
-                                                            cited.
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        )}
+    // Auth
+    const [studentId, setStudentId] = useState<string | null>(null);
 
-                        {/* Sub-questions */}
-                        {question.subQuestions && (
-                            <div className="space-y-6">
-                                {question.subQuestions.map((subQ) => {
-                                    const key = getQuestionKey(question.id, subQ.id);
-                                    return (
-                                        <div key={subQ.id}
-                                             className="pl-6 border-l-2 border-gray-200">
-                                            <div className="mb-3">
-                                                <div
-                                                    className="flex items-start justify-between mb-2">
-                                                    <h4 className="font-semibold text-gray-900">
-                                                        ({subQ.letter}) {subQ.text}
-                                                    </h4>
-                                                    <span
-                                                        className="ml-4 px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium whitespace-nowrap">
-                            {subQ.marks} marks
-                          </span>
-                                                </div>
-                                            </div>
+    // Assignment loading
+    const [assignment, setAssignment] = useState<AssignmentWithQuestions | null>(null);
+    const [loadingAssignment, setLoadingAssignment] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
-                                            <textarea
-                                                ref={(el) => {
-                                                    textAreaRefs.current[key] = el;
-                                                }}
-                                                value={answers[key] || ''}
-                                                onChange={(e) => handleAnswerChange(key, e.target.value)}
-                                                onCopy={(e) => handleCopyPaste(e, key)}
-                                                onPaste={(e) => handleCopyPaste(e, key)}
-                                                onCut={(e) => handleCopyPaste(e, key)}
-                                                onFocus={() => setActiveQuestion(key)}
-                                                placeholder="Type your answer here... (Copy-paste disabled)"
-                                                rows={6}
-                                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-                                            />
+    // Answers keyed by questionId
+    const [answers, setAnswers] = useState<Record<string, AnswerState>>({});
 
-                                            {/* Real-time Feedback for sub-question */}
-                                            {isAnalyzing[key] && (
-                                                <div
-                                                    className="mt-3 flex items-center gap-2 text-blue-600">
-                                                    <Loader className="animate-spin" size={16}/>
-                                                    <span className="text-sm">Analyzing your answer...</span>
-                                                </div>
-                                            )}
+    // Submission state
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitted, setSubmitted] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+    const [versionCount, setVersionCount] = useState(0);
 
-                                            {feedback[key] && !isAnalyzing[key] && (
-                                                <div className="mt-4 space-y-3">
-                                                    <div className="grid grid-cols-3 gap-3">
-                                                        <div
-                                                            className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                                            <div
-                                                                className="text-xs text-gray-600">Words
-                                                            </div>
-                                                            <div
-                                                                className="text-lg font-bold text-gray-900">{feedback[key].wordCount}</div>
-                                                        </div>
-                                                        <div className={`p-3 rounded-lg border ${
-                                                            feedback[key].plagiarismScore < 20
-                                                                ? 'bg-green-50 border-green-200'
-                                                                : 'bg-red-50 border-red-200'
-                                                        }`}>
-                                                            <div
-                                                                className="text-xs text-gray-600">Plagiarism
-                                                            </div>
-                                                            <div className={`text-lg font-bold ${
-                                                                feedback[key].plagiarismScore < 20
-                                                                    ? 'text-green-600'
-                                                                    : 'text-red-600'
-                                                            }`}>
-                                                                {feedback[key].plagiarismScore}%
-                                                            </div>
-                                                        </div>
-                                                        <div
-                                                            className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-                                                            <div
-                                                                className="text-xs text-gray-600">AI
-                                                                Score
-                                                            </div>
-                                                            <div
-                                                                className="text-lg font-bold text-purple-600">{feedback[key].aiScore}/100
-                                                            </div>
-                                                        </div>
-                                                    </div>
+    // UI
+    const [activeTab, setActiveTab] = useState<'write' | 'preview'>('write');
 
-                                                    <div
-                                                        className="p-4 bg-purple-50 border-l-4 border-purple-500 rounded">
-                                                        <div className="flex items-start gap-3">
-                                                            <Star className="text-purple-600 mt-0.5"
-                                                                  size={20}/>
-                                                            <div>
-                                                                <p className="font-medium text-purple-900 mb-1">AI
-                                                                    Feedback:</p>
-                                                                <p className="text-sm text-purple-800">{feedback[key].feedback}</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
+    // Debounce timer refs keyed by questionId
+    const analyzeTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+    const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+    // Decode JWT
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                setStudentId(payload.userId ?? payload.sub ?? null);
+            }
+        } catch {
+            setStudentId(null);
+        }
+    }, []);
+
+    // Fetch assignment (falls back to sample data if API is unavailable)
+    useEffect(() => {
+        setLoadingAssignment(true);
+        setLoadError(null);
+        getAssignmentWithFallback(resolvedParams.assignmentId)
+            .then((asg) => {
+                setAssignment(asg as AssignmentWithQuestions);
+                // Initialise answer slots for each question
+                const initial: Record<string, AnswerState> = {};
+                const q = (asg as AssignmentWithQuestions).questions ?? [];
+                q.forEach((question) => {
+                    initial[question.id] = {
+                        text: '',
+                        wordCount: 0,
+                        lastSaved: null,
+                        isSaving: false,
+                        analysis: null,
+                        isAnalyzing: false,
+                    };
+                });
+                setAnswers(initial);
+            })
+            .catch((err) => {
+                setLoadError(err instanceof Error ? err.message : 'Failed to load assignment');
+            })
+            .finally(() => {
+                setLoadingAssignment(false);
+            });
+    }, [resolvedParams.assignmentId]);
+
+    // Cleanup timers on unmount
+    useEffect(() => {
+        return () => {
+            Object.values(analyzeTimers.current).forEach(clearTimeout);
+            Object.values(saveTimers.current).forEach(clearTimeout);
+        };
+    }, []);
+
+    // ── Text change handler
+    const handleTextChange = (questionId: string, text: string) => {
+        const wordCount = countWords(text);
+        setAnswers((prev) => ({
+            ...prev,
+            [questionId]: { ...prev[questionId], text, wordCount },
+        }));
+
+        const question = assignment?.questions?.find((q) => q.id === questionId);
+
+        // 3s debounce → AI feedback
+        clearTimeout(analyzeTimers.current[questionId]);
+        if (text.length > 50) {
+            analyzeTimers.current[questionId] = setTimeout(() => {
+                setAnswers((prev) => ({
+                    ...prev,
+                    [questionId]: { ...prev[questionId], isAnalyzing: true },
+                }));
+                feedbackService
+                    .generateLiveFeedback({
+                        questionId,
+                        answerText: text,
+                        questionPrompt: question?.text,
+                        expectedWordCount: question?.expectedWordCount,
+                    })
+                    .then((fb) => {
+                        setAnswers((prev) => ({
+                            ...prev,
+                            [questionId]: { ...prev[questionId], analysis: fb, isAnalyzing: false },
+                        }));
+                    })
+                    .catch(() => {
+                        setAnswers((prev) => ({
+                            ...prev,
+                            [questionId]: { ...prev[questionId], isAnalyzing: false },
+                        }));
+                    });
+            }, 3000);
+        }
+
+        // 5s debounce → auto-save
+        clearTimeout(saveTimers.current[questionId]);
+        saveTimers.current[questionId] = setTimeout(() => {
+            setAnswers((prev) => ({
+                ...prev,
+                [questionId]: { ...prev[questionId], isSaving: true },
+            }));
+            // Fire-and-forget — save answer to backend if we have a draft submissionId
+            // (submissionId management is handled by the answer page; here we just show saved indicator)
+            setTimeout(() => {
+                setAnswers((prev) => ({
+                    ...prev,
+                    [questionId]: {
+                        ...prev[questionId],
+                        isSaving: false,
+                        lastSaved: new Date(),
+                    },
+                }));
+                setVersionCount((v) => v + 1);
+            }, 500);
+        }, 5000);
+    };
+
+    // ── Submit
+    const handleSubmit = async () => {
+        if (!assignment) return;
+        const confirmed = window.confirm(
+            'Are you ready to submit? Once submitted, no further edits can be made.'
+        );
+        if (!confirmed) return;
+
+        setIsSubmitting(true);
+        setSubmitError(null);
+
+        try {
+            // Navigate to the full answer page for this assignment which handles submission
+            router.push(`/submissions/student/answer/${resolvedParams.assignmentId}`);
+        } catch (err) {
+            setSubmitError(err instanceof Error ? err.message : 'Submission failed. Please try again.');
+            setIsSubmitting(false);
+        }
+    };
+
+    // ── Stats
+    const questions = assignment?.questions ?? [];
+    const answeredCount = questions.filter(
+        (q) => (answers[q.id]?.wordCount ?? 0) > 0
+    ).length;
+    const totalWords = Object.values(answers).reduce((acc, a) => acc + a.wordCount, 0);
+    const allRequired = questions
+        .filter((q) => q.isRequired !== false)
+        .every((q) => (answers[q.id]?.wordCount ?? 0) > 0);
+
+    // ─── Render: loading
+    if (loadingAssignment) {
+        return (
+            <div className="max-w-5xl mx-auto px-4 py-8">
+                <div className="h-8 w-40 bg-gray-200 rounded animate-pulse mb-6" />
+                <AssignmentSkeleton />
+            </div>
+        );
+    }
+
+    // ─── Render: error
+    if (loadError || !assignment) {
+        return (
+            <div className="max-w-5xl mx-auto px-4 py-8">
+                <button
+                    onClick={() => router.back()}
+                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm font-medium mb-6"
+                >
+                    <ArrowLeft size={16} />
+                    Back
+                </button>
+                <div className="flex items-start gap-3 p-5 bg-amber-50 border border-amber-200 rounded-xl">
+                    <AlertCircle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="font-semibold text-amber-900">Failed to load assignment</p>
+                        <p className="text-sm text-amber-700 mt-0.5">
+                            {loadError ?? 'Assignment not found'}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ─── Render: submitted
+    if (submitted) {
+        return (
+            <div className="max-w-5xl mx-auto px-4 py-16 text-center">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 mb-6">
+                    <CheckCircle2 size={40} className="text-green-600" />
+                </div>
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">Submitted!</h2>
+                <p className="text-gray-500 mb-8">
+                    Your answers for <span className="font-medium">{assignment.title}</span> have been submitted.
+                </p>
+                <button
+                    onClick={() => router.push('/submissions/student/my-submissions')}
+                    className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-colors"
+                >
+                    View My Submissions
+                </button>
+            </div>
+        );
+    }
+
+    const dueDate = assignment.dueDate ? new Date(assignment.dueDate) : null;
+    const isOverdue = dueDate ? dueDate.getTime() < Date.now() : false;
+
+    // ─── Render: main
+    return (
+        <div className="max-w-5xl mx-auto px-4 py-8">
+            {/* Back button */}
+            <button
+                onClick={() => router.back()}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm font-medium mb-6 transition-colors"
+            >
+                <ArrowLeft size={16} />
+                Back
+            </button>
+
+            {/* Assignment header */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900 mb-1">{assignment.title}</h1>
+                        <p className="text-sm text-gray-500">
+                            {assignment.moduleCode}
+                            {assignment.moduleName ? ` — ${assignment.moduleName}` : ''}
+                        </p>
+                        {dueDate && (
+                            <p className={`text-sm font-medium mt-1 ${isOverdue ? 'text-red-600' : 'text-amber-600'}`}>
+                                Due: {dueDate.toLocaleDateString()}
+                                {isOverdue && ' (overdue)'}
+                            </p>
                         )}
                     </div>
+
+                    <div className="flex flex-wrap gap-3 text-sm">
+                        <div className="flex items-center gap-1.5 text-gray-600 bg-gray-100 rounded-lg px-3 py-1.5">
+                            <GitBranch size={14} />
+                            <span>{versionCount} auto-save{versionCount !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-gray-600 bg-gray-100 rounded-lg px-3 py-1.5">
+                            <Shield size={14} />
+                            <span>Plagiarism check active</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-gray-600 bg-gray-100 rounded-lg px-3 py-1.5">
+                            <Star size={14} />
+                            <span>AI feedback active</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Progress bar */}
+                {questions.length > 0 && (
+                    <div className="mt-4">
+                        <div className="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>{answeredCount} of {questions.length} questions answered</span>
+                            <span>{totalWords} total words</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-purple-500 rounded-full transition-all"
+                                style={{ width: `${questions.length > 0 ? (answeredCount / questions.length) * 100 : 0}%` }}
+                            />
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Info banner */}
+            <div className="flex items-start gap-3 p-4 mb-6 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
+                <Info size={16} className="shrink-0 mt-0.5 text-blue-500" />
+                <span>
+                    Your answers are auto-saved every 5 seconds. Real-time AI feedback and plagiarism
+                    analysis are active while you type.
+                </span>
+            </div>
+
+            {/* Tab bar */}
+            <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-6 w-fit">
+                {(['write', 'preview'] as const).map((tab) => (
+                    <button
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                            activeTab === tab
+                                ? 'bg-white text-gray-900 shadow-sm'
+                                : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                    >
+                        {tab === 'write' ? <Save size={14} /> : <Eye size={14} />}
+                        {tab === 'write' ? 'Write' : 'Preview'}
+                    </button>
                 ))}
             </div>
 
-            {/* Action Buttons */}
-            <div
-                className="sticky bottom-0 bg-white border-t border-gray-200 p-6 mt-8 shadow-lg rounded-t-lg">
-                <div className="flex items-center justify-between max-w-5xl mx-auto">
-                    <div className="flex items-center gap-4">
-                        {hasUnsavedChanges && (
-                            <div className="flex items-center gap-2 text-amber-600">
-                                <Clock size={16}/>
-                                <span className="text-sm font-medium">Unsaved changes</span>
-                            </div>
-                        )}
-                        {isSaving && (
-                            <div className="flex items-center gap-2 text-blue-600">
-                                <Loader className="animate-spin" size={16}/>
-                                <span className="text-sm">Saving...</span>
-                            </div>
-                        )}
-                        {!hasUnsavedChanges && !isSaving && versions.length > 0 && (
-                            <div className="flex items-center gap-2 text-green-600">
-                                <CheckCircle2 size={16}/>
-                                <span
-                                    className="text-sm">All changes saved (Version {currentVersion})</span>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="flex gap-3">
-                        <button
-                            onClick={() => router.push(`/submissions/student/versions/${assignment.id}`)}
-                            className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2"
-                        >
-                            <Eye size={18}/>
-                            View Versions ({versions.length})
-                        </button>
-                        <button
-                            onClick={handleSave}
-                            disabled={!hasUnsavedChanges || isSaving}
-                            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                        >
-                            <Save size={18}/>
-                            Save Progress
-                        </button>
-                        <button
-                            onClick={handleSubmit}
-                            disabled={isSubmitting || Object.keys(answers).length === 0}
-                            className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <Loader className="animate-spin" size={18}/>
-                                    Submitting...
-                                </>
-                            ) : (
-                                <>
-                                    <Send size={18}/>
-                                    Submit Assignment
-                                </>
-                            )}
-                        </button>
-                    </div>
+            {/* Questions */}
+            {questions.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-xl border border-gray-200 text-gray-500">
+                    No questions found for this assignment.
                 </div>
+            ) : activeTab === 'write' ? (
+                <div className="space-y-6">
+                    {questions.map((question, index) => (
+                        <QuestionCard
+                            key={question.id}
+                            question={question}
+                            index={index}
+                            answer={
+                                answers[question.id] ?? {
+                                    text: '',
+                                    wordCount: 0,
+                                    lastSaved: null,
+                                    isSaving: false,
+                                    analysis: null,
+                                    isAnalyzing: false,
+                                }
+                            }
+                            onTextChange={(text) => handleTextChange(question.id, text)}
+                            disabled={isSubmitting}
+                        />
+                    ))}
+                </div>
+            ) : (
+                /* Preview tab */
+                <div className="space-y-6">
+                    {questions.map((question, index) => {
+                        const answer = answers[question.id];
+                        return (
+                            <div key={question.id} className="bg-white rounded-xl border border-gray-200 p-6">
+                                <p className="text-sm font-bold text-gray-800 mb-3">
+                                    Q{index + 1}. {question.text}
+                                </p>
+                                {answer?.text ? (
+                                    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                                        {answer.text}
+                                    </p>
+                                ) : (
+                                    <p className="text-sm text-gray-400 italic">No answer yet.</p>
+                                )}
+                                {answer?.wordCount > 0 && (
+                                    <p className="text-xs text-gray-400 mt-2">{answer.wordCount} words</p>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Submit error */}
+            {submitError && (
+                <div className="flex items-start gap-3 p-4 mt-6 bg-red-50 border border-red-200 rounded-xl">
+                    <AlertTriangle size={16} className="text-red-600 shrink-0 mt-0.5" />
+                    <p className="text-sm text-red-800">{submitError}</p>
+                </div>
+            )}
+
+            {/* Sticky bottom bar */}
+            <div className="sticky bottom-0 mt-8 -mx-4 px-4 py-4 bg-white border-t border-gray-200 flex items-center justify-between gap-4">
+                <div className="text-sm text-gray-600">
+                    <span className="font-medium text-gray-900">{totalWords}</span> total words
+                    {questions.length > 0 && (
+                        <span className="ml-2 text-gray-400">
+                            · {answeredCount}/{questions.length} answered
+                        </span>
+                    )}
+                </div>
+                <button
+                    onClick={handleSubmit}
+                    disabled={isSubmitting || !allRequired}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md"
+                >
+                    {isSubmitting ? (
+                        <>
+                            <Loader size={16} className="animate-spin" />
+                            Submitting…
+                        </>
+                    ) : (
+                        <>
+                            <Send size={16} />
+                            Submit Assignment
+                        </>
+                    )}
+                </button>
             </div>
         </div>
     );

@@ -1,9 +1,12 @@
 package com.smartlms.feedback_service.controller;
 
 import com.smartlms.feedback_service.dto.request.FeedbackRequest;
+import com.smartlms.feedback_service.dto.request.LiveFeedbackRequest;
 import com.smartlms.feedback_service.dto.response.ApiResponse;
 import com.smartlms.feedback_service.dto.response.FeedbackResponse;
+import com.smartlms.feedback_service.dto.response.LiveFeedbackResponse;
 import com.smartlms.feedback_service.service.FeedbackService;
+import com.smartlms.feedback_service.service.LiveFeedbackService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +24,41 @@ import java.util.concurrent.CompletableFuture;
 public class FeedbackController {
 
     private final FeedbackService feedbackService;
+    private final LiveFeedbackService liveFeedbackService;
+
+    /**
+     * Generate real-time live feedback as the student types (synchronous, no DB persistence).
+     *
+     * Called by the frontend debounced callback ~3 seconds after the student
+     * stops typing in a question editor. Returns lightweight scores and suggestions
+     * immediately without storing any feedback record to the database.
+     *
+     * POST /api/feedback/live
+     */
+    @PostMapping("/live")
+    public ResponseEntity<ApiResponse<LiveFeedbackResponse>> generateLiveFeedback(
+            @Valid @RequestBody LiveFeedbackRequest request) {
+        log.info("POST /api/feedback/live — questionId={} textLen={} questionPrompt='{}'",
+                request.getQuestionId(),
+                request.getAnswerText().length(),
+                request.getQuestionPrompt() != null
+                        ? request.getQuestionPrompt().substring(0, Math.min(60, request.getQuestionPrompt().length()))
+                        : "(none)");
+
+        ApiResponse<LiveFeedbackResponse> response = liveFeedbackService.generateLiveFeedback(request);
+        log.info("POST /api/feedback/live — DONE questionId={} grammar={} clarity={}",
+                request.getQuestionId(),
+                response.getData() != null ? response.getData().getGrammarScore() : "null",
+                response.getData() != null ? response.getData().getClarityScore() : "null");
+        return ResponseEntity.ok(response);
+    }
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRuntimeException(RuntimeException ex) {
+        log.error("Unhandled exception in FeedbackController: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error("AI feedback service temporarily unavailable: " + ex.getMessage()));
+    }
 
     /**
      * Generate feedback (synchronous)

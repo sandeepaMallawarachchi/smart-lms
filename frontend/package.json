@@ -10,12 +10,12 @@
     "worker:notifications": "tsx workers/notificationWorker.ts"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "@tiptap/extension-link": "^2.26.4",
     "@tiptap/extension-placeholder": "^2.26.4",
     "@tiptap/extension-underline": "^2.26.4",
     "@tiptap/react": "^2.26.4",
     "@tiptap/starter-kit": "^2.26.4",
-    "@monaco-editor/react": "^4.7.0",
     "aws-sdk": "^2.1693.0",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.69.4",
@@ -23,6 +23,7 @@
     "framer-motion": "^12.23.26",
     "ioredis": "^5.8.1",
     "jsonwebtoken": "^9.0.3",
+    "jspdf": "^4.2.0",
     "lucide-react": "^0.561.0",
     "mongoose": "^9.0.2",
     "next": "16.0.10",

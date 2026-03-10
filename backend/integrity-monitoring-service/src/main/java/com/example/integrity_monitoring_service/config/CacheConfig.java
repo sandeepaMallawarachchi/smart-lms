@@ -17,6 +17,7 @@ public class CacheConfig {
     public CacheManager cacheManager() {
         CaffeineCacheManager cacheManager = new CaffeineCacheManager(
                 "internetSearchCache",
+                "scholarSearchCache",
                 "questionAnalysisCache"
         );
 

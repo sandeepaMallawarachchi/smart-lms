@@ -118,23 +118,71 @@ public class TextSimilarityService {
     }
 
     /**
-     * Calculate similarity with internet search results
+     * Calculate similarity between a student's text and internet search results.
+     *
+     * Strategy: concatenate all snippets into one "corpus" document and compare
+     * against the student's text once. This produces a much more reliable TF-IDF
+     * cosine similarity than comparing against each 150-char snippet individually,
+     * because a single short snippet shares too few vocabulary tokens with a
+     * 300-500 word student essay to yield a meaningful cosine score.
+     *
+     * We also compute a per-snippet max as a secondary signal and return the
+     * higher of the two.
      */
     public double calculateInternetSimilarity(String studentText, List<Map<String, String>> searchResults) {
         if (searchResults == null || searchResults.isEmpty()) {
             return 0.0;
         }
 
-        double maxSimilarity = 0.0;
+        // ── 1. Concatenated corpus comparison ─────────────────────────────────
+        // Join all snippets + titles into one document. More shared vocabulary
+        // means TF-IDF vectors overlap more — gives an honest overall similarity.
+        StringBuilder corpus = new StringBuilder();
+        for (Map<String, String> result : searchResults) {
+            String title   = result.getOrDefault("title", "");
+            String snippet = result.getOrDefault("snippet", "");
+            if (!title.isEmpty())   corpus.append(title).append(". ");
+            if (!snippet.isEmpty()) corpus.append(snippet).append(" ");
+        }
+        double corpusSim = corpus.length() > 0
+                ? calculateSimilarity(studentText, corpus.toString().trim())
+                : 0.0;
+        log.debug("[TextSimilarity] Internet corpus similarity={} (corpusLen={})", corpusSim, corpus.length());
 
+        // ── 2. Per-snippet max (secondary signal) ──────────────────────────────
+        double maxSnippetSim = 0.0;
         for (Map<String, String> result : searchResults) {
             String snippet = result.getOrDefault("snippet", "");
             if (!snippet.isEmpty()) {
-                double similarity = calculateSimilarity(studentText, snippet);
-                maxSimilarity = Math.max(maxSimilarity, similarity);
+                double sim = calculateSimilarity(studentText, snippet);
+                if (sim > maxSnippetSim) {
+                    log.debug("[TextSimilarity] Per-snippet sim={} domain={}", sim, result.getOrDefault("domain", "?"));
+                    maxSnippetSim = sim;
+                }
             }
         }
 
-        return maxSimilarity;
+        double finalSim = Math.max(corpusSim, maxSnippetSim);
+        log.debug("[TextSimilarity] calculateInternetSimilarity — corpusSim={} maxSnippetSim={} final={}",
+                corpusSim, maxSnippetSim, finalSim);
+        return finalSim;
+    }
+
+    /**
+     * Return the TF-IDF cosine similarity score for each individual search result.
+     * Used to annotate matched sources in the real-time check response.
+     *
+     * Each entry in the returned list corresponds (by index) to the entry in searchResults.
+     */
+    public List<Double> calculatePerSnippetSimilarities(String studentText, List<Map<String, String>> searchResults) {
+        List<Double> scores = new ArrayList<>();
+        for (Map<String, String> result : searchResults) {
+            String snippet = result.getOrDefault("snippet", "");
+            String title   = result.getOrDefault("title", "");
+            // Score against snippet + title combined for better signal
+            String combined = title + ". " + snippet;
+            scores.add(combined.isBlank() ? 0.0 : calculateSimilarity(studentText, combined));
+        }
+        return scores;
     }
 }

@@ -3,7 +3,9 @@ package com.example.integrity_monitoring_service.model;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -79,8 +81,8 @@ public class PlagiarismCheck {
     @Column(name = "processing_time_ms")
     private Long processingTimeMs;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "metadata", columnDefinition = "jsonb")
-    @Convert(converter = MapToJsonConverter.class)
     private Map<String, Object> metadata = new HashMap<>();
 
     @OneToMany(mappedBy = "plagiarismCheck", cascade = CascadeType.ALL, orphanRemoval = true)

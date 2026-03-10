@@ -383,6 +383,19 @@ public class IntegrityCheckService {
         return ApiResponse.success(responses);
     }
 
+    /**
+     * Get plagiarism checks by submission ID, most recent first.
+     */
+    public ApiResponse<List<PlagiarismCheckResponse>> getChecksBySubmissionId(Long submissionId) {
+        List<PlagiarismCheck> checks = checkRepository.findBySubmissionIdOrderByCreatedAtDesc(submissionId);
+
+        List<PlagiarismCheckResponse> responses = checks.stream()
+                .map(PlagiarismCheckResponse::fromEntity)
+                .collect(Collectors.toList());
+
+        return ApiResponse.success(responses);
+    }
+
     // Helper methods
 
     private Map<String, String> extractCodeFiles(PlagiarismCheckRequest request) {

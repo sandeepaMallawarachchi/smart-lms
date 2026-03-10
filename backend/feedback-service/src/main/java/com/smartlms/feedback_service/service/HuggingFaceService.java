@@ -3,13 +3,19 @@ package com.smartlms.feedback_service.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartlms.feedback_service.exception.FeedbackGenerationException;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.*;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -17,7 +23,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class HuggingFaceService {
 
-    private final OkHttpClient client;
+    private OkHttpClient client;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${huggingface.api-key}")
@@ -32,79 +38,95 @@ public class HuggingFaceService {
     @Value("${huggingface.timeout:120}")
     private int timeout;
 
-    @Value("${huggingface.max-tokens:2000}")
+    @Value("${huggingface.max-tokens:500}")
     private int maxTokens;
 
-    public HuggingFaceService() {
+    @PostConstruct
+    public void init() {
         this.client = new OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(120, TimeUnit.SECONDS)
+                .readTimeout(timeout, TimeUnit.SECONDS)
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .build();
+        log.info("[HuggingFace] Initialized — model='{}' apiUrl='{}' maxTokens={} readTimeout={}s",
+                model, apiUrl, maxTokens, timeout);
     }
 
     /**
-     * Generate completion using Hugging Face Inference API
+     * Generate completion using Hugging Face OpenAI-compatible chat completions API.
+     * Endpoint: POST {apiUrl}/chat/completions
      */
     public String generateCompletion(String prompt) {
-        log.debug("Generating completion with Hugging Face model: {}", model);
+        String url = apiUrl + "/chat/completions";
+        log.info("[HuggingFace] POST {} | model='{}' | promptChars={}", url, model, prompt.length());
 
         try {
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("inputs", prompt);
+            Map<String, Object> message = new HashMap<>();
+            message.put("role", "user");
+            message.put("content", prompt);
 
-            Map<String, Object> parameters = new HashMap<>();
-            parameters.put("max_new_tokens", maxTokens);
-            parameters.put("temperature", 0.7);
-            parameters.put("top_p", 0.95);
-            parameters.put("return_full_text", false);
-            requestBody.put("parameters", parameters);
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("model", model);
+            requestBody.put("messages", List.of(message));
+            requestBody.put("max_tokens", maxTokens);
+            requestBody.put("temperature", 0.7);
 
             String jsonBody = objectMapper.writeValueAsString(requestBody);
+            log.debug("[HuggingFace] Request body: {}", jsonBody);
 
             Request request = new Request.Builder()
-                    .url(apiUrl + "/" + model)
+                    .url(url)
                     .addHeader("Authorization", "Bearer " + apiKey)
                     .addHeader("Content-Type", "application/json")
                     .post(RequestBody.create(jsonBody, MediaType.parse("application/json")))
                     .build();
 
+            long startMs = System.currentTimeMillis();
+
             try (Response response = client.newCall(request).execute()) {
+                long elapsedMs = System.currentTimeMillis() - startMs;
+                log.info("[HuggingFace] Response: HTTP {} in {}ms", response.code(), elapsedMs);
+
                 if (!response.isSuccessful()) {
-                    String errorBody = response.body() != null ? response.body().string() : "Unknown error";
-                    log.error("Hugging Face API error: {} - {}", response.code(), errorBody);
+                    String errorBody = response.body() != null ? response.body().string() : "(no body)";
+                    log.error("[HuggingFace] ERROR HTTP {} | url='{}' | model='{}' | body={}",
+                            response.code(), url, model, errorBody);
 
                     if (response.code() == 503) {
-                        // Model is loading, wait and retry
-                        log.info("Model is loading, waiting 20 seconds...");
+                        log.info("[HuggingFace] Model loading (503), waiting 20 s then retrying...");
                         Thread.sleep(20000);
-                        return generateCompletion(prompt); // Retry once
+                        return generateCompletion(prompt);
                     }
 
-                    throw new FeedbackGenerationException("API request failed: " + errorBody);
+                    throw new FeedbackGenerationException(
+                            "API request failed: HTTP " + response.code() + " — " + errorBody);
                 }
 
-                String responseBody = response.body().string();
-                log.debug("Raw Hugging Face response: {}", responseBody);
+                String responseBody = response.body() != null ? response.body().string() : "";
+                log.debug("[HuggingFace] Raw response body: {}", responseBody);
 
-                JsonNode jsonResponse = objectMapper.readTree(responseBody);
+                JsonNode json = objectMapper.readTree(responseBody);
+                JsonNode choices = json.get("choices");
 
-                // Handle array response
-                if (jsonResponse.isArray() && jsonResponse.size() > 0) {
-                    return jsonResponse.get(0).get("generated_text").asText();
+                if (choices != null && choices.isArray() && choices.size() > 0) {
+                    JsonNode contentNode = choices.get(0).path("message").path("content");
+                    String content = contentNode.asText("");
+                    if (!content.isBlank()) {
+                        log.info("[HuggingFace] Success — extracted {}chars of content", content.length());
+                        log.debug("[HuggingFace] Content preview: {}",
+                                content.substring(0, Math.min(300, content.length())));
+                        return content.trim();
+                    }
+                    log.warn("[HuggingFace] choices[0].message.content is blank | fullBody={}", responseBody);
+                } else {
+                    log.warn("[HuggingFace] No 'choices' array in response | fullBody={}", responseBody);
                 }
-                // Handle object response
-                else if (jsonResponse.has("generated_text")) {
-                    return jsonResponse.get("generated_text").asText();
-                }
-                else {
-                    log.error("Unexpected response format: {}", responseBody);
-                    throw new FeedbackGenerationException("Unexpected response format");
-                }
+
+                throw new FeedbackGenerationException("Unexpected response format from Hugging Face API");
             }
 
         } catch (IOException e) {
-            log.error("Error calling Hugging Face API: {}", e.getMessage(), e);
+            log.error("[HuggingFace] IOException calling '{}': {}", url, e.getMessage(), e);
             throw new FeedbackGenerationException("Failed to generate completion", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -113,12 +135,14 @@ public class HuggingFaceService {
     }
 
     /**
-     * Check if Hugging Face API is available
+     * Check if the model exists on Hugging Face Hub.
      */
     public boolean isAvailable() {
         try {
+            String baseModel = model.contains(":") ? model.split(":")[0] : model;
+
             Request request = new Request.Builder()
-                    .url("https://huggingface.co/api/models/" + model)
+                    .url("https://huggingface.co/api/models/" + baseModel)
                     .get()
                     .build();
 
@@ -131,9 +155,6 @@ public class HuggingFaceService {
         }
     }
 
-    /**
-     * Get model name
-     */
     public String getModelName() {
         return model;
     }

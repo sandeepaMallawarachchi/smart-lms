@@ -1,0 +1,135 @@
+# BuildKit must be enabled for --mount=type=cache in Dockerfiles to work.
+# It is on by default in Docker Desktop and Docker Engine 23+.
+# If you get a "unknown flag: --mount" error, run: export DOCKER_BUILDKIT=1
+services:
+
+  # ── PostgreSQL (shared DB, all services use their own schema) ─
+  postgres:
+    image: postgres:16-alpine
+    pull_policy: never
+    container_name: lms-postgres
+    environment:
+      POSTGRES_DB: lms_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ksdk1357@A
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d lms_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── Redis (used by feedback-service) ─────────────────────────
+  redis:
+    image: redis:7-alpine
+    pull_policy: never
+    container_name: lms-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Submission Management Service (port 8081) ─────────────────
+  submission-management-service:
+    build:
+      context: ./backend/submission-management-service
+      dockerfile: Dockerfile
+      no_cache: false
+    pull_policy: never
+    container_name: submission-management-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lms_db?currentSchema=submission_schema
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ksdk1357@A
+      FILE_UPLOAD_DIR: /app/uploads
+      VERSION_SERVICE_URL: http://version-control-service:8082
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Version Control Service (port 8082) ───────────────────────
+  version-control-service:
+    build:
+      context: ./backend/version_control_service
+      dockerfile: Dockerfile
+      no_cache: false
+    pull_policy: never
+    container_name: version-control-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lms_db?currentSchema=version_schema
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ksdk1357@A
+      FILE_STORAGE_BASE_PATH: /app/version-storage
+      SUBMISSION_SERVICE_URL: http://submission-management-service:8081
+    volumes:
+      - version_storage:/app/version-storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      submission-management-service:
+        condition: service_started
+    restart: unless-stopped
+
+  # ── Feedback Service (port 8083) ──────────────────────────────
+  feedback-service:
+    build:
+      context: ./backend/feedback-service
+      dockerfile: Dockerfile
+      no_cache: false
+    pull_policy: never
+    container_name: feedback-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lms_db?currentSchema=feedback_schema
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ksdk1357@A
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Integrity Monitoring Service (port 8084) ──────────────────
+  integrity-monitoring-service:
+    build:
+      context: ./backend/integrity-monitoring-service
+      dockerfile: Dockerfile
+      no_cache: false
+    pull_policy: never
+    container_name: integrity-monitoring-service
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lms_db?currentSchema=integrity_schema
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ksdk1357@A
+      SUBMISSION_SERVICE_URL: http://submission-management-service:8081
+    depends_on:
+      postgres:
+        condition: service_healthy
+      submission-management-service:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  uploads:
+  version_storage:
