@@ -13,11 +13,19 @@ export default function Home() {
         showForgotPassword={true}
         navItems={[
           { label: 'Home', href: '/' },
-          { label: 'Programmes', href: '/programmes', hasDropdown: true },
-          { label: 'Support', href: '/support', hasDropdown: true },
-          { label: 'Resources', href: '/resources', hasDropdown: true },
-          { label: 'Libraries', href: '/libraries', hasDropdown: true },
-          { label: 'Email', href: '/email', hasDropdown: true },
+          {
+            label: 'Main Components',
+            href: '/code-engine/ide',
+            hasDropdown: true,
+            dropdownItems: [
+              { label: 'Code Engine', href: '/code-engine/ide' },
+              { label: 'Submission & Feedback', href: '/submissions' },
+              { label: 'Projects & Tasks', href: '/projects-and-tasks' },
+              { label: 'Learning Progress & Insights', href: '/learning-analytics' },
+            ],
+          },
+          { label: 'About Us', href: '/about-us' },
+          { label: 'Support', href: '/support' },
         ]}
       />
 

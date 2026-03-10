@@ -9,6 +9,7 @@ interface NavItem {
   label: string;
   href: string;
   hasDropdown?: boolean;
+  dropdownItems?: { label: string; href: string }[];
 }
 
 interface HeaderProps {
@@ -21,11 +22,19 @@ const Header: React.FC<HeaderProps> = ({
   logoText = 'Smart Learning Management System',
   navItems = [
     { label: 'Home', href: '/' },
-    { label: 'Programmes', href: '/programmes', hasDropdown: true },
-    { label: 'Support', href: '/support', hasDropdown: true },
-    { label: 'Resources', href: '/resources', hasDropdown: true },
-    { label: 'Libraries', href: '/libraries', hasDropdown: true },
-    { label: 'Email', href: '/email', hasDropdown: true },
+    {
+      label: 'Main Components',
+      href: '/code-engine/ide',
+      hasDropdown: true,
+      dropdownItems: [
+        { label: 'Code Engine', href: '/code-engine/ide' },
+        { label: 'Submission & Feedback', href: '/submissions' },
+        { label: 'Projects & Tasks', href: '/projects-and-tasks' },
+        { label: 'Learning Progress & Insights', href: '/learning-analytics' },
+      ],
+    },
+    { label: 'About Us', href: '/about-us' },
+    { label: 'Support', href: '/support' },
   ],
   showForgotPassword = true,
 }) => {
@@ -200,16 +209,13 @@ const Header: React.FC<HeaderProps> = ({
           <nav className="hidden lg:flex items-center gap-0 border-t border-gray-200">
             {navItems.map((item) => (
               <div key={item.label} className="relative group">
-                <button
-                  onClick={() => item.hasDropdown && toggleDropdown(item.label)}
-                  className={`px-6 py-3 text-sm font-medium transition-colors relative ${item.label === 'Home'
-                    ? 'bg-brand-yellow text-white'
-                    : 'text-gray-700 hover:bg-gray-100'
-                    }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span>{item.label}</span>
-                    {item.hasDropdown && (
+                {item.hasDropdown ? (
+                  <button
+                    onClick={() => toggleDropdown(item.label)}
+                    className="px-6 py-3 text-sm font-medium transition-colors relative text-gray-700 hover:bg-gray-100"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>{item.label}</span>
                       <svg
                         className="w-4 h-4"
                         fill="none"
@@ -223,26 +229,32 @@ const Header: React.FC<HeaderProps> = ({
                           d="M19 14l-7 7m0 0l-7-7m7 7V3"
                         />
                       </svg>
-                    )}
-                  </div>
-                </button>
+                    </div>
+                  </button>
+                ) : (
+                  <Link
+                    href={item.href}
+                    className={`block px-6 py-3 text-sm font-medium transition-colors relative ${item.label === 'Home'
+                      ? 'bg-brand-yellow text-white'
+                      : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                  >
+                    {item.label}
+                  </Link>
+                )}
 
                 {/* Dropdown menu for desktop */}
                 {item.hasDropdown && (
                   <div className="absolute left-0 mt-0 w-48 bg-white border border-gray-200 rounded-b shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                    <Link
-                      href={item.href}
-                      className="block px-6 py-3 text-sm text-gray-700 hover:bg-gray-100 first:rounded-b-none"
-                    >
-                      View {item.label}
-                    </Link>
-                    <div className="border-t border-gray-200"></div>
-                    <a
-                      href="#"
-                      className="block px-6 py-3 text-sm text-gray-700 hover:bg-gray-100 last:rounded-b"
-                    >
-                      {item.label} Option
-                    </a>
+                    {(item.dropdownItems && item.dropdownItems.length > 0 ? item.dropdownItems : [{ label: item.label, href: item.href }]).map((dropdownItem, index, array) => (
+                      <Link
+                        key={dropdownItem.label}
+                        href={dropdownItem.href}
+                        className={`block px-6 py-3 text-sm text-gray-700 hover:bg-gray-100 ${index === array.length - 1 ? 'rounded-b' : 'border-b border-gray-200'}`}
+                      >
+                        {dropdownItem.label}
+                      </Link>
+                    ))}
                   </div>
                 )}
               </div>
@@ -256,16 +268,13 @@ const Header: React.FC<HeaderProps> = ({
             <div className="px-4 py-4 space-y-2">
               {navItems.map((item) => (
                 <div key={item.label}>
-                  <button
-                    onClick={() => item.hasDropdown && toggleDropdown(item.label)}
-                    className={`w-full text-left px-4 py-2 text-sm font-medium rounded transition-colors ${item.label === 'Home'
-                      ? 'bg-brand-yellow text-white'
-                      : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span>{item.label}</span>
-                      {item.hasDropdown && (
+                  {item.hasDropdown ? (
+                    <button
+                      onClick={() => toggleDropdown(item.label)}
+                      className="w-full text-left px-4 py-2 text-sm font-medium rounded transition-colors text-gray-700 hover:bg-gray-100"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>{item.label}</span>
                         <svg
                           className={`w-4 h-4 transition-transform ${openDropdown === item.label ? 'rotate-180' : ''
                             }`}
@@ -280,25 +289,32 @@ const Header: React.FC<HeaderProps> = ({
                             d="M19 14l-7 7m0 0l-7-7m7 7V3"
                           />
                         </svg>
-                      )}
-                    </div>
-                  </button>
+                      </div>
+                    </button>
+                  ) : (
+                    <Link
+                      href={item.href}
+                      className={`block w-full px-4 py-2 text-sm font-medium rounded transition-colors ${item.label === 'Home'
+                        ? 'bg-brand-yellow text-white'
+                        : 'text-gray-700 hover:bg-gray-100'
+                        }`}
+                    >
+                      {item.label}
+                    </Link>
+                  )}
 
                   {/* Mobile dropdown */}
                   {item.hasDropdown && openDropdown === item.label && (
                     <div className="ml-4 mt-2 space-y-2 border-l-2 border-brand-yellow pl-4">
-                      <Link
-                        href={item.href}
-                        className="block text-sm text-gray-600 hover:text-brand-blue py-1"
-                      >
-                        View {item.label}
-                      </Link>
-                      <a
-                        href="#"
-                        className="block text-sm text-gray-600 hover:text-brand-blue py-1"
-                      >
-                        {item.label} Option
-                      </a>
+                      {(item.dropdownItems && item.dropdownItems.length > 0 ? item.dropdownItems : [{ label: item.label, href: item.href }]).map((dropdownItem) => (
+                        <Link
+                          key={dropdownItem.label}
+                          href={dropdownItem.href}
+                          className="block text-sm text-gray-600 hover:text-brand-blue py-1"
+                        >
+                          {dropdownItem.label}
+                        </Link>
+                      ))}
                     </div>
                   )}
                 </div>
