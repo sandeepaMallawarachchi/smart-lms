@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   XCircle,
   Plus,
+  X,
 } from 'lucide-react';
 import RegisterLecturerModal from '@/components/Admin/RegisterLecturerModal';
 
@@ -36,11 +37,11 @@ function AllUsersPageContent() {
   const filterParam = searchParams.get('filter');
 
   const [users, setUsers] = useState<User[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'student' | 'lecturer' | 'pending'>('all');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [viewUser, setViewUser] = useState<User | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [approveLoading, setApproveLoading] = useState<string | null>(null);
@@ -64,8 +65,25 @@ function AllUsersPageContent() {
   }, []);
 
   useEffect(() => {
-    filterUsers();
-  }, [users, searchQuery, filterType]);
+    if (!viewUser) {
+      return undefined;
+    }
+
+    const originalOverflow = document.body.style.overflow;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setViewUser(null);
+      }
+    };
+
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [viewUser]);
 
   const fetchUsers = async () => {
     try {
@@ -87,7 +105,7 @@ function AllUsersPageContent() {
     }
   };
 
-  const filterUsers = () => {
+  const filteredUsers = (() => {
     let filtered = users;
 
     if (filterType === 'student') {
@@ -106,8 +124,8 @@ function AllUsersPageContent() {
       );
     }
 
-    setFilteredUsers(filtered);
-  };
+    return filtered;
+  })();
 
   const handleApproveReject = async (userId: string, userType: 'student' | 'lecturer', action: 'approve' | 'reject') => {
     setApproveLoading(userId);
@@ -401,7 +419,11 @@ function AllUsersPageContent() {
                           </button>
                         </>
                       )}
-                      <button className="text-purple-600 hover:text-purple-900 p-2 hover:bg-purple-50 rounded-lg transition-colors" title="View">
+                      <button
+                        onClick={() => setViewUser(user)}
+                        className="text-purple-600 hover:text-purple-900 p-2 hover:bg-purple-50 rounded-lg transition-colors"
+                        title="View"
+                      >
                         <Eye size={18} />
                       </button>
                       <button
@@ -466,6 +488,160 @@ function AllUsersPageContent() {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+          onClick={() => setViewUser(null)}
+        >
+          <div
+            className="w-full max-w-2xl overflow-hidden rounded-3xl border border-purple-200 bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-600 px-6 py-6 text-white">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className={`flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-bold text-white ${viewUser.userType === 'student' ? 'bg-green-500/90' : 'bg-blue-500/90'}`}>
+                    {viewUser.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-purple-100">
+                      User Details
+                    </p>
+                    <h3 className="mt-1 text-2xl font-bold">{viewUser.name}</h3>
+                    <p className="mt-1 text-sm text-purple-100">
+                      {viewUser.userType === 'student' ? 'Student Profile' : 'Lecturer Profile'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setViewUser(null)}
+                  className="rounded-xl bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+                  title="Close"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid gap-6 px-6 py-6 md:grid-cols-[1.1fr_0.9fr]">
+              <div className="space-y-5">
+                <div className="rounded-2xl border border-purple-100 bg-purple-50 p-5">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-purple-700">
+                    Account Information
+                  </p>
+                  <div className="space-y-3 text-sm text-gray-700">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="font-medium text-gray-500">Email</span>
+                      <span className="text-right font-medium text-gray-900">{viewUser.email}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="font-medium text-gray-500">User Type</span>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${viewUser.userType === 'student' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {viewUser.userType === 'student' ? <GraduationCap size={14} /> : <Briefcase size={14} />}
+                        {viewUser.userType === 'student' ? 'Student' : 'Lecturer'}
+                      </span>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="font-medium text-gray-500">Status</span>
+                      <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${viewUser.isVerified === false ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                        {viewUser.isVerified === false ? 'Pending Approval' : 'Active'}
+                      </span>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="font-medium text-gray-500">Joined</span>
+                      <span className="text-right font-medium text-gray-900">{formatDate(viewUser.createdAt)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-purple-700">
+                    Role-Specific Details
+                  </p>
+                  <div className="space-y-3 text-sm text-gray-700">
+                    {viewUser.userType === 'student' ? (
+                      <>
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="font-medium text-gray-500">Student ID</span>
+                          <span className="text-right font-medium text-gray-900">{viewUser.studentIdNumber || 'Not available'}</span>
+                        </div>
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="font-medium text-gray-500">Department</span>
+                          <span className="text-right font-medium text-gray-900">{viewUser.department || 'Not assigned'}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="font-medium text-gray-500">Position</span>
+                          <span className="text-right font-medium text-gray-900">{viewUser.position || 'Not available'}</span>
+                        </div>
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="font-medium text-gray-500">Department</span>
+                          <span className="text-right font-medium text-gray-900">{viewUser.department || 'Not assigned'}</span>
+                        </div>
+                      </>
+                    )}
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="font-medium text-gray-500">User ID</span>
+                      <span className="max-w-[55%] break-all text-right font-medium text-gray-900">{viewUser._id}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-5">
+                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
+                    Summary
+                  </p>
+                  <p className="text-sm leading-6 text-gray-700">
+                    This view gives a quick admin snapshot for the selected account so approvals, status checks, and user reviews can happen without leaving the table.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-purple-700">
+                    Quick Actions
+                  </p>
+                  <div className="space-y-3">
+                    {viewUser.isVerified === false && (
+                      <button
+                        onClick={() => {
+                          setViewUser(null);
+                          handleApproveReject(viewUser._id, viewUser.userType, 'approve');
+                        }}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+                      >
+                        <CheckCircle2 size={16} />
+                        Approve User
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setSelectedUser(viewUser);
+                        setViewUser(null);
+                        setShowDeleteModal(true);
+                      }}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100"
+                    >
+                      <Trash2 size={16} />
+                      Delete User
+                    </button>
+                    <button
+                      onClick={() => setViewUser(null)}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

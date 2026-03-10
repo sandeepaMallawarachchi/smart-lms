@@ -7,7 +7,6 @@ import {
   BarChart3,
   Users,
   AlertCircle,
-  Settings,
   FileText,
   ChevronDown,
   HelpCircle,
@@ -90,17 +89,6 @@ export default function LecturerSidebar() {
         { id: 'project-summary', label: 'Summary', href: '/projects-and-tasks/lecturer/reports' },
         { id: 'student-progress', label: 'Progress', href: '/projects-and-tasks/lecturer/reports?view=progress' },
         { id: 'export-data', label: 'Export', href: '/projects-and-tasks/lecturer/reports?view=export' },
-      ],
-    },
-    {
-      id: 'settings',
-      label: 'Settings',
-      icon: <Settings size={22} />,
-      href: '/lecturer/settings',
-      subsections: [
-        { id: 'notification-settings', label: 'Notifications' },
-        { id: 'assignment-linking', label: 'Assignments' },
-        { id: 'grading-rubrics', label: 'Grading' },
       ],
     },
   ];

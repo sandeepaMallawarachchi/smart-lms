@@ -16,7 +16,7 @@ export default function AnalyticsChatbot() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: "Hi! I'm your Learning Analytics assistant. I can help you with:\n- Academic risk predictions\n- Performance metrics\n- Personalized study recommendations\n- Engagement analysis\n- Trend analysis\n\nWhat would you like to know?",
+      text: "Hi! I'm your Learning Analytics assistant. I can help you with:\n\n- Academic risk predictions\n- Performance metrics\n- Personalized study recommendations\n- Engagement analysis\n\nWhat would you like to know?",
       sender: 'bot',
       timestamp: new Date(),
     },

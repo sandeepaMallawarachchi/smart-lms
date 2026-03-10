@@ -1,16 +1,13 @@
 import React from 'react';
 import {
   LayoutGrid,
-  Trello,
   CodeXml,
   Clock,
   AlertCircle,
   Users,
   BarChart3,
-  Lightbulb,
   LayoutDashboard,
   ListTodo,
-  Settings,
   FileText,
   BellIcon
 } from 'lucide-react';
@@ -37,7 +34,7 @@ export interface Notification {
   message: string;
   time: string;
   type: 'alert' | 'warning' | 'info' | 'success';
-  icon: React.ComponentType<any>;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
 }
 
 export interface SidebarConfig {
@@ -284,7 +281,7 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           id: 'dashboard',
           label: 'Dashboard',
           icon: <LayoutDashboard size={22} />,
-          href: '/projects-and-tasks/lecturer/dashboard',
+          href: '/projects-and-tasks/lecturer',
         },
         {
           id: 'projects',
@@ -329,17 +326,6 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           label: 'Reports',
           icon: <FileText size={22} />,
           href: '/projects-and-tasks/lecturer/reports',
-        },
-        {
-          id: 'settings',
-          label: 'Settings',
-          icon: <Settings size={22} />,
-          href: '/projects-and-tasks/lecturer/settings',
-          subsections: [
-            { id: 'notification-settings', label: 'Notifications' },
-            { id: 'assignment-linking', label: 'Assignments' },
-            { id: 'grading-rubrics', label: 'Grading' },
-          ],
         },
       ],
     },

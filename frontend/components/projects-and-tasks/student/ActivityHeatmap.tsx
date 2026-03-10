@@ -50,6 +50,7 @@ export default function ActivityHeatmap() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hoveredDay, setHoveredDay] = useState<HeatmapDay | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [showHeatmapInfo, setShowHeatmapInfo] = useState(false);
 
@@ -135,6 +136,10 @@ export default function ActivityHeatmap() {
       });
       
       setData(result);
+      const latestHistoricalWithItems = [...result.heatmap]
+        .reverse()
+        .find((day: HeatmapDay) => !day.isPrediction && day.items.length > 0);
+      setSelectedDate(latestHistoricalWithItems?.date || result.heatmap.find((day: HeatmapDay) => !day.isPrediction)?.date || null);
     } catch (error) {
       console.error('❌ Error fetching heatmap:', error);
       setError(error instanceof Error ? error.message : 'Unknown error');
@@ -157,6 +162,10 @@ export default function ActivityHeatmap() {
     return greenColors[day.level];
   };
 
+  const getDisplayCount = (day: HeatmapDay) => (
+    day.isPrediction ? Math.ceil(day.count) : day.count
+  );
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('en-US', { 
@@ -173,6 +182,11 @@ export default function ActivityHeatmap() {
 
   const handleMouseLeave = () => {
     setHoveredDay(null);
+  };
+
+  const handleDayClick = (day: HeatmapDay) => {
+    if (!day.date || day.isPrediction) return;
+    setSelectedDate(day.date);
   };
 
   // Organize days into weeks
@@ -220,23 +234,6 @@ export default function ActivityHeatmap() {
     return weeks;
   };
 
-  const getLatestWorks = () => {
-    if (!data) return [];
-    
-    const worksWithDates = data.heatmap
-      .filter(day => day.items.length > 0 && !day.isPrediction)
-      .flatMap(day => 
-        day.items.map(item => ({
-          ...item,
-          date: day.date
-        }))
-      )
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 5);
-    
-    return worksWithDates;
-  };
-
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-96 gap-4">
@@ -275,6 +272,7 @@ export default function ActivityHeatmap() {
   }
 
   const weeks = organizeIntoWeeks(data.heatmap);
+  const selectedDay = data.heatmap.find((day) => day.date === selectedDate) || null;
   const monthMarkers = (() => {
     const markers: Array<{ weekIndex: number; label: string }> = [];
     weeks.forEach((week, index) => {
@@ -447,6 +445,7 @@ export default function ActivityHeatmap() {
                         className="relative"
                         onMouseMove={(e) => day.date && handleMouseMove(e, day)}
                         onMouseLeave={handleMouseLeave}
+                        onClick={() => day.date && handleDayClick(day)}
                         whileHover={{ scale: day.date ? 1.3 : 1 }}
                       >
                         <div
@@ -457,7 +456,11 @@ export default function ActivityHeatmap() {
                             width: `${CELL_SIZE}px`,
                             height: `${CELL_SIZE}px`,
                             backgroundColor: day.date ? getColor(day) : 'transparent',
-                            border: day.date ? '1px solid rgba(0,0,0,0.1)' : 'none',
+                            border: day.date
+                              ? day.date === selectedDate
+                                ? '2px solid #111827'
+                                : '1px solid rgba(0,0,0,0.1)'
+                              : 'none',
                           }}
                         >
                           {/* Anomaly Indicator */}
@@ -521,13 +524,29 @@ export default function ActivityHeatmap() {
         </div>
       </div>
 
-      {/* Latest Works */}
+      {/* Selected Day Activities */}
       <div className="bg-white rounded-xl p-6 border border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Latest 5 Works
+          {selectedDay ? `Activities for ${formatDate(selectedDay.date)}` : 'Day Activities'}
         </h3>
+        {selectedDay ? (
+          <div className="mb-4 flex items-center gap-3 text-sm text-gray-600">
+            <span>
+              {selectedDay.isPrediction
+                ? `Predicted ${getDisplayCount(selectedDay)} activities`
+                : `${getDisplayCount(selectedDay)} ${getDisplayCount(selectedDay) === 1 ? 'activity' : 'activities'}`}
+            </span>
+            {selectedDay.isAnomaly && (
+              <span className={selectedDay.anomalyType === 'positive' ? 'text-emerald-600' : 'text-red-600'}>
+                {selectedDay.anomalyType === 'positive' ? 'Positive anomaly' : 'Negative anomaly'}
+              </span>
+            )}
+          </div>
+        ) : (
+          <p className="mb-4 text-sm text-gray-500">Click a historical heatmap cube to inspect that day.</p>
+        )}
         <div className="space-y-3">
-          {getLatestWorks().map((work, idx) => (
+          {(selectedDay?.items || []).map((work, idx) => (
             <motion.div
               key={`${work.id}-${idx}`}
               initial={{ opacity: 0, x: -20 }}
@@ -559,9 +578,14 @@ export default function ActivityHeatmap() {
               </span>
             </motion.div>
           ))}
-          {getLatestWorks().length === 0 && (
+          {selectedDay && selectedDay.items.length === 0 && (
             <p className="text-center text-gray-500 py-4">
-              No activities yet
+              No recorded project or task updates for this day
+            </p>
+          )}
+          {!selectedDay && (
+            <p className="text-center text-gray-500 py-4">
+              No day selected
             </p>
           )}
         </div>
@@ -582,11 +606,11 @@ export default function ActivityHeatmap() {
               <p className="text-sm">
                 {hoveredDay.isPrediction ? (
                   <span className="text-blue-300">
-                    Predicted: {hoveredDay.count.toFixed(2)} activities
+                    Predicted: {getDisplayCount(hoveredDay)} activities
                   </span>
                 ) : (
                   <span>
-                    {hoveredDay.count} {hoveredDay.count === 1 ? 'activity' : 'activities'}
+                    {getDisplayCount(hoveredDay)} {getDisplayCount(hoveredDay) === 1 ? 'activity' : 'activities'}
                   </span>
                 )}
               </p>

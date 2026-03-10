@@ -5,6 +5,7 @@ import { successResponse, unauthorizedResponse, notFoundResponse, serverErrorRes
 import { verifyToken } from '@/lib/jwt';
 import {
     cancelReminderJobsForStudentItem,
+    hasReminderJobsForStudentItem,
     scheduleReminderJobsForStudentItem,
 } from '@/lib/projects-and-tasks/reminders/scheduler';
 
@@ -70,6 +71,7 @@ export async function GET(request: NextRequest) {
             studentId: payload.userId,
             taskId,
         });
+        const wasCreated = !progress;
 
         if (!progress) {
             progress = new StudentTaskProgress({
@@ -89,7 +91,22 @@ export async function GET(request: NextRequest) {
 
         }
 
-        if (progress.status !== 'done' && visibleTask.deadlineDate) {
+        progress.subtasks = applyTaskMarks(
+            (progress.subtasks || []) as ProgressSubtask[],
+            (visibleTask.subtasks || []) as ProgressSubtask[]
+        ) as any;
+
+        // Only schedule when this item has no queued reminder jobs. Re-scheduling
+        // on every GET keeps pushing 25/50/75 reminders forward and they never fire.
+        const hasReminderJobs =
+            progress.status !== 'done'
+                ? await hasReminderJobsForStudentItem({
+                    studentId: payload.userId,
+                    taskId,
+                })
+                : false;
+
+        if ((wasCreated || !hasReminderJobs) && progress.status !== 'done' && visibleTask.deadlineDate) {
             await scheduleReminderJobsForStudentItem({
                 studentId: payload.userId,
                 itemType: 'task',
@@ -97,13 +114,9 @@ export async function GET(request: NextRequest) {
                 itemName: visibleTask.taskName,
                 deadlineDate: visibleTask.deadlineDate,
                 deadlineTime: visibleTask.deadlineTime || '23:59',
+                startAt: (visibleTask as any).createdAt || progress.createdAt,
             });
         }
-
-        progress.subtasks = applyTaskMarks(
-            (progress.subtasks || []) as ProgressSubtask[],
-            (visibleTask.subtasks || []) as ProgressSubtask[]
-        ) as any;
 
         return successResponse('Task progress retrieved', { progress }, 200);
     } catch (error: any) {
@@ -149,6 +162,8 @@ export async function POST(request: NextRequest) {
             studentId: payload.userId,
             taskId,
         });
+        const wasCreated = !progress;
+        const previousStatus = progress?.status;
 
         if (!progress) {
             progress = new StudentTaskProgress({
@@ -192,16 +207,22 @@ export async function POST(request: NextRequest) {
                 studentId: payload.userId,
                 taskId,
             });
-        } else {
-            if (visibleTask.deadlineDate) {
-                await scheduleReminderJobsForStudentItem({
-                    studentId: payload.userId,
-                    itemType: 'task',
-                    itemId: taskId,
-                    itemName: visibleTask.taskName,
-                    deadlineDate: visibleTask.deadlineDate,
-                    deadlineTime: visibleTask.deadlineTime || '23:59',
-                });
+        } else if (visibleTask.deadlineDate) {
+            const hasReminderJobs = await hasReminderJobsForStudentItem({
+                studentId: payload.userId,
+                taskId,
+            });
+
+            if (wasCreated || previousStatus === 'done' || !hasReminderJobs) {
+            await scheduleReminderJobsForStudentItem({
+                studentId: payload.userId,
+                itemType: 'task',
+                itemId: taskId,
+                itemName: visibleTask.taskName,
+                deadlineDate: visibleTask.deadlineDate,
+                deadlineTime: visibleTask.deadlineTime || '23:59',
+                startAt: (visibleTask as any).createdAt || progress.createdAt,
+            });
             }
         }
 

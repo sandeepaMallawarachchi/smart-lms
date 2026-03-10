@@ -200,6 +200,7 @@ export async function PUT(
               itemName: updatedTask.taskName,
               deadlineDate: updatedTask.deadlineDate,
               deadlineTime: updatedTask.deadlineTime || '23:59',
+              startAt: existingTask.createdAt || updatedTask.createdAt,
             })
           )
         );
