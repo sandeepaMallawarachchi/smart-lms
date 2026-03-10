@@ -228,6 +228,7 @@ export async function POST(request: NextRequest) {
       itemName,
       deadlineDate: item.deadlineDate,
       deadlineTime: item.deadlineTime || '23:59',
+      startAt: item.createdAt as string | Date | undefined,
     });
 
     return successResponse(

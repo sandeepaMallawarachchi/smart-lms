@@ -2,6 +2,7 @@ import { ReminderType } from './jobTypes';
 import {
   getReminderJobId,
   getReminderJobPrefix,
+  listReminderJobsByPrefix,
   notificationQueue,
   removeReminderJobsByPrefix,
 } from './notificationQueue';
@@ -15,6 +16,20 @@ function computeReminderScheduleTimes(deadline: Date, now: Date) {
     const offsetMs = Math.floor((totalMs * percentage) / 100);
     const scheduledFor = new Date(now.getTime() + offsetMs);
     return { percentage, scheduledFor };
+  });
+}
+
+function computeReminderScheduleTimesFromStart(start: Date, deadline: Date) {
+  const totalMs = deadline.getTime() - start.getTime();
+  if (totalMs <= 0) return [];
+
+  const checkpoints = [25, 50, 75, 100] as const;
+  return checkpoints.map((percentage) => {
+    const offsetMs = Math.floor((totalMs * percentage) / 100);
+    return {
+      percentage,
+      scheduledFor: new Date(start.getTime() + offsetMs),
+    };
   });
 }
 
@@ -35,6 +50,16 @@ export async function cancelReminderJobsForStudentItem(input: {
   return removeReminderJobsByPrefix(prefix);
 }
 
+export async function hasReminderJobsForStudentItem(input: {
+  studentId: string;
+  projectId?: string;
+  taskId?: string;
+}) {
+  const prefix = getReminderJobPrefix(input);
+  const jobs = await listReminderJobsByPrefix(prefix);
+  return jobs.length > 0;
+}
+
 export async function scheduleReminderJobsForStudentItem(input: {
   studentId: string;
   itemType: 'project' | 'task';
@@ -42,6 +67,7 @@ export async function scheduleReminderJobsForStudentItem(input: {
   itemName: string;
   deadlineDate: string;
   deadlineTime?: string;
+  startAt?: string | Date;
 }) {
   const deadline = new Date(`${input.deadlineDate}T${input.deadlineTime || '23:59'}`);
   if (Number.isNaN(deadline.getTime())) {
@@ -49,6 +75,12 @@ export async function scheduleReminderJobsForStudentItem(input: {
   }
 
   const now = new Date();
+  const parsedStart = input.startAt ? new Date(input.startAt) : null;
+  const scheduleStart =
+    parsedStart && !Number.isNaN(parsedStart.getTime()) && parsedStart.getTime() < deadline.getTime()
+      ? parsedStart
+      : now;
+
   await cancelReminderJobsForStudentItem({
     studentId: input.studentId,
     projectId: input.itemType === 'project' ? input.itemId : undefined,
@@ -63,7 +95,7 @@ export async function scheduleReminderJobsForStudentItem(input: {
   }> = [];
 
   // If already overdue, enqueue a single immediate overdue notification.
-  if (deadline.getTime() <= now.getTime()) {
+  if (deadline.getTime() < now.getTime()) {
     const reminderType = resolveOverdueReminderType(input.itemType);
     const jobId = getReminderJobId({
       studentId: input.studentId,
@@ -104,7 +136,13 @@ export async function scheduleReminderJobsForStudentItem(input: {
     ];
   }
 
-  const scheduleTimes = computeReminderScheduleTimes(deadline, now);
+  const baseScheduleTimes = computeReminderScheduleTimesFromStart(scheduleStart, deadline);
+  const pastOrNow = baseScheduleTimes.filter((point) => point.scheduledFor.getTime() <= now.getTime());
+  const future = baseScheduleTimes.filter((point) => point.scheduledFor.getTime() > now.getTime());
+  const scheduleTimes = [
+    ...(pastOrNow.length > 0 ? [pastOrNow[pastOrNow.length - 1]] : []),
+    ...future,
+  ];
 
   for (const point of scheduleTimes) {
     const reminderType = resolveReminderType(input.itemType, point.percentage);

@@ -99,13 +99,17 @@ const getDeadlineStatus = (deadlineDate: string, deadlineTime: string = '23:59')
     try {
         const deadline = new Date(`${deadlineDate}T${deadlineTime}`);
         const now = new Date();
-        const hoursUntil = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
+        const startOfToday = new Date(now);
+        startOfToday.setHours(0, 0, 0, 0);
+        const startOfDeadline = new Date(deadline);
+        startOfDeadline.setHours(0, 0, 0, 0);
+        const dayDiff = Math.round((startOfDeadline.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
 
-        if (hoursUntil < 0) {
+        if (deadline.getTime() < now.getTime()) {
             return { status: 'overdue', color: 'text-red-600', bgColor: 'bg-red-50', borderColor: 'border-red-200' };
-        } else if (hoursUntil < 24) {
-            return { status: 'urgent', color: 'text-red-600', bgColor: 'bg-red-50', borderColor: 'border-red-200' };
-        } else if (hoursUntil < 72) {
+        } else if (dayDiff <= 2) {
+            return { status: 'urgent', color: 'text-orange-600', bgColor: 'bg-orange-50', borderColor: 'border-orange-200' };
+        } else if (dayDiff <= 5) {
             return { status: 'warning', color: 'text-orange-600', bgColor: 'bg-orange-50', borderColor: 'border-orange-200' };
         } else {
             return { status: 'ok', color: 'text-green-600', bgColor: 'bg-green-50', borderColor: 'border-green-200' };
@@ -119,10 +123,15 @@ const getDeadlineText = (deadlineDate: string, deadlineTime: string = '23:59') =
     try {
         const deadline = new Date(`${deadlineDate}T${deadlineTime}`);
         const now = new Date();
-        const daysUntil = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        const startOfToday = new Date(now);
+        startOfToday.setHours(0, 0, 0, 0);
+        const startOfDeadline = new Date(deadline);
+        startOfDeadline.setHours(0, 0, 0, 0);
+        const daysUntil = Math.round((startOfDeadline.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
 
-        if (daysUntil < 0) {
-            return `Overdue by ${Math.abs(daysUntil)} day${Math.abs(daysUntil) !== 1 ? 's' : ''}`;
+        if (deadline.getTime() < now.getTime()) {
+            const overdueDays = Math.max(1, Math.ceil((now.getTime() - deadline.getTime()) / (1000 * 60 * 60 * 24)));
+            return `Overdue by ${overdueDays} day${overdueDays !== 1 ? 's' : ''}`;
         } else if (daysUntil === 0) {
             return 'Due today';
         } else if (daysUntil === 1) {

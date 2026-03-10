@@ -79,7 +79,7 @@ export async function processReminderJob(payload: ReminderJobPayload): Promise<v
         taskId: itemId,
       }).lean();
 
-  if (!progress || progress.status === 'done') {
+  if (progress && progress.status === 'done') {
     return;
   }
 
@@ -94,7 +94,7 @@ export async function processReminderJob(payload: ReminderJobPayload): Promise<v
   let taskProgressData: any[] = [];
 
   if (isProject) {
-    const mainTasks = (progress as any).mainTasks || [];
+    const mainTasks = (progress as any)?.mainTasks || (item as any).mainTasks || [];
     const totalMainTasks = mainTasks.length;
     const completedMainTasks = mainTasks.filter((mt: any) => mt.completed).length;
 
@@ -123,7 +123,7 @@ export async function processReminderJob(payload: ReminderJobPayload): Promise<v
       completedCount: mt.subtasks?.filter((st: any) => st.completed).length || 0,
     }));
   } else {
-    const subtasks = (progress as any).subtasks || [];
+    const subtasks = (progress as any)?.subtasks || (item as any).subtasks || [];
     const totalSubtasks = subtasks.length;
     const completedSubtasks = subtasks.filter((st: any) => st.completed).length;
 
@@ -160,9 +160,11 @@ export async function processReminderJob(payload: ReminderJobPayload): Promise<v
     dedupeKey,
     type: payload.reminderType.endsWith('_overdue')
       ? 'overdue'
-      : isProject
-        ? 'project_reminder'
-        : 'task_reminder',
+      : payload.reminderType.endsWith('_deadline') || payload.reminderType.endsWith('_75')
+        ? 'deadline_warning'
+        : isProject
+          ? 'project_reminder'
+          : 'task_reminder',
     reminderPercentage: payload.reminderPercentage,
     title: content.title,
     message: content.message,

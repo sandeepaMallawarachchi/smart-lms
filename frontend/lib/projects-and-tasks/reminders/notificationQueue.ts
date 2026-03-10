@@ -32,10 +32,20 @@ export function getReminderJobPrefix(payload: {
   return `reminder__${payload.studentId}__${itemId}__`;
 }
 
-export async function removeReminderJobsByPrefix(prefix: string): Promise<number> {
-  const states = ['delayed', 'waiting', 'active', 'paused', 'prioritized'] as const;
+export async function listReminderJobsByPrefix(prefix: string) {
+  const states: Array<'delayed' | 'waiting' | 'active' | 'paused' | 'prioritized'> = [
+    'delayed',
+    'waiting',
+    'active',
+    'paused',
+    'prioritized',
+  ];
   const jobs = await notificationQueue.getJobs(states, 0, -1, true);
-  const removable = jobs.filter((job) => typeof job.id === 'string' && job.id.startsWith(prefix));
+  return jobs.filter((job) => typeof job.id === 'string' && job.id.startsWith(prefix));
+}
+
+export async function removeReminderJobsByPrefix(prefix: string): Promise<number> {
+  const removable = await listReminderJobsByPrefix(prefix);
 
   await Promise.all(
     removable.map(async (job) => {
