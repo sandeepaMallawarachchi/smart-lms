@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, use } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     ArrowLeft,
@@ -9,200 +9,144 @@ import {
     Shield,
     Star,
     Eye,
-    Download,
     CheckCircle2,
     Award,
     Calendar,
-    FileText,
-    AlertTriangle,
     TrendingUp,
+    Loader2,
+    AlertCircle,
 } from 'lucide-react';
-
-interface Version {
-    version: number;
-    createdAt: string;
-    wordCount: number;
-    plagiarismScore: number;
-    aiScore: number;
-    aiFeedback: string;
-    status: 'draft' | 'submitted';
-    answers: {
-        questionId: string;
-        text: string;
-        wordCount: number;
-        plagiarismScore: number;
-        aiScore: number;
-        aiFeedback: string;
-    }[];
-}
+import { useSubmission } from '@/hooks/useSubmissions';
+import { useVersions, useVersion } from '@/hooks/useVersions';
+import type { VersionAnswer, VersionPlagiarismSource } from '@/types/submission.types';
 
 export default function SubmissionDetailPage({ params }: { params: Promise<{ submissionId: string }> }) {
     const resolvedParams = use(params);
+    const submissionId = resolvedParams.submissionId;
     const router = useRouter();
-    const [selectedVersion, setSelectedVersion] = useState(4);
+    const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
     const [showAnswers, setShowAnswers] = useState(false);
 
-    // Hardcoded submission data
-    const submission = {
-        id: resolvedParams.submissionId,
-        title: 'Data Structures Implementation',
-        module: { code: 'CS2002', name: 'Data Structures & Algorithms' },
-        totalMarks: 100,
-        finalGrade: null, // Not graded yet
-        dueDate: '2025-01-08 23:59',
-        submittedAt: '2025-01-08 20:45',
-        status: 'submitted',
-        versions: [
-            {
-                version: 1,
-                createdAt: '2025-01-06 14:30',
-                wordCount: 450,
-                plagiarismScore: 8,
-                aiScore: 72,
-                aiFeedback: 'Good start, but needs more detail on implementation.',
-                status: 'draft',
-                answers: [
-                    {
-                        questionId: 'q1',
-                        text: 'A Binary Search Tree is a data structure...',
-                        wordCount: 150,
-                        plagiarismScore: 10,
-                        aiScore: 70,
-                        aiFeedback: 'Good explanation but could use more examples.',
-                    },
-                    {
-                        questionId: 'q2',
-                        text: 'AVL trees maintain balance through...',
-                        wordCount: 180,
-                        plagiarismScore: 6,
-                        aiScore: 75,
-                        aiFeedback: 'Clear explanation of rotation mechanisms.',
-                    },
-                    {
-                        questionId: 'q3',
-                        text: 'Hash tables use hash functions to...',
-                        wordCount: 120,
-                        plagiarismScore: 8,
-                        aiScore: 70,
-                        aiFeedback: 'Need more detail on collision handling.',
-                    },
-                ],
-            },
-            {
-                version: 2,
-                createdAt: '2025-01-07 10:15',
-                wordCount: 620,
-                plagiarismScore: 7,
-                aiScore: 80,
-                aiFeedback: 'Much improved! Good use of examples and explanations.',
-                status: 'draft',
-                answers: [
-                    {
-                        questionId: 'q1',
-                        text: 'A Binary Search Tree (BST) is a hierarchical data structure where each node has at most two children...',
-                        wordCount: 220,
-                        plagiarismScore: 8,
-                        aiScore: 82,
-                        aiFeedback: 'Excellent expansion with practical examples.',
-                    },
-                    {
-                        questionId: 'q2',
-                        text: 'AVL trees are self-balancing BSTs that maintain a balance factor...',
-                        wordCount: 240,
-                        plagiarismScore: 5,
-                        aiScore: 80,
-                        aiFeedback: 'Good coverage of rotation types.',
-                    },
-                    {
-                        questionId: 'q3',
-                        text: 'Hash tables provide O(1) average case lookup through hash functions and collision resolution...',
-                        wordCount: 160,
-                        plagiarismScore: 8,
-                        aiScore: 78,
-                        aiFeedback: 'Good explanation of chaining and open addressing.',
-                    },
-                ],
-            },
-            {
-                version: 3,
-                createdAt: '2025-01-08 16:20',
-                wordCount: 780,
-                plagiarismScore: 6,
-                aiScore: 85,
-                aiFeedback: 'Excellent work! Very comprehensive coverage.',
-                status: 'draft',
-                answers: [
-                    {
-                        questionId: 'q1',
-                        text: 'A Binary Search Tree (BST) is a fundamental data structure in computer science...',
-                        wordCount: 280,
-                        plagiarismScore: 7,
-                        aiScore: 87,
-                        aiFeedback: 'Outstanding explanation with complexity analysis.',
-                    },
-                    {
-                        questionId: 'q2',
-                        text: 'AVL trees, named after inventors Adelson-Velsky and Landis...',
-                        wordCount: 290,
-                        plagiarismScore: 4,
-                        aiScore: 85,
-                        aiFeedback: 'Excellent historical context and implementation details.',
-                    },
-                    {
-                        questionId: 'q3',
-                        text: 'Hash tables are one of the most efficient data structures...',
-                        wordCount: 210,
-                        plagiarismScore: 7,
-                        aiScore: 83,
-                        aiFeedback: 'Great comparison of collision resolution strategies.',
-                    },
-                ],
-            },
-            {
-                version: 4,
-                createdAt: '2025-01-08 20:45',
-                wordCount: 850,
-                plagiarismScore: 5,
-                aiScore: 88,
-                aiFeedback: 'Outstanding submission! Comprehensive and well-structured.',
-                status: 'submitted',
-                answers: [
-                    {
-                        questionId: 'q1',
-                        text: 'A Binary Search Tree (BST) is a fundamental hierarchical data structure...',
-                        wordCount: 300,
-                        plagiarismScore: 5,
-                        aiScore: 90,
-                        aiFeedback: 'Exceptional explanation with real-world use cases.',
-                    },
-                    {
-                        questionId: 'q2',
-                        text: 'AVL trees represent a crucial advancement in self-balancing binary search trees...',
-                        wordCount: 320,
-                        plagiarismScore: 3,
-                        aiScore: 88,
-                        aiFeedback: 'Superb coverage of balancing algorithms.',
-                    },
-                    {
-                        questionId: 'q3',
-                        text: 'Hash tables provide one of the most efficient solutions for key-value storage...',
-                        wordCount: 230,
-                        plagiarismScore: 7,
-                        aiScore: 86,
-                        aiFeedback: 'Excellent analysis of performance trade-offs.',
-                    },
-                ],
-            },
-        ] as Version[],
+    const { data: submission, loading: subLoading, error: subError } = useSubmission(submissionId);
+    const { data: versions, loading: verLoading, error: verError } = useVersions(submissionId);
+    const { data: selectedVersionDetail, loading: verDetailLoading } = useVersion(submissionId, selectedVersionId);
+
+    // Auto-select latest version when versions load
+    useEffect(() => {
+        if (versions && versions.length > 0 && !selectedVersionId) {
+            setSelectedVersionId(versions[0].id); // sorted newest-first
+        }
+    }, [versions, selectedVersionId]);
+
+    const loading = subLoading || verLoading;
+    const error = subError || verError;
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <Loader2 className="animate-spin text-purple-600" size={40} />
+            </div>
+        );
+    }
+
+    if (error || !submission) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+                <AlertCircle className="text-red-500" size={40} />
+                <p className="text-red-600 font-medium">{error || 'Submission not found'}</p>
+                <button onClick={() => router.back()} className="text-purple-600 hover:underline">Go back</button>
+            </div>
+        );
+    }
+
+    const currentVersion = selectedVersionDetail;
+    const versionList = versions || [];
+
+    // Build timeline with improvement deltas (chronological, then reversed for display)
+    const getVersionTimeline = () => {
+        const chronological = [...versionList].reverse(); // oldest-first
+        return chronological.map((v, index) => ({
+            ...v,
+            improvement:
+                index > 0 && v.aiScore != null && chronological[index - 1].aiScore != null
+                    ? (v.aiScore ?? 0) - (chronological[index - 1].aiScore ?? 0)
+                    : 0,
+        }));
     };
 
-    const currentVersion = submission.versions.find(v => v.version === selectedVersion) || submission.versions[submission.versions.length - 1];
+    // Status badge config
+    const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
+        SUBMITTED: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Submitted' },
+        GRADED: { bg: 'bg-green-100', text: 'text-green-700', label: 'Graded' },
+        DRAFT: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Draft' },
+        LATE: { bg: 'bg-red-100', text: 'text-red-700', label: 'Late' },
+        PENDING_REVIEW: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Pending Review' },
+        FLAGGED: { bg: 'bg-red-100', text: 'text-red-700', label: 'Flagged' },
+    };
+    const badge = statusConfig[submission.status] || statusConfig.SUBMITTED;
 
-    const getVersionTimeline = () => {
-        return submission.versions.map((v, index) => ({
-            ...v,
-            improvement: index > 0 ? v.aiScore - submission.versions[index - 1].aiScore : 0,
-        }));
+    // Collect all plagiarism sources from every answer in the current version
+    const allPlagiarismSources: VersionPlagiarismSource[] =
+        currentVersion?.answers?.flatMap((a) => a.plagiarismSources || []) ?? [];
+
+    // Compute per-answer AI score as average of 4 sub-scores
+    const computeAnswerAiScore = (a: VersionAnswer): number | null => {
+        const scores = [a.grammarScore, a.clarityScore, a.completenessScore, a.relevanceScore].filter(
+            (s): s is number => s != null,
+        );
+        if (scores.length === 0) return null;
+        return Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length);
+    };
+
+    // Format AI feedback from strengths / improvements / suggestions arrays
+    const formatAiFeedback = (a: VersionAnswer): string | null => {
+        const parts: string[] = [];
+        if (a.strengths?.length) parts.push(`Strengths: ${a.strengths.join(', ')}`);
+        if (a.improvements?.length) parts.push(`Areas for improvement: ${a.improvements.join(', ')}`);
+        if (a.suggestions?.length) parts.push(`Suggestions: ${a.suggestions.join(', ')}`);
+        return parts.length > 0 ? parts.join('. ') : null;
+    };
+
+    // Plagiarism label & styling (uses full class names for Tailwind JIT)
+    const getPlagiarismConfig = (score: number) => {
+        if (score < 20)
+            return {
+                label: 'Excellent Originality',
+                desc: 'Your work shows high originality',
+                bg: 'bg-green-50',
+                border: 'border-green-200',
+                circleBg: 'bg-green-100',
+                circleText: 'text-green-600',
+                titleText: 'text-green-900',
+                descText: 'text-green-700',
+                barBg: 'bg-green-200',
+                barFill: 'bg-green-600',
+            };
+        if (score < 50)
+            return {
+                label: 'Moderate Similarity',
+                desc: 'Some similarities detected',
+                bg: 'bg-amber-50',
+                border: 'border-amber-200',
+                circleBg: 'bg-amber-100',
+                circleText: 'text-amber-600',
+                titleText: 'text-amber-900',
+                descText: 'text-amber-700',
+                barBg: 'bg-amber-200',
+                barFill: 'bg-amber-600',
+            };
+        return {
+            label: 'High Similarity',
+            desc: 'Significant similarities found',
+            bg: 'bg-red-50',
+            border: 'border-red-200',
+            circleBg: 'bg-red-100',
+            circleText: 'text-red-600',
+            titleText: 'text-red-900',
+            descText: 'text-red-700',
+            barBg: 'bg-red-200',
+            barFill: 'bg-red-600',
+        };
     };
 
     return (
@@ -220,14 +164,21 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ sub
                 <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
                     <div className="flex items-start justify-between mb-4">
                         <div>
-                            <h1 className="text-3xl font-bold text-gray-900 mb-2">{submission.title}</h1>
-                            <p className="text-gray-600">{submission.module.code} • {submission.module.name}</p>
+                            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                                {submission.assignmentTitle || submission.title || 'Untitled Submission'}
+                            </h1>
+                            <p className="text-gray-600">
+                                {submission.moduleCode}
+                                {submission.moduleName ? ` • ${submission.moduleName}` : ''}
+                            </p>
                         </div>
                         <div className="text-right">
-              <span className="inline-flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-full font-medium">
-                <CheckCircle2 size={18} />
-                Submitted
-              </span>
+                            <span
+                                className={`inline-flex items-center gap-2 px-4 py-2 ${badge.bg} ${badge.text} rounded-full font-medium`}
+                            >
+                                <CheckCircle2 size={18} />
+                                {badge.label}
+                            </span>
                         </div>
                     </div>
 
@@ -236,14 +187,14 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ sub
                             <Award className="text-purple-600" size={20} />
                             <div>
                                 <div className="text-xs text-gray-500">Total Marks</div>
-                                <div className="font-bold">{submission.totalMarks}</div>
+                                <div className="font-bold">{submission.totalMarks ?? '—'}</div>
                             </div>
                         </div>
                         <div className="flex items-center gap-2 text-gray-700">
                             <GitBranch className="text-blue-600" size={20} />
                             <div>
                                 <div className="text-xs text-gray-500">Total Versions</div>
-                                <div className="font-bold">{submission.versions.length}</div>
+                                <div className="font-bold">{submission.totalVersions}</div>
                             </div>
                         </div>
                         <div className="flex items-center gap-2 text-gray-700">
@@ -251,12 +202,14 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ sub
                             <div>
                                 <div className="text-xs text-gray-500">Submitted</div>
                                 <div className="font-bold text-sm">
-                                    {new Date(submission.submittedAt).toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                    })}
+                                    {submission.submittedAt
+                                        ? new Date(submission.submittedAt).toLocaleDateString('en-US', {
+                                              month: 'short',
+                                              day: 'numeric',
+                                              hour: '2-digit',
+                                              minute: '2-digit',
+                                          })
+                                        : '—'}
                                 </div>
                             </div>
                         </div>
@@ -265,12 +218,14 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ sub
                             <div>
                                 <div className="text-xs text-gray-500">Due Date</div>
                                 <div className="font-bold text-sm">
-                                    {new Date(submission.dueDate).toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                    })}
+                                    {submission.dueDate
+                                        ? new Date(submission.dueDate).toLocaleDateString('en-US', {
+                                              month: 'short',
+                                              day: 'numeric',
+                                              hour: '2-digit',
+                                              minute: '2-digit',
+                                          })
+                                        : '—'}
                                 </div>
                             </div>
                         </div>
@@ -278,278 +233,387 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ sub
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Version Timeline */}
-                <div className="lg:col-span-1">
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sticky top-4">
-                        <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                            <GitBranch className="text-purple-600" size={24} />
-                            Version Timeline
-                        </h2>
+            {versionList.length === 0 ? (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center text-gray-500">
+                    No versions found for this submission.
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Version Timeline */}
+                    <div className="lg:col-span-1">
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sticky top-4">
+                            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <GitBranch className="text-purple-600" size={24} />
+                                Version Timeline
+                            </h2>
 
-                        <div className="space-y-3">
-                            {getVersionTimeline().reverse().map((version) => (
-                                <div
-                                    key={version.version}
-                                    onClick={() => setSelectedVersion(version.version)}
-                                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                                        selectedVersion === version.version
-                                            ? 'border-purple-500 bg-purple-50 shadow-md'
-                                            : 'border-gray-200 hover:border-purple-300 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-bold text-gray-900">Version {version.version}</span>
-                                            {version.status === 'submitted' && (
-                                                <CheckCircle2 className="text-green-600" size={16} />
-                                            )}
+                            <div className="space-y-3">
+                                {getVersionTimeline()
+                                    .reverse()
+                                    .map((version) => (
+                                        <div
+                                            key={version.id}
+                                            onClick={() => setSelectedVersionId(version.id)}
+                                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                                                selectedVersionId === version.id
+                                                    ? 'border-purple-500 bg-purple-50 shadow-md'
+                                                    : 'border-gray-200 hover:border-purple-300 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold text-gray-900">
+                                                        Version {version.versionNumber}
+                                                    </span>
+                                                    {version.versionNumber === versionList[0]?.versionNumber && (
+                                                        <CheckCircle2 className="text-green-600" size={16} />
+                                                    )}
+                                                </div>
+                                                {version.improvement > 0 && (
+                                                    <div className="flex items-center gap-1 text-green-600 text-xs font-medium">
+                                                        <TrendingUp size={14} />
+                                                        +{version.improvement}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="text-xs text-gray-500 mb-3">
+                                                {new Date(version.submittedAt).toLocaleDateString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                })}
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div className="text-center p-2 bg-purple-50 rounded">
+                                                    <div className="text-xs text-gray-600">AI Score</div>
+                                                    <div className="text-sm font-bold text-purple-600">
+                                                        {version.aiScore ?? '—'}
+                                                    </div>
+                                                </div>
+                                                <div
+                                                    className={`text-center p-2 rounded ${
+                                                        (version.plagiarismScore ?? 0) < 20
+                                                            ? 'bg-green-50'
+                                                            : 'bg-red-50'
+                                                    }`}
+                                                >
+                                                    <div className="text-xs text-gray-600">Plagiarism</div>
+                                                    <div
+                                                        className={`text-sm font-bold ${
+                                                            (version.plagiarismScore ?? 0) < 20
+                                                                ? 'text-green-600'
+                                                                : 'text-red-600'
+                                                        }`}
+                                                    >
+                                                        {version.plagiarismScore != null
+                                                            ? `${version.plagiarismScore}%`
+                                                            : '—'}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-2 text-xs text-gray-600">
+                                                {version.totalWordCount ?? 0} words
+                                            </div>
                                         </div>
-                                        {version.improvement > 0 && (
-                                            <div className="flex items-center gap-1 text-green-600 text-xs font-medium">
-                                                <TrendingUp size={14} />
-                                                +{version.improvement}
+                                    ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Version Details */}
+                    <div className="lg:col-span-2 space-y-6">
+                        {verDetailLoading ? (
+                            <div className="flex items-center justify-center min-h-[200px]">
+                                <Loader2 className="animate-spin text-purple-600" size={32} />
+                            </div>
+                        ) : currentVersion ? (
+                            <>
+                                {/* Version Stats */}
+                                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                                    <div className="flex items-center justify-between mb-6">
+                                        <h2 className="text-xl font-bold text-gray-900">
+                                            Version {currentVersion.versionNumber} Details
+                                        </h2>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                            <div className="text-xs text-gray-600 mb-1">Word Count</div>
+                                            <div className="text-2xl font-bold text-gray-900">
+                                                {currentVersion.totalWordCount ?? 0}
+                                            </div>
+                                        </div>
+                                        <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                                            <div className="text-xs text-gray-600 mb-1">AI Score</div>
+                                            <div className="text-2xl font-bold text-purple-600">
+                                                {currentVersion.aiScore != null
+                                                    ? `${currentVersion.aiScore}/100`
+                                                    : '—'}
+                                            </div>
+                                        </div>
+                                        <div
+                                            className={`p-4 rounded-lg border ${
+                                                (currentVersion.plagiarismScore ?? 0) < 20
+                                                    ? 'bg-green-50 border-green-200'
+                                                    : 'bg-red-50 border-red-200'
+                                            }`}
+                                        >
+                                            <div className="text-xs text-gray-600 mb-1">Plagiarism</div>
+                                            <div
+                                                className={`text-2xl font-bold ${
+                                                    (currentVersion.plagiarismScore ?? 0) < 20
+                                                        ? 'text-green-600'
+                                                        : 'text-red-600'
+                                                }`}
+                                            >
+                                                {currentVersion.plagiarismScore != null
+                                                    ? `${currentVersion.plagiarismScore}%`
+                                                    : '—'}
+                                            </div>
+                                        </div>
+                                        <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                            <div className="text-xs text-gray-600 mb-1">AI Grade</div>
+                                            <div className="text-lg font-bold text-blue-600">
+                                                {currentVersion.aiGrade != null ? currentVersion.aiGrade : '—'}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Overall AI Score Summary */}
+                                    {currentVersion.aiScore != null && (
+                                        <div className="p-4 bg-purple-50 border-l-4 border-purple-500 rounded">
+                                            <div className="flex items-start gap-3">
+                                                <Star className="text-purple-600 mt-0.5" size={24} />
+                                                <div>
+                                                    <p className="font-medium text-purple-900 mb-1">
+                                                        AI Assessment Summary
+                                                    </p>
+                                                    <p className="text-sm text-purple-800">
+                                                        Overall AI score: {currentVersion.aiScore}/100
+                                                        {currentVersion.aiGrade != null &&
+                                                            ` · AI Grade: ${currentVersion.aiGrade}`}
+                                                        {currentVersion.finalGrade != null &&
+                                                            ` · Final Grade: ${currentVersion.finalGrade}`}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Question-by-Question Analysis */}
+                                {currentVersion.answers && currentVersion.answers.length > 0 && (
+                                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                                        <div className="flex items-center justify-between mb-6">
+                                            <h2 className="text-xl font-bold text-gray-900">
+                                                Question-by-Question Analysis
+                                            </h2>
+                                            <button
+                                                onClick={() => setShowAnswers(!showAnswers)}
+                                                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                                            >
+                                                <Eye size={16} />
+                                                {showAnswers ? 'Hide' : 'Show'} Answers
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-6">
+                                            {currentVersion.answers.map((answer, index) => {
+                                                const answerAiScore = computeAnswerAiScore(answer);
+                                                const feedback = formatAiFeedback(answer);
+
+                                                return (
+                                                    <div
+                                                        key={answer.id}
+                                                        className="pb-6 border-b border-gray-200 last:border-0"
+                                                    >
+                                                        <h3 className="font-bold text-gray-900 mb-1">
+                                                            Question {index + 1}
+                                                        </h3>
+                                                        {answer.questionText && (
+                                                            <p className="text-sm text-gray-500 mb-4">
+                                                                {answer.questionText}
+                                                            </p>
+                                                        )}
+
+                                                        {/* Answer Stats */}
+                                                        <div className="grid grid-cols-3 gap-3 mb-4">
+                                                            <div className="p-3 bg-gray-50 rounded border border-gray-200">
+                                                                <div className="text-xs text-gray-600">Words</div>
+                                                                <div className="text-lg font-bold text-gray-900">
+                                                                    {answer.wordCount ?? 0}
+                                                                </div>
+                                                            </div>
+                                                            <div className="p-3 bg-purple-50 rounded border border-purple-200">
+                                                                <div className="text-xs text-gray-600">AI Score</div>
+                                                                <div className="text-lg font-bold text-purple-600">
+                                                                    {answerAiScore != null
+                                                                        ? `${answerAiScore}/100`
+                                                                        : '—'}
+                                                                </div>
+                                                            </div>
+                                                            <div
+                                                                className={`p-3 rounded border ${
+                                                                    (answer.similarityScore ?? 0) < 20
+                                                                        ? 'bg-green-50 border-green-200'
+                                                                        : 'bg-red-50 border-red-200'
+                                                                }`}
+                                                            >
+                                                                <div className="text-xs text-gray-600">
+                                                                    Plagiarism
+                                                                </div>
+                                                                <div
+                                                                    className={`text-lg font-bold ${
+                                                                        (answer.similarityScore ?? 0) < 20
+                                                                            ? 'text-green-600'
+                                                                            : 'text-red-600'
+                                                                    }`}
+                                                                >
+                                                                    {answer.similarityScore != null
+                                                                        ? `${answer.similarityScore}%`
+                                                                        : '—'}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Answer Text */}
+                                                        {showAnswers && answer.answerText && (
+                                                            <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                                                <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                                                                    {answer.answerText}
+                                                                </p>
+                                                            </div>
+                                                        )}
+
+                                                        {/* AI Feedback */}
+                                                        {feedback && (
+                                                            <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
+                                                                <div className="flex items-start gap-3">
+                                                                    <Star
+                                                                        className="text-blue-600 mt-0.5"
+                                                                        size={20}
+                                                                    />
+                                                                    <div>
+                                                                        <p className="font-medium text-blue-900 mb-1">
+                                                                            AI Feedback:
+                                                                        </p>
+                                                                        <p className="text-sm text-blue-800">
+                                                                            {feedback}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Plagiarism Report */}
+                                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                                    <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                        <Shield className="text-green-600" size={24} />
+                                        Plagiarism Report
+                                    </h2>
+
+                                    <div className="space-y-4">
+                                        {(() => {
+                                            const score = currentVersion.plagiarismScore ?? 0;
+                                            const pc = getPlagiarismConfig(score);
+                                            return (
+                                                <div className={`p-4 ${pc.bg} ${pc.border} border rounded-lg`}>
+                                                    <div className="flex items-center gap-3 mb-3">
+                                                        <div
+                                                            className={`w-16 h-16 rounded-full ${pc.circleBg} flex items-center justify-center`}
+                                                        >
+                                                            <span
+                                                                className={`text-2xl font-bold ${pc.circleText}`}
+                                                            >
+                                                                {score}%
+                                                            </span>
+                                                        </div>
+                                                        <div>
+                                                            <p className={`font-bold ${pc.titleText}`}>
+                                                                {pc.label}
+                                                            </p>
+                                                            <p className={`text-sm ${pc.descText}`}>{pc.desc}</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className={`w-full ${pc.barBg} rounded-full h-3`}>
+                                                        <div
+                                                            className={`${pc.barFill} h-3 rounded-full`}
+                                                            style={{ width: `${score}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
+                                        <div className="p-4 bg-gray-50 rounded-lg">
+                                            <div className="text-xs text-gray-600 mb-1">Matches Found</div>
+                                            <div className="text-xl font-bold text-gray-900">
+                                                {allPlagiarismSources.length}
+                                            </div>
+                                        </div>
+
+                                        {allPlagiarismSources.length > 0 && (
+                                            <div>
+                                                <p className="font-medium text-gray-900 mb-3">Detected Matches:</p>
+                                                <div className="space-y-2">
+                                                    {allPlagiarismSources.map((source) => (
+                                                        <div
+                                                            key={source.id}
+                                                            className="p-3 bg-amber-50 border border-amber-200 rounded"
+                                                        >
+                                                            <div className="flex items-center justify-between mb-1">
+                                                                <span className="text-sm font-medium text-amber-900">
+                                                                    {source.sourceTitle || source.sourceUrl}
+                                                                </span>
+                                                                <span className="text-sm font-bold text-amber-700">
+                                                                    {source.similarityPercentage}%
+                                                                </span>
+                                                            </div>
+                                                            {source.sourceSnippet && (
+                                                                <p className="text-xs text-amber-700">
+                                                                    {source.sourceSnippet}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
                                         )}
                                     </div>
-
-                                    <div className="text-xs text-gray-500 mb-3">
-                                        {new Date(version.createdAt).toLocaleDateString('en-US', {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                        })}
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="text-center p-2 bg-purple-50 rounded">
-                                            <div className="text-xs text-gray-600">AI Score</div>
-                                            <div className="text-sm font-bold text-purple-600">{version.aiScore}</div>
-                                        </div>
-                                        <div className={`text-center p-2 rounded ${
-                                            version.plagiarismScore < 20 ? 'bg-green-50' : 'bg-red-50'
-                                        }`}>
-                                            <div className="text-xs text-gray-600">Plagiarism</div>
-                                            <div className={`text-sm font-bold ${
-                                                version.plagiarismScore < 20 ? 'text-green-600' : 'text-red-600'
-                                            }`}>
-                                                {version.plagiarismScore}%
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-2 text-xs text-gray-600">
-                                        {version.wordCount} words
-                                    </div>
                                 </div>
-                            ))}
-                        </div>
+
+                                {/* Actions */}
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() =>
+                                            router.push(`/submissions/student/versions/${submissionId}`)
+                                        }
+                                        className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center justify-center gap-2"
+                                    >
+                                        <GitBranch size={18} />
+                                        Compare Versions
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center text-gray-500">
+                                Select a version to view details.
+                            </div>
+                        )}
                     </div>
                 </div>
-
-                {/* Version Details */}
-                <div className="lg:col-span-2 space-y-6">
-                    {/* Version Stats */}
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-bold text-gray-900">
-                                Version {currentVersion.version} Details
-                            </h2>
-                            <button className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-sm font-medium">
-                                <Download size={16} />
-                                Export Report
-                            </button>
-                        </div>
-
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                                <div className="text-xs text-gray-600 mb-1">Word Count</div>
-                                <div className="text-2xl font-bold text-gray-900">{currentVersion.wordCount}</div>
-                            </div>
-                            <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                                <div className="text-xs text-gray-600 mb-1">AI Score</div>
-                                <div className="text-2xl font-bold text-purple-600">{currentVersion.aiScore}/100</div>
-                            </div>
-                            <div className={`p-4 rounded-lg border ${
-                                currentVersion.plagiarismScore < 20
-                                    ? 'bg-green-50 border-green-200'
-                                    : 'bg-red-50 border-red-200'
-                            }`}>
-                                <div className="text-xs text-gray-600 mb-1">Plagiarism</div>
-                                <div className={`text-2xl font-bold ${
-                                    currentVersion.plagiarismScore < 20 ? 'text-green-600' : 'text-red-600'
-                                }`}>
-                                    {currentVersion.plagiarismScore}%
-                                </div>
-                            </div>
-                            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                                <div className="text-xs text-gray-600 mb-1">Status</div>
-                                <div className="text-lg font-bold text-blue-600 capitalize">{currentVersion.status}</div>
-                            </div>
-                        </div>
-
-                        {/* Overall AI Feedback */}
-                        <div className="p-4 bg-purple-50 border-l-4 border-purple-500 rounded">
-                            <div className="flex items-start gap-3">
-                                <Star className="text-purple-600 mt-0.5" size={24} />
-                                <div>
-                                    <p className="font-medium text-purple-900 mb-1">Overall AI Feedback:</p>
-                                    <p className="text-sm text-purple-800">{currentVersion.aiFeedback}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Question-by-Question Analysis */}
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-bold text-gray-900">Question-by-Question Analysis</h2>
-                            <button
-                                onClick={() => setShowAnswers(!showAnswers)}
-                                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
-                            >
-                                <Eye size={16} />
-                                {showAnswers ? 'Hide' : 'Show'} Answers
-                            </button>
-                        </div>
-
-                        <div className="space-y-6">
-                            {currentVersion.answers.map((answer, index) => (
-                                <div key={answer.questionId} className="pb-6 border-b border-gray-200 last:border-0">
-                                    <h3 className="font-bold text-gray-900 mb-4">Question {index + 1}</h3>
-
-                                    {/* Answer Stats */}
-                                    <div className="grid grid-cols-3 gap-3 mb-4">
-                                        <div className="p-3 bg-gray-50 rounded border border-gray-200">
-                                            <div className="text-xs text-gray-600">Words</div>
-                                            <div className="text-lg font-bold text-gray-900">{answer.wordCount}</div>
-                                        </div>
-                                        <div className="p-3 bg-purple-50 rounded border border-purple-200">
-                                            <div className="text-xs text-gray-600">AI Score</div>
-                                            <div className="text-lg font-bold text-purple-600">{answer.aiScore}/100</div>
-                                        </div>
-                                        <div className={`p-3 rounded border ${
-                                            answer.plagiarismScore < 20
-                                                ? 'bg-green-50 border-green-200'
-                                                : 'bg-red-50 border-red-200'
-                                        }`}>
-                                            <div className="text-xs text-gray-600">Plagiarism</div>
-                                            <div className={`text-lg font-bold ${
-                                                answer.plagiarismScore < 20 ? 'text-green-600' : 'text-red-600'
-                                            }`}>
-                                                {answer.plagiarismScore}%
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Answer Text */}
-                                    {showAnswers && (
-                                        <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{answer.text}</p>
-                                        </div>
-                                    )}
-
-                                    {/* AI Feedback */}
-                                    <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
-                                        <div className="flex items-start gap-3">
-                                            <Star className="text-blue-600 mt-0.5" size={20} />
-                                            <div>
-                                                <p className="font-medium text-blue-900 mb-1">AI Feedback:</p>
-                                                <p className="text-sm text-blue-800">{answer.aiFeedback}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Plagiarism Report */}
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                        <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                            <Shield className="text-green-600" size={24} />
-                            Plagiarism Report
-                        </h2>
-
-                        <div className="space-y-4">
-                            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                                <div className="flex items-center gap-3 mb-3">
-                                    <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
-                                        <span className="text-2xl font-bold text-green-600">{currentVersion.plagiarismScore}%</span>
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-green-900">Excellent Originality</p>
-                                        <p className="text-sm text-green-700">Your work shows high originality</p>
-                                    </div>
-                                </div>
-
-                                <div className="w-full bg-green-200 rounded-full h-3">
-                                    <div
-                                        className="bg-green-600 h-3 rounded-full"
-                                        style={{ width: `${currentVersion.plagiarismScore}%` }}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="p-4 bg-gray-50 rounded-lg">
-                                    <div className="text-xs text-gray-600 mb-1">Sources Checked</div>
-                                    <div className="text-xl font-bold text-gray-900">1,245</div>
-                                </div>
-                                <div className="p-4 bg-gray-50 rounded-lg">
-                                    <div className="text-xs text-gray-600 mb-1">Matches Found</div>
-                                    <div className="text-xl font-bold text-gray-900">3</div>
-                                </div>
-                            </div>
-
-                            {currentVersion.plagiarismScore > 0 && (
-                                <div>
-                                    <p className="font-medium text-gray-900 mb-3">Detected Matches:</p>
-                                    <div className="space-y-2">
-                                        <div className="p-3 bg-amber-50 border border-amber-200 rounded">
-                                            <div className="flex items-center justify-between mb-1">
-                                                <span className="text-sm font-medium text-amber-900">Wikipedia - Binary Search Tree</span>
-                                                <span className="text-sm font-bold text-amber-700">3%</span>
-                                            </div>
-                                            <p className="text-xs text-amber-700">Common terminology match</p>
-                                        </div>
-                                        <div className="p-3 bg-amber-50 border border-amber-200 rounded">
-                                            <div className="flex items-center justify-between mb-1">
-                                                <span className="text-sm font-medium text-amber-900">GeeksforGeeks - AVL Trees</span>
-                                                <span className="text-sm font-bold text-amber-700">1%</span>
-                                            </div>
-                                            <p className="text-xs text-amber-700">Technical definition match</p>
-                                        </div>
-                                        <div className="p-3 bg-amber-50 border border-amber-200 rounded">
-                                            <div className="flex items-center justify-between mb-1">
-                                                <span className="text-sm font-medium text-amber-900">Course Textbook</span>
-                                                <span className="text-sm font-bold text-amber-700">1%</span>
-                                            </div>
-                                            <p className="text-xs text-amber-700">Standard terminology</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-3">
-                        <button
-                            onClick={() => router.push(`/submissions/student/versions/${submission.id}`)}
-                            className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center justify-center gap-2"
-                        >
-                            <GitBranch size={18} />
-                            Compare Versions
-                        </button>
-                        <button className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2">
-                            <Download size={18} />
-                            Download
-                        </button>
-                    </div>
-                </div>
-            </div>
+            )}
         </div>
     );
 }

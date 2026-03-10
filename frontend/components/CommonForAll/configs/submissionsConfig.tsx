@@ -20,6 +20,7 @@ import {
     Bell,
     BookOpen,
     Target,
+    FileSpreadsheet,
 } from 'lucide-react';
 
 interface SubSection {
@@ -226,6 +227,13 @@ export const submissionsConfig: Record<'student' | 'lecture', ModuleConfig> = {
                     icon: <BarChart3 size={22} />,
                     description: 'Performance insights',
                     href: '/submissions/lecturer/analytics',
+                },
+                {
+                    id: 'export-reports',
+                    label: 'Export Reports',
+                    icon: <FileSpreadsheet size={22} />,
+                    description: 'Download CSV reports',
+                    href: '/submissions/lecturer/export-reports',
                 },
                 {
                     id: 'settings',
