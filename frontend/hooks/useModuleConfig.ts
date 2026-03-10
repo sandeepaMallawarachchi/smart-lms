@@ -1,16 +1,32 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
 import { 
   projectsTasksConfig, 
   updateConfigWithCourses, 
-  CoursesApiResponse 
+  CoursesApiResponse,
+  ModuleConfig as ProjectsTasksModuleConfig,
 } from '@/components/CommonForAll/configs/projectsTasksConfig'
 import { learningAnalyticsConfig } from '@/components/CommonForAll/configs/learningAnalyticsConfig'
 import { submissionsConfig } from '@/components/CommonForAll/configs/submissionsConfig'
 
 type UserRole = 'student' | 'lecture' | 'superadmin'
+type ConfigModule = 'projects-tasks' | 'learning-analytics' | 'submissions' | null
+type ConfigState = {
+  module: ConfigModule
+  role: UserRole
+  value: ProjectsTasksModuleConfig | null
+}
+
+const getSidebarDeadline = (
+  deadlineDate?: string,
+  deadlineTime?: string
+) => {
+  if (!deadlineDate) return null
+  const parsed = new Date(`${deadlineDate}T${deadlineTime || '23:59'}`)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
 
 export function useModuleConfig(userRole: UserRole) {
   const pathname = usePathname()
@@ -22,7 +38,7 @@ export function useModuleConfig(userRole: UserRole) {
     ? 'submissions'
     : null
 
-  const getBaseConfig = () => {
+  const getBaseConfig = useCallback(() => {
     if (userRole === 'superadmin') return null
 
     if (currentModule === 'projects-tasks') {
@@ -33,14 +49,16 @@ export function useModuleConfig(userRole: UserRole) {
       return submissionsConfig[userRole]
     }
     return null
-  }
+  }, [currentModule, userRole])
 
-  const [config, setConfig] = useState(getBaseConfig())
+  const baseConfig = getBaseConfig()
+  const [configState, setConfigState] = useState<ConfigState>({
+    module: currentModule,
+    role: userRole,
+    value: baseConfig,
+  })
 
   useEffect(() => {
-    const base = getBaseConfig()
-    setConfig(base)
-
     if (currentModule === 'submissions' && userRole !== 'superadmin') {
       let isMounted = true
 
@@ -100,17 +118,21 @@ export function useModuleConfig(userRole: UserRole) {
             }
 
             if (isMounted) {
-              setConfig({
-                ...base,
-                sidebar: {
-                  ...base.sidebar,
-                  stats: { total: submissionCount, dueSoon: dueSoonCount },
-                  navItems: base.sidebar.navItems.map(
-                    (item: { id: string; [key: string]: unknown }) =>
-                      item.id === 'my-assignments'
-                        ? { ...item, badge: assignmentCount > 0 ? assignmentCount : undefined }
-                        : item
-                  ),
+              setConfigState({
+                module: currentModule,
+                role: userRole,
+                value: {
+                  ...base,
+                  sidebar: {
+                    ...base.sidebar,
+                    stats: { total: submissionCount, dueSoon: dueSoonCount },
+                    navItems: base.sidebar.navItems.map(
+                      (item: { id: string; [key: string]: unknown }) =>
+                        item.id === 'my-assignments'
+                          ? { ...item, badge: assignmentCount > 0 ? assignmentCount : undefined }
+                          : item
+                    ),
+                  },
                 },
               })
             }
@@ -145,21 +167,25 @@ export function useModuleConfig(userRole: UserRole) {
             } catch { /* silent */ }
 
             if (isMounted) {
-              setConfig({
-                ...base,
-                sidebar: {
-                  ...base.sidebar,
-                  navItems: base.sidebar.navItems.map(
-                    (item: { id: string; [key: string]: unknown }) => {
-                      if (item.id === 'submissions')
-                        return { ...item, badge: totalCount > 0 ? totalCount : undefined }
-                      if (item.id === 'grading')
-                        return { ...item, badge: pendingCount > 0 ? pendingCount : undefined }
-                      if (item.id === 'plagiarism')
-                        return { ...item, badge: flaggedCount > 0 ? flaggedCount : undefined }
-                      return item
-                    }
-                  ),
+              setConfigState({
+                module: currentModule,
+                role: userRole,
+                value: {
+                  ...base,
+                  sidebar: {
+                    ...base.sidebar,
+                    navItems: base.sidebar.navItems.map(
+                      (item: { id: string; [key: string]: unknown }) => {
+                        if (item.id === 'submissions')
+                          return { ...item, badge: totalCount > 0 ? totalCount : undefined }
+                        if (item.id === 'grading')
+                          return { ...item, badge: pendingCount > 0 ? pendingCount : undefined }
+                        if (item.id === 'plagiarism')
+                          return { ...item, badge: flaggedCount > 0 ? flaggedCount : undefined }
+                        return item
+                      }
+                    ),
+                  },
                 },
               })
             }
@@ -179,44 +205,80 @@ export function useModuleConfig(userRole: UserRole) {
     if (currentModule === 'projects-tasks' && userRole === 'student') {
       let isMounted = true
 
-      const fetchCourses = async () => {
+      const fetchProjectsTasksSidebarData = async () => {
         try {
+          const base = getBaseConfig()
           const token = localStorage.getItem('authToken')
 
-          if (!token) {
-              window.location.href = '/login'
-              return
+          if (!token || !base) {
+            window.location.href = '/login'
+            return
           }
 
-          const response = await fetch('/api/student/get-courses', {
-             headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
+          const headers = {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          }
+
+          const [coursesResponse, projectsResponse, tasksResponse] = await Promise.all([
+            fetch('/api/student/get-courses', { headers }),
+            fetch('/api/projects-and-tasks/student/projects', { headers }),
+            fetch('/api/projects-and-tasks/student/tasks', { headers }),
+          ])
+
+          if (!coursesResponse.ok || !projectsResponse.ok || !tasksResponse.ok) return
+
+          const [coursesResult, projectsResult, tasksResult]: [
+            CoursesApiResponse,
+            { data?: { projects?: Array<{ deadlineDate?: string; deadlineTime?: string }> } },
+            { data?: { tasks?: Array<{ deadlineDate?: string; deadlineTime?: string }> } },
+          ] = await Promise.all([
+            coursesResponse.json(),
+            projectsResponse.json(),
+            tasksResponse.json(),
+          ])
+
+          if (isMounted && coursesResult.success && coursesResult.data.courses) {
+            const updatedFullConfig = updateConfigWithCourses(projectsTasksConfig, coursesResult.data.courses)
+            const projects = projectsResult.data?.projects ?? []
+            const tasks = tasksResult.data?.tasks ?? []
+            const items = [...projects, ...tasks]
+            const now = Date.now()
+            const sevenDaysFromNow = now + 7 * 24 * 60 * 60 * 1000
+            const dueSoonCount = items.filter((item) => {
+              const deadline = getSidebarDeadline(item.deadlineDate, item.deadlineTime)
+              if (!deadline) return false
+              const time = deadline.getTime()
+              return time >= now && time <= sevenDaysFromNow
+            }).length
+
+            setConfigState({
+              module: currentModule,
+              role: userRole,
+              value: {
+                ...updatedFullConfig.student,
+                sidebar: {
+                  ...updatedFullConfig.student.sidebar,
+                  stats: {
+                    total: items.length,
+                    dueSoon: dueSoonCount,
+                  },
+                },
               },
-          })
-
-          console.log("response courses", response)
-
-          if (!response.ok) return
-
-          const result: CoursesApiResponse = await response.json()
-
-          if (isMounted && result.success && result.data.courses) {
-            const updatedFullConfig = updateConfigWithCourses(projectsTasksConfig, result.data.courses)
-            setConfig(updatedFullConfig.student)
+            })
           }
         } catch (error) {
           console.error('Failed to fetch sidebar courses:', error)
         }
       }
 
-      fetchCourses()
+      fetchProjectsTasksSidebarData()
 
       return () => {
         isMounted = false
       }
     }
-  }, [pathname, userRole, currentModule])
+  }, [pathname, userRole, currentModule, getBaseConfig])
 
   if (userRole === 'superadmin') {
     return {
@@ -226,9 +288,14 @@ export function useModuleConfig(userRole: UserRole) {
     }
   }
 
+  const resolvedConfig =
+    configState.module === currentModule && configState.role === userRole
+      ? configState.value
+      : baseConfig
+
   return {
     currentModule,
-    headerConfig: config?.header || null,
-    sidebarConfig: config?.sidebar || null,
+    headerConfig: resolvedConfig?.header || null,
+    sidebarConfig: resolvedConfig?.sidebar || null,
   }
 }
