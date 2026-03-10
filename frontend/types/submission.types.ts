@@ -283,6 +283,11 @@ export interface PlagiarismReport {
     reviewNotes?: string;
     createdAt: string;
     completedAt?: string;
+    // Enrichment fields (populated when built from submission data)
+    studentId?: string;
+    studentName?: string;
+    assignmentId?: string;
+    assignmentTitle?: string;
 }
 
 export interface CheckPlagiarismPayload {

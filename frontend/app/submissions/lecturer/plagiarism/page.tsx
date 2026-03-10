@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     AlertTriangle,
@@ -10,17 +10,16 @@ import {
     FileText,
     Flag,
     Globe,
-    RefreshCw,
     Shield,
+    User,
     XCircle,
 } from 'lucide-react';
-import { useAllPlagiarismReports, useUpdatePlagiarismReview } from '@/hooks/usePlagiarism';
-import type { PlagiarismReport } from '@/types/submission.types';
+import { useAllPlagiarismReports } from '@/hooks/usePlagiarism';
+import type { PlagiarismReport, PlagiarismReviewStatus } from '@/types/submission.types';
 import {
     PageHeader,
     StatCard,
     Skeleton,
-    SectionCard,
     ErrorBanner,
     FilterToolbar,
     SearchInput,
@@ -30,6 +29,23 @@ import {
 /* ─── Types & Helpers ──────────────────────────────────────── */
 
 type ReviewStatus = NonNullable<PlagiarismReport['reviewStatus']>;
+
+const REVIEW_STORAGE_KEY = 'plagiarism-reviews';
+
+/** Read persisted review decisions from localStorage. */
+function loadReviews(): Record<string, { status: ReviewStatus; notes?: string; by?: string; at?: string }> {
+    if (typeof window === 'undefined') return {};
+    try {
+        return JSON.parse(localStorage.getItem(REVIEW_STORAGE_KEY) ?? '{}');
+    } catch { return {}; }
+}
+
+/** Persist a review decision to localStorage. */
+function saveReview(reportId: string, status: ReviewStatus, notes?: string) {
+    const reviews = loadReviews();
+    reviews[reportId] = { status, notes, by: 'lecturer', at: new Date().toISOString() };
+    localStorage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(reviews));
+}
 
 function severity(score: number) {
     if (score >= 40) return { label: 'Critical', cls: 'bg-red-100 border-red-300 text-red-700' };
@@ -54,23 +70,22 @@ function ReviewBadge({ status }: { status: ReviewStatus | undefined }) {
 
 function ReportCard({ report, onUpdate, updating }: {
     report: PlagiarismReport;
-    onUpdate: (id: string, status: ReviewStatus, notes: string) => Promise<void>;
+    onUpdate: (id: string, status: ReviewStatus, notes: string) => void;
     updating: boolean;
 }) {
     const [noteText, setNoteText] = useState('');
     const [showNote, setShowNote] = useState(false);
-    const [pendingStatus, setPendingStatus] = useState<ReviewStatus | null>(null);
     const router = useRouter();
 
     const sev = severity(report.overallScore);
     const isPending = report.reviewStatus === 'PENDING_REVIEW' || !report.reviewStatus;
+    const studentLabel = report.studentName ?? report.studentId ?? 'Unknown student';
+    const assignmentLabel = report.assignmentTitle ?? report.assignmentId ?? 'Unknown assignment';
 
-    const handleAction = async (status: ReviewStatus) => {
-        setPendingStatus(status);
-        await onUpdate(report.id, status, noteText);
+    const handleAction = (status: ReviewStatus) => {
+        onUpdate(report.id, status, noteText);
         setShowNote(false);
         setNoteText('');
-        setPendingStatus(null);
     };
 
     return (
@@ -79,19 +94,19 @@ function ReportCard({ report, onUpdate, updating }: {
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3 min-w-0">
                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
-                        <Shield size={16} />
+                        <User size={16} />
                     </div>
                     <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-gray-900 text-sm truncate">Plagiarism Report</span>
+                            <span className="font-semibold text-gray-900 text-sm truncate">{studentLabel}</span>
                             <ReviewBadge status={report.reviewStatus} />
                             <span className={`px-2 py-0.5 rounded-full text-xs font-bold border ${sev.cls}`}>{sev.label}</span>
                         </div>
-                        <p className="text-xs text-gray-400 truncate">{severity(report.overallScore).label} severity · {report.matchesFound ?? 0} matches</p>
+                        <p className="text-xs text-gray-500 truncate">{assignmentLabel}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-3">
-                    <button onClick={() => router.push(`/submissions/lecturer/submissions/${report.submissionId}`)} className="p-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 cursor-pointer" title="View"><Eye size={14} /></button>
+                    <button onClick={() => router.push(`/submissions/lecturer/grading/${report.submissionId}`)} className="p-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 cursor-pointer" title="View Submission"><Eye size={14} /></button>
                     <button onClick={() => alert('Report exported')} className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 cursor-pointer" title="Export"><Download size={14} /></button>
                 </div>
             </div>
@@ -162,13 +177,13 @@ function ReportCard({ report, onUpdate, updating }: {
                         <>
                             <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} rows={2} placeholder="Review note (optional)…"
                                 className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2" />
-                            <button onClick={() => handleAction('CONFIRMED')} disabled={updating && pendingStatus === 'CONFIRMED'}
-                                className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-xs font-medium flex items-center gap-1 disabled:opacity-50 cursor-pointer">
-                                {updating && pendingStatus === 'CONFIRMED' ? <RefreshCw size={12} className="animate-spin" /> : <XCircle size={12} />}Confirm
+                            <button onClick={() => handleAction('CONFIRMED')}
+                                className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-xs font-medium flex items-center gap-1 cursor-pointer">
+                                <XCircle size={12} />Confirm
                             </button>
-                            <button onClick={() => handleAction('FALSE_POSITIVE')} disabled={updating && pendingStatus === 'FALSE_POSITIVE'}
-                                className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs font-medium flex items-center gap-1 disabled:opacity-50 cursor-pointer">
-                                {updating && pendingStatus === 'FALSE_POSITIVE' ? <RefreshCw size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}False Positive
+                            <button onClick={() => handleAction('FALSE_POSITIVE')}
+                                className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs font-medium flex items-center gap-1 cursor-pointer">
+                                <CheckCircle2 size={12} />False Positive
                             </button>
                             <button onClick={() => { setShowNote(false); setNoteText(''); }} className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer">Cancel</button>
                         </>
@@ -186,23 +201,50 @@ export default function LecturerPlagiarismDetectionPage() {
     const [filterStatus, setFilterStatus] = useState<'all' | ReviewStatus>('all');
     const [filterSeverity, setFilterSeverity] = useState<'all' | 'critical' | 'high' | 'medium'>('all');
     const [sortBy, setSortBy] = useState<'score' | 'matches'>('score');
+    const [reviewMap, setReviewMap] = useState<Record<string, { status: ReviewStatus; notes?: string; by?: string; at?: string }>>({});
 
     const { data: reports, loading, error, refetch } = useAllPlagiarismReports();
-    const { loading: updating, updateReview } = useUpdatePlagiarismReview();
+
+    // Load persisted review decisions from localStorage on mount
+    useEffect(() => { setReviewMap(loadReviews()); }, []);
+
+    // Merge server reports with local review decisions
+    const enrichedReports = useMemo(() => {
+        return (reports ?? []).map((r) => {
+            const review = reviewMap[r.id];
+            if (!review) return r;
+            return {
+                ...r,
+                reviewStatus: review.status as PlagiarismReviewStatus,
+                reviewNotes: review.notes,
+                reviewedBy: review.by,
+                reviewedAt: review.at,
+            };
+        });
+    }, [reports, reviewMap]);
 
     const handleUpdate = useCallback(
-        async (reportId: string, status: ReviewStatus, notes: string) => {
-            await updateReview(reportId, { reviewStatus: status, reviewNotes: notes || undefined });
-            refetch();
+        (reportId: string, status: ReviewStatus, notes: string) => {
+            saveReview(reportId, status, notes || undefined);
+            setReviewMap(loadReviews());
         },
-        [updateReview, refetch],
+        [],
     );
 
     const processed = useMemo(() => {
-        const list = reports ?? [];
+        const list = enrichedReports;
         const filtered = list.filter((r) => {
             const q = searchQuery.toLowerCase();
-            if (q && !severity(r.overallScore).label.toLowerCase().includes(q) && !(r.reviewStatus ?? '').toLowerCase().includes(q)) return false;
+            if (q) {
+                const haystack = [
+                    severity(r.overallScore).label,
+                    r.reviewStatus ?? '',
+                    r.studentName ?? '',
+                    r.studentId ?? '',
+                    r.assignmentTitle ?? '',
+                ].join(' ').toLowerCase();
+                if (!haystack.includes(q)) return false;
+            }
             if (filterStatus !== 'all' && r.reviewStatus !== filterStatus) return false;
             if (filterSeverity === 'critical' && r.overallScore < 40) return false;
             if (filterSeverity === 'high' && (r.overallScore < 30 || r.overallScore >= 40)) return false;
@@ -210,10 +252,10 @@ export default function LecturerPlagiarismDetectionPage() {
             return true;
         });
         return [...filtered].sort((a, b) => sortBy === 'matches' ? (b.matchesFound ?? 0) - (a.matchesFound ?? 0) : b.overallScore - a.overallScore);
-    }, [reports, searchQuery, filterStatus, filterSeverity, sortBy]);
+    }, [enrichedReports, searchQuery, filterStatus, filterSeverity, sortBy]);
 
     const stats = useMemo(() => {
-        const l = reports ?? [];
+        const l = enrichedReports;
         return {
             total: l.length,
             pending: l.filter((r) => r.reviewStatus === 'PENDING_REVIEW' || !r.reviewStatus).length,
@@ -224,13 +266,13 @@ export default function LecturerPlagiarismDetectionPage() {
             high: l.filter((r) => r.overallScore >= 30 && r.overallScore < 40).length,
             medium: l.filter((r) => r.overallScore >= 20 && r.overallScore < 30).length,
         };
-    }, [reports]);
+    }, [enrichedReports]);
 
     return (
         <div>
             <PageHeader title="Plagiarism Detection" subtitle="Review and manage flagged submissions for academic integrity" icon={Shield} iconColor="text-red-600" loading={loading} onRefresh={refetch} />
 
-            {error && <ErrorBanner message={`Could not load plagiarism reports: ${error}. Check that the Plagiarism Detection service is running on port 8084.`} />}
+            {error && <ErrorBanner message={`Could not load plagiarism reports: ${error}. Ensure the Submission Management service (port 8081) is running.`} />}
 
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
@@ -284,7 +326,7 @@ export default function LecturerPlagiarismDetectionPage() {
                 {loading && !reports ? (
                     [1, 2, 3].map((i) => <Skeleton key={i} className="h-36" />)
                 ) : processed.length > 0 ? (
-                    processed.map((r) => <ReportCard key={r.id} report={r} onUpdate={handleUpdate} updating={updating} />)
+                    processed.map((r) => <ReportCard key={r.id} report={r} onUpdate={handleUpdate} updating={false} />)
                 ) : (
                     <EmptyState icon={CheckCircle2} message={!reports || reports.length === 0 ? 'All submissions have excellent academic integrity!' : 'No reports match your current filters.'} />
                 )}

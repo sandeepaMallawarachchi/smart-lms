@@ -744,17 +744,22 @@ export const plagiarismService = {
     },
 
     /** Get all plagiarism reports (lecturer - flagged submissions) */
-    getAllReports(params?: {
+    async getAllReports(params?: {
         minScore?: number;
         reviewStatus?: string;
         assignmentId?: string;
     }): Promise<PlagiarismReport[]> {
-        const query = new URLSearchParams();
-        if (params?.minScore != null)   query.set('minScore', String(params.minScore));
-        if (params?.reviewStatus)       query.set('reviewStatus', params.reviewStatus);
-        if (params?.assignmentId)       query.set('assignmentId', params.assignmentId);
-        const qs = query.toString() ? `?${query}` : '';
-        return apiRequest<PlagiarismReport[]>(`${PLAGIARISM_API}/api/plagiarism${qs}`);
+        // Fetch aggregated plagiarism data from our Next.js API route
+        // which merges submission-level scores with integrity service data.
+        const reports: PlagiarismReport[] = await apiRequest<PlagiarismReport[]>(
+            '/api/submissions/lecturer/plagiarism-reports',
+        );
+        // Apply client-side filters when provided
+        return reports.filter((r) => {
+            if (params?.minScore != null && r.overallScore < params.minScore) return false;
+            if (params?.assignmentId && r.assignmentId !== params.assignmentId) return false;
+            return true;
+        });
     },
 
     /** Trigger plagiarism check (legacy endpoint — kept for backward compat) */
