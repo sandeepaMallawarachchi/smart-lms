@@ -469,6 +469,7 @@ function _mapProject(p: _RawProject): Assignment {
         totalMarks:     totalMarks || 100,
         status:         _deriveStatus(p.deadlineDate, p.deadlineTime),
         assignmentType: 'project',
+        createdBy:      typeof p.lecturerId === 'string' ? p.lecturerId : undefined,
     };
 }
 
@@ -484,6 +485,7 @@ function _mapTask(t: _RawTask): Assignment {
         totalMarks:     totalMarks || 100,
         status:         _deriveStatus(t.deadlineDate, t.deadlineTime),
         assignmentType: 'task',
+        createdBy:      typeof t.lecturerId === 'string' ? t.lecturerId : undefined,
     };
 }
 

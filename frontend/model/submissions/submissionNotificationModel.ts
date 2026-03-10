@@ -1,12 +1,11 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ISubmissionNotification extends Document {
-  studentId: string;
+  recipientId: string;
   submissionId: string;
-  type: 'grade_submitted' | 'annotation_added' | 'feedback_updated';
+  type: 'grade_submitted' | 'annotation_added' | 'feedback_updated' | 'submission_submitted';
   title: string;
   message: string;
-  /** Optional link for the student to navigate to */
   link: string;
   isRead: boolean;
   createdAt: Date;
@@ -15,11 +14,11 @@ export interface ISubmissionNotification extends Document {
 
 const submissionNotificationSchema = new Schema<ISubmissionNotification>(
   {
-    studentId: { type: String, required: true, index: true },
+    recipientId: { type: String, required: true, index: true },
     submissionId: { type: String, required: true, index: true },
     type: {
       type: String,
-      enum: ['grade_submitted', 'annotation_added', 'feedback_updated'],
+      enum: ['grade_submitted', 'annotation_added', 'feedback_updated', 'submission_submitted'],
       required: true,
     },
     title: { type: String, required: true },
@@ -30,7 +29,7 @@ const submissionNotificationSchema = new Schema<ISubmissionNotification>(
   { timestamps: true },
 );
 
-submissionNotificationSchema.index({ studentId: 1, isRead: 1 });
+submissionNotificationSchema.index({ recipientId: 1, isRead: 1 });
 
 export default mongoose.models.SubmissionNotification ??
   mongoose.model<ISubmissionNotification>('SubmissionNotification', submissionNotificationSchema);

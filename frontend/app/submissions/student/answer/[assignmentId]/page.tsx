@@ -363,6 +363,26 @@ export default function AnswerPage({
                 console.warn('[AnswerPage] Failed to save plagiarism sources (non-fatal):', srcErr);
             }
 
+            // ── Notify the lecturer about the new submission ─────────────
+            try {
+                const lecturerId = assignment?.createdBy;
+                if (lecturerId) {
+                    const token = localStorage.getItem('authToken') ?? '';
+                    await fetch('/api/submissions/notifications', {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            recipientId: lecturerId,
+                            submissionId,
+                            type: 'submission_submitted',
+                            title: 'New Submission',
+                            message: `${getStudentName()} submitted "${assignment?.title ?? 'Assignment'}" (v${versionNumber}).`,
+                            link: `/submissions/lecturer/grading/${submissionId}`,
+                        }),
+                    });
+                }
+            } catch { /* notification is best-effort */ }
+
             // Short delay so the user sees the success state before redirect.
             setTimeout(() => {
                 router.push('/submissions/student/my-submissions');

@@ -15,7 +15,7 @@ function getPayload(request: NextRequest) {
   return verifyToken(token);
 }
 
-// ─── GET: list notifications for the authenticated student ────
+// ─── GET: list notifications for the authenticated user ───────
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const payload = getPayload(request);
     if (!payload) return unauthorizedResponse();
 
-    const notifications = await SubmissionNotification.find({ studentId: payload.userId })
+    const notifications = await SubmissionNotification.find({ recipientId: payload.userId })
       .sort({ createdAt: -1 })
       .limit(50)
       .lean();
@@ -35,17 +35,17 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ─── POST: create a notification (lecturer only) ──────────────
+// ─── POST: create a notification ──────────────────────────────
 
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
     const payload = getPayload(request);
-    if (!payload || payload.userRole !== 'lecture') return unauthorizedResponse('Lecturer access required');
+    if (!payload) return unauthorizedResponse();
 
     const body = await request.json();
-    const { studentId, submissionId, type, title, message, link } = body as {
-      studentId?: string;
+    const { recipientId, submissionId, type, title, message, link } = body as {
+      recipientId?: string;
       submissionId?: string;
       type?: string;
       title?: string;
@@ -53,12 +53,12 @@ export async function POST(request: NextRequest) {
       link?: string;
     };
 
-    if (!studentId || !submissionId || !type || !title || !message || !link) {
+    if (!recipientId || !submissionId || !type || !title || !message || !link) {
       return errorResponse('Missing required fields');
     }
 
     const notification = await SubmissionNotification.create({
-      studentId,
+      recipientId,
       submissionId,
       type,
       title,
@@ -86,7 +86,7 @@ export async function PATCH(request: NextRequest) {
 
     if (markAllRead) {
       await SubmissionNotification.updateMany(
-        { studentId: payload.userId, isRead: false },
+        { recipientId: payload.userId, isRead: false },
         { isRead: true },
       );
       return successResponse('All notifications marked as read');
@@ -95,7 +95,7 @@ export async function PATCH(request: NextRequest) {
     if (!notificationId) return errorResponse('notificationId or markAllRead required');
 
     await SubmissionNotification.updateOne(
-      { _id: notificationId, studentId: payload.userId },
+      { _id: notificationId, recipientId: payload.userId },
       { isRead: true },
     );
 

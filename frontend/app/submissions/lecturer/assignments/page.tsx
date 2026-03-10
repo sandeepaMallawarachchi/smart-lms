@@ -236,14 +236,6 @@ function AssignmentCard({
                             <Edit size={12} /> Grade ({submitted - graded})
                         </button>
                     )}
-                    {a.status === 'DRAFT' && (
-                        <button
-                            onClick={() => onNavigate(`/submissions/lecturer/assignments/${a.id}/edit`)}
-                            className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-xs font-medium flex items-center gap-1 cursor-pointer"
-                        >
-                            <Edit size={12} /> Edit
-                        </button>
-                    )}
                     {a.status === 'CLOSED' && (
                         <span className="text-xs text-gray-400 flex items-center gap-1"><Archive size={11} /> Closed</span>
                     )}

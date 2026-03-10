@@ -472,7 +472,7 @@ export default function LecturerGradingPage({
                     method: 'POST',
                     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        studentId: submission?.studentId,
+                        recipientId: submission?.studentId,
                         submissionId,
                         type: 'grade_submitted',
                         title: 'Submission Graded',

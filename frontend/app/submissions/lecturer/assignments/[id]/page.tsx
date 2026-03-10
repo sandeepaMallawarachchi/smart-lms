@@ -97,16 +97,7 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
                 iconColor="text-blue-600"
                 loading={loading}
                 onRefresh={fetchAssignment}
-                actions={
-                    assignment?.status === 'DRAFT' ? (
-                        <button
-                            onClick={() => router.push(`/submissions/lecturer/assignments/${id}/edit`)}
-                            className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors text-sm font-medium cursor-pointer"
-                        >
-                            <Edit size={14} /> Edit Draft
-                        </button>
-                    ) : undefined
-                }
+                actions={undefined}
             />
 
             {error && <ErrorBanner message={error} onRetry={fetchAssignment} />}
@@ -272,14 +263,6 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
                                             className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center justify-center gap-1.5 cursor-pointer"
                                         >
                                             <CheckCircle2 size={14} /> Grade Pending ({subsStats.pending})
-                                        </button>
-                                    )}
-                                    {assignment.status === 'DRAFT' && (
-                                        <button
-                                            onClick={() => router.push(`/submissions/lecturer/assignments/${id}/edit`)}
-                                            className="w-full px-3 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors text-sm font-medium flex items-center justify-center gap-1.5 cursor-pointer"
-                                        >
-                                            <Edit size={14} /> Edit Assignment
                                         </button>
                                     )}
                                     <button
