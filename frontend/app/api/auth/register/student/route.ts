@@ -117,6 +117,7 @@ export async function POST(request: NextRequest) {
       userId: student._id.toString(),
       email: student.email,
       userRole: 'student',
+      name: student.name,
     });
 
     // Get student data without password

@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
       userId: user._id.toString(),
       email: user.email,
       userRole,
+      name: user.name,
     });
 
     // Remove password from response

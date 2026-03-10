@@ -41,6 +41,9 @@ export default function LoginPage() {
       // Store token and user role
       localStorage.setItem('authToken', data.data.token);
       localStorage.setItem('userRole', data.data.userRole);
+      if (data.data.user?.name) {
+        localStorage.setItem('userName', data.data.user.name);
+      }
 
       // Navigate based on user role
       if (data.data.isSuperAdmin) {

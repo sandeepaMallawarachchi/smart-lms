@@ -228,6 +228,8 @@ export const submissionService = {
         studentId: string,
         studentName: string = 'Student',
         assignmentTitle?: string,
+        moduleCode?: string,
+        moduleName?: string,
     ): Promise<Submission> {
         console.debug('[submissionService] getOrCreateDraftSubmission — assignmentId:', assignmentId, '| studentId:', studentId);
 
@@ -272,7 +274,10 @@ export const submissionService = {
                 studentId,
                 studentName,
                 assignmentId,
+                assignmentTitle: assignmentTitle || undefined,
                 title: assignmentTitle || 'Text Submission',
+                moduleCode: moduleCode || undefined,
+                moduleName: moduleName || undefined,
                 submissionType: 'ASSIGNMENT',
             }),
         });

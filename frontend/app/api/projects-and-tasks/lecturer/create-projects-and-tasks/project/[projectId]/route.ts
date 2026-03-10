@@ -8,6 +8,7 @@ import {
   scheduleReminderJobsForStudentItem,
 } from '@/lib/projects-and-tasks/reminders/scheduler';
 import CourseGroup from '@/model/CourseGroup';
+import Course from '@/model/Course';
 
 type ProjectWithGroupsLite = {
   courseId: string;
@@ -122,12 +123,24 @@ export async function GET(
       groupName: String((group as { groupName?: string }).groupName || ''),
     }));
 
+    // Enrich with course data
+    let courseData = undefined;
+    if (projectWithGroups.courseId) {
+      const courseDoc = await Course.findById(projectWithGroups.courseId)
+        .select('_id courseName courseCode')
+        .lean();
+      if (courseDoc) {
+        courseData = courseDoc;
+      }
+    }
+
     return NextResponse.json(
       {
         message: 'Project fetched successfully',
         data: {
           ...project,
           assignedGroups,
+          course: courseData,
         },
       },
       { status: 200 }
