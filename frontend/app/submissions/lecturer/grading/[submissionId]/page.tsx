@@ -352,13 +352,20 @@ export default function LecturerGradingPage({
     const [questionStates, setQuestionStates] = useState<Record<string, QuestionGradeState>>({});
     const [overallComment, setOverallComment]   = useState('');
     const [apiQuestions, setApiQuestions]       = useState<Question[] | null>(null);
+    const [assignment, setAssignment]           = useState<AssignmentWithQuestions | null>(null);
     const [submitDone, setSubmitDone]           = useState(false);
 
-    // Compute deadline status. Prefer the backend-computed field; fall back to local check.
+    // Resolve the effective deadline from submission or assignment
+    const effectiveDeadline: string | null =
+        (submission?.dueDate as unknown as string) || assignment?.dueDate || null;
+
+    // Compute deadline status. Prefer the backend-computed field (only when submission
+    // carries its own dueDate); otherwise fall back to local check against the assignment deadline.
     const isDeadlinePassed: boolean = (() => {
-        if (submission?.isDeadlinePassed != null) return submission.isDeadlinePassed as unknown as boolean;
-        if (!submission?.dueDate) return false;
-        return new Date() > new Date(submission.dueDate as unknown as string);
+        if (submission?.dueDate && submission?.isDeadlinePassed != null)
+            return submission.isDeadlinePassed as unknown as boolean;
+        if (!effectiveDeadline) return false;
+        return new Date() > new Date(effectiveDeadline);
     })();
 
     // Load assignment questions
@@ -367,6 +374,7 @@ export default function LecturerGradingPage({
         getAssignmentWithFallback(submission.assignmentId, typeHint)
             .then(asg => {
                 const withQ = asg as AssignmentWithQuestions;
+                setAssignment(withQ);
                 if (withQ.questions?.length) setApiQuestions(withQ.questions);
             })
             .catch(() => {});
@@ -535,8 +543,8 @@ export default function LecturerGradingPage({
                         <p className="text-sm text-amber-700 mt-0.5">
                             The current grade is AI-generated and cannot be changed before the deadline.
                             You can read the submission but all marks are locked.
-                            {submission?.dueDate && (
-                                <> Deadline: <strong>{formatDate(String(submission.dueDate))}</strong>.</>
+                            {effectiveDeadline && (
+                                <> Deadline: <strong>{formatDate(effectiveDeadline)}</strong>.</>
                             )}
                         </p>
                     </div>
@@ -584,7 +592,7 @@ export default function LecturerGradingPage({
                         <div>
                             <div className="text-xs text-gray-400">Deadline</div>
                             <div className={`font-medium ${isDeadlinePassed ? 'text-green-700' : 'text-amber-700'}`}>
-                                {formatDate(submission?.dueDate as unknown as string)}
+                                {formatDate(effectiveDeadline)}
                             </div>
                         </div>
                     </div>
