@@ -2,7 +2,7 @@
 
 **Module:** Submission System (IT22586766)
 **Branch:** `IT22586766/feature/007/integration`
-**Updated:** 2026-03-02
+**Updated:** 2026-03-10
 
 This document has **two audiences:**
 
@@ -586,9 +586,29 @@ Real-time similarity while student types. Called 3 seconds after typing stops.
   "sessionId": "550e8400-...",
   "similarityScore": 0.12,
   "flagged": false,
-  "matchedText": null
+  "matchedText": null,
+  "internetSimilarityScore": 0.10,
+  "peerSimilarityScore": 0.02,
+  "riskScore": 15.0,
+  "riskLevel": "LOW",
+  "internetMatches": [
+    {
+      "title": "OSI Model - Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/OSI_model",
+      "snippet": "The OSI model is a conceptual framework...",
+      "similarityScore": 0.10,
+      "sourceDomain": "wikipedia.org",
+      "sourceCategory": "ENCYCLOPEDIA",
+      "confidenceLevel": "HIGH",
+      "matchedStudentText": "7 layers of the OSI model"
+    }
+  ]
 }
 ```
+
+> **Internet matches** are always returned when `internetSimilarityScore > 0`, regardless of `flagged` status. The frontend uses these to display source details in the `PlagiarismWarning` component even at LOW severity.
+
+> **FACTUAL question optimization:** FACTUAL questions with fewer than 15 words skip plagiarism checking entirely. CALCULATION and OBJECTIVE questions always skip.
 
 **Frontend severity mapping:**
 ```
@@ -645,10 +665,12 @@ const payload = JSON.parse(atob(token.split('.')[1]));
 const studentId = payload.userId ?? payload.sub;
 ```
 
-**JWT payload must include `userId` (MongoDB `_id`):**
+**JWT payload must include `userId` (MongoDB `_id`) and optionally `name`:**
 ```json
-{ "userId": "6507c1a2b3d4e5f6a7b8c9d0", "email": "...", "userRole": "student" }
+{ "userId": "6507c1a2b3d4e5f6a7b8c9d0", "email": "...", "userRole": "student", "name": "John Smith" }
 ```
+
+> **`name` field** (added 2026-03-10): Optional. Included in the JWT at login and registration. Used by the submission system to populate `studentName` on submissions without an extra API call.
 
 ---
 

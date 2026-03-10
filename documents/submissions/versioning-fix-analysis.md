@@ -122,7 +122,7 @@ The `answers` table remains the live working copy. Auto-save, AI feedback, and p
 
 1. **On mount**: Decodes JWT → fetches assignment → calls `getOrCreateDraftSubmission()` → pre-loads saved answers.
 2. **While typing**: `useAnswerEditor` hook manages debounced auto-save (5s), live AI feedback (2s), and live plagiarism checking (2s). All three write to the working copy only.
-3. **Submit**: Calls `submissionService.submitSubmission(submissionId)`. The backend handles snapshot creation server-side. No `versionService.createTextSnapshot()` call from the frontend.
+3. **Submit**: Calls `submissionService.submitSubmission(submissionId)`. The backend handles snapshot creation server-side. No `versionService.createTextSnapshot()` call from the frontend. However, after submit the frontend fetches the latest version and calls `versionService.savePlagiarismSources()` for each question that has `internetMatches` in `plagiarismMap`, persisting the matched sources to the `version_plagiarism_sources` table.
 4. **Resubmit**: The student opens the answer page again (status is still SUBMITTED/GRADED — no reset to DRAFT needed). They edit answers (working copy), then click Submit again. `Submission.submit()` increments `versionNumber` and a new snapshot is created.
 
 ### Report Page (`/submissions/student/feedback/[id]`)
@@ -156,7 +156,7 @@ The `answers` table remains the live working copy. Auto-save, AI feedback, and p
 | `WebConfig.java` | Added `RestTemplate` bean with timeout configuration |
 | `application.properties` | Added `version.service.url=http://localhost:8082` |
 | `answer/[assignmentId]/page.tsx` | Removed `versionService.createTextSnapshot()` call from `handleSubmit()` |
-| `answer/[assignmentId]/page.tsx` | Removed unused `versionService` import |
+| `answer/[assignmentId]/page.tsx` | Re-added `versionService` import — now used for `savePlagiarismSources()` after submit (persists `internetMatches` per question to the version) |
 
 ---
 
@@ -180,7 +180,7 @@ All changes have been applied across the codebase:
 
 - **Backend (submission-management-service)**: `resetToDraft` eliminated, `versionNumber` starts at 0, snapshot creation moved server-side with `RestTemplate` calling version_control_service atomically during `submitSubmission()`.
 - **Backend (version_control_service)**: Unique constraint added on `(submission_id, version_number)` to prevent duplicate version records.
-- **Frontend**: `handleSubmit()` simplified to a single `submissionService.submitSubmission()` call — no more fire-and-forget snapshot call from the browser. Unused `versionService` import removed from the answer page.
+- **Frontend**: `handleSubmit()` simplified to a single `submissionService.submitSubmission()` call for the core submit — no more fire-and-forget snapshot call from the browser. After submit, the frontend fetches the latest version and calls `versionService.savePlagiarismSources()` for each question with internet matches, persisting plagiarism source data to the version record.
 
 ### Version Number Lifecycle
 

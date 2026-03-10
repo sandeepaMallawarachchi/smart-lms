@@ -1,7 +1,7 @@
 # Submission System — Frontend Components Reference
 
 **Module:** Submission System (IT22586766)
-**Updated:** 2026-03-02
+**Updated:** 2026-03-10
 
 All frontend files live under `frontend/` in the monorepo.
 
@@ -400,9 +400,10 @@ Inline severity chip displayed below each question editor.
 |----------|---------|
 | `null + !loading` | Nothing (takes no space) |
 | `loading` | Nothing (silent — avoids distraction while typing) |
-| `LOW` | Green chip: "✓ No plagiarism detected" |
-| `MEDIUM` | Amber banner: "⚠ Similarity detected (X%) — try rephrasing" |
-| `HIGH` | Red alert: "🚨 High similarity (X%) detected — review required" |
+| `LOW` (no matches) | Green chip: "✓ No internet plagiarism detected" + peer similarity % if present |
+| `LOW` (with matches) | Blue info panel: "Low similarity detected" with source list and signal bars for internet/peer similarity |
+| `MEDIUM` | Amber banner: "⚠ Similarity detected (X%) — try rephrasing" with matched sources, signal bars, and guidance panel |
+| `HIGH` | Red alert: "🚨 High similarity (X%) detected — review required" with matched sources/text and guidance panel |
 
 ---
 
@@ -464,12 +465,18 @@ Two sections:
 **Main text-answer writing page.**
 
 On mount:
-1. Decode JWT → `studentId`
+1. Decode JWT → `studentId`, `studentName` (from `payload.name` or `localStorage.getItem('userName')` fallback)
 2. `GET /api/assignments/{id}` → load `questions[]`
-3. `getOrCreateDraftSubmission(assignmentId, studentId)` → get/create DRAFT
+3. `getOrCreateDraftSubmission(assignmentId, studentId, studentName, assignmentTitle, moduleCode, moduleName)` → get/create DRAFT
 4. `GET /api/submissions/{id}/answers` → pre-fill editors
 
 Renders one `QuestionCard` per question. Sticky bottom bar shows total word count and "Submit Assignment" button. Submission is blocked until all required questions have > 0 words.
+
+**On Submit:**
+1. Calls `submissionService.submitSubmission(submissionId)` — backend creates version snapshot atomically
+2. Fetches `versionService.getLatestVersion(submissionId)` to get the new version ID
+3. For each question with `plagiarismMap[qId]?.internetMatches`, calls `versionService.savePlagiarismSources()` to persist the detected internet sources to the version
+4. Redirects to `/submissions/student/my-submissions` after a brief success state
 
 ---
 
@@ -540,23 +547,9 @@ Charts/sections: overall stats · grades by module · submission timeline · rec
 
 ---
 
-### `/submissions/lecturer/students` — `app/submissions/lecturer/students/page.tsx`
+### `/submissions/lecturer/submissions` — `app/submissions/lecturer/submissions/page.tsx`
 
-**Per-student insights.** Groups flat `Submission[]` by `studentId` into `StudentSummary[]`. Shows average grade, average plagiarism, submission count, late count, and status badge.
-
-**Status logic:**
-- `plagiarism > 25` → `at-risk`
-- `grade ≥ 85` → `excellent`
-- `grade ≥ 75` → `good`
-- `grade ≥ 60` → `average`
-- `grade ≥ 45` → `at-risk`
-- else → `critical`
-
----
-
-### `/submissions/lecturer/plagiarism` — `app/submissions/lecturer/plagiarism/page.tsx`
-
-**Plagiarism management.** Lists all flagged reports. Allows lecturer to update review status (`FALSE_POSITIVE`, `CONFIRMED`, `REVIEWED`) via `useUpdatePlagiarismReview`.
+**All submissions view.** Lists all student submissions across all assignments with filtering and sorting.
 
 ---
 
@@ -576,23 +569,17 @@ All in `frontend/lib/api/submission-services.ts`.
 | `deleteSubmission(id)` | `DELETE /api/submissions/{id}` |
 | `uploadFiles(submissionId, files)` | `POST /api/submissions/{id}/files` |
 | `gradeSubmission(id, payload)` | `POST /api/submissions/{id}/grade` |
-| `getAssignments(params?)` | `GET /api/assignments` |
-| `getAssignment(id)` | `GET /api/assignments/{id}` |
-| `createAssignment(payload)` | `POST /api/assignments` |
-| `updateAssignment(id, payload)` | `PUT /api/assignments/{id}` |
-| `getOrCreateDraftSubmission(asgId, stdId)` | `GET` then `POST /api/submissions` |
+| `getOrCreateDraftSubmission(asgId, stdId, name?, title?, moduleCode?, moduleName?)` | `GET` then `POST /api/submissions` |
 | `saveAnswer(submissionId, questionId, payload)` | `PUT /api/submissions/{id}/answers/{qId}` |
 | `getAnswers(submissionId)` | `GET /api/submissions/{id}/answers` |
 
-### `versionService` → port 8082
+### `versionService` → port 8081
 | Method | Endpoint |
 |--------|----------|
-| `getVersions(submissionId)` | `GET /api/versions?submissionId=…` |
-| `getVersion(id)` | `GET /api/versions/{id}` |
-| `getLatestVersion(submissionId)` | `GET /api/versions/latest?submissionId=…` |
-| `compareVersions(v1Id, v2Id)` | `GET /api/versions/compare?v1=…&v2=…` |
-| `createVersion(payload)` | `POST /api/versions` (multipart) |
-| `downloadVersion(versionId)` | `GET /api/versions/{id}/download` → Blob |
+| `getVersions(submissionId)` | `GET /api/submissions/{id}/versions` |
+| `getVersion(submissionId, versionId)` | `GET /api/submissions/{id}/versions/{vId}` |
+| `getLatestVersion(submissionId)` | `GET /api/submissions/{id}/versions/latest` |
+| `savePlagiarismSources(submissionId, versionId, questionId, payload)` | `POST /api/submissions/{id}/versions/{vId}/answers/{qId}/sources` |
 
 ### `feedbackService` → port 8083
 | Method | Endpoint |
@@ -614,6 +601,18 @@ All in `frontend/lib/api/submission-services.ts`.
 | `getCheckStatus(reportId)` | `GET /api/plagiarism/{id}/status` |
 | `updateReview(reportId, payload)` | `PUT /api/plagiarism/{id}/review` |
 | `checkLiveSimilarity(payload)` | `POST /api/integrity/realtime/check` |
+
+### `projectsAndTasksService` → Next.js API routes (MongoDB)
+| Method | Endpoint |
+|--------|----------|
+| `getStudentProjects()` | `GET /api/projects-and-tasks/student/projects` |
+| `getStudentTasks()` | `GET /api/projects-and-tasks/student/tasks` |
+| `getLecturerProjects(courseId, lecturerId)` | `GET /api/submissions/lecturer/published-projects?courseId=…&lecturerId=…` |
+| `getLecturerTasks(courseId, lecturerId)` | `GET /api/submissions/lecturer/published-tasks?courseId=…&lecturerId=…` |
+| `getProjectById(id)` | `GET /api/projects-and-tasks/lecturer/create-projects-and-tasks/project/{id}` |
+| `getTaskById(id)` | `GET /api/projects-and-tasks/lecturer/create-projects-and-tasks/task/{id}` |
+
+> **Note:** `getLecturerProjects` and `getLecturerTasks` use dedicated published-only endpoints under `/api/submissions/lecturer/` that filter by `isPublished: { $ne: false }` and `isArchived: { $ne: true }`. The original `/api/projects-and-tasks/lecturer/...` endpoints are used by other team members and return all projects/tasks regardless of publish status.
 
 ---
 
