@@ -1,7 +1,7 @@
 # Submission System — User Flows
 
 **Module:** Submission System (IT22586766)
-**Updated:** 2026-03-02
+**Updated:** 2026-03-10
 
 ---
 
@@ -36,7 +36,11 @@ This is the primary student workflow — typing essay answers directly in the br
 8. When all required questions answered → "Submit Assignment" button becomes active
 9. Student clicks "Submit" → confirmation dialog
 10. Confirmed → POST /api/submissions/{id}/submit
-11. Redirect → /submissions/student/my-submissions with success toast
+11. Backend creates version snapshot atomically (server-side)
+12. Frontend fetches latest version, saves plagiarism sources:
+    → For each question with internetMatches:
+       POST /api/submissions/{id}/versions/{vId}/answers/{qId}/sources
+13. Redirect → /submissions/student/my-submissions with success toast
 ```
 
 **Error states handled:**
@@ -135,31 +139,7 @@ This is the primary student workflow — typing essay answers directly in the br
 
 ---
 
-### Flow 7: Create an Assignment
-
-```
-1. /submissions/lecturer/assignments
-2. Click "Create Assignment" → /submissions/lecturer/assignments/create
-3. Form fields:
-   - Title (required)
-   - Module code + module name (required) — ideally dropdown from course service
-   - Description (optional)
-   - Due date/time (required)
-   - Total marks (required)
-   - Max file size, allowed file types (for file submissions)
-   - Status: DRAFT / OPEN
-   - Questions (for text-based):
-     - Add question text, description, expected word count, max word count, required flag
-     - Reorder questions with drag handles
-4. "Save as Draft" → POST /api/assignments with status: DRAFT
-   OR
-   "Publish" → POST /api/assignments with status: OPEN
-5. Redirect → /submissions/lecturer/assignments
-```
-
----
-
-### Flow 8: Grade a Submission
+### Flow 7: Grade a Submission
 
 ```
 1. /submissions/lecturer/grading
@@ -184,45 +164,7 @@ This is the primary student workflow — typing essay answers directly in the br
 
 ---
 
-### Flow 9: Review Plagiarism
-
-```
-1. /submissions/lecturer/plagiarism
-   → table of submissions with plagiarism > threshold
-   → columns: student, assignment, score, matches found, review status
-2. Filter by: review status / assignment / score range
-3. Click "Review" on a row
-4. Modal or detail view showing:
-   - PlagiarismReportCard (full matches list)
-   - Review status dropdown: PENDING_REVIEW → REVIEWED / FALSE_POSITIVE / CONFIRMED
-   - Notes textarea
-5. Click "Update Review"
-6. PUT /api/plagiarism/{id}/review
-7. Row updates with new review status badge
-```
-
----
-
-### Flow 10: View Student Insights
-
-```
-1. /submissions/lecturer/students
-   → grid of StudentSummary cards (one per unique student who submitted)
-2. Each card shows:
-   - Student name + registration ID
-   - Modules enrolled in (from submissions)
-   - Average grade (colour-coded: green ≥75, amber ≥60, red <60)
-   - Average plagiarism score
-   - Status badge: excellent / good / average / at-risk / critical
-   - Flagged indicator if plagiarism > 25%
-3. Search by name / registration ID
-4. Filter by: status / module
-5. Sort by: grade / plagiarism / submissions count / name
-```
-
----
-
-### Flow 11: Lecturer Analytics
+### Flow 8: Lecturer Analytics
 
 ```
 1. /submissions/lecturer/analytics
@@ -283,15 +225,10 @@ This is the primary student workflow — typing essay answers directly in the br
 │
 └── /lecturer
     ├── /                         ← dashboard
-    ├── /assignments              ← manage all assignments
-    ├── /assignments/create       ← create new assignment
-    ├── /assignments/[id]         ← view/edit one assignment
     ├── /submissions              ← all submissions view
     ├── /grading                  ← grading queue
     ├── /grading/[submissionId]   ← grade one submission
     ├── /analytics                ← class analytics
-    ├── /students                 ← per-student insights
-    ├── /plagiarism               ← plagiarism management
     └── /settings                 ← system configuration
 ```
 

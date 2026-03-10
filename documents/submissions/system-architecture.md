@@ -1,7 +1,7 @@
 # Submission System — System Architecture
 
 **Module:** Submission System (IT22586766)
-**Updated:** 2026-03-02
+**Updated:** 2026-03-10
 
 ---
 
@@ -42,6 +42,7 @@ The submission system is a full-stack feature built on top of the Smart LMS plat
 │  │   API Services  (submission-services.ts)                       │ │
 │  │   submissionService · versionService                           │ │
 │  │   feedbackService  · plagiarismService                         │ │
+│  │   projectsAndTasksService                                      │ │
 │  └──┬──────────────┬──────────────┬──────────────┬───────────────┘ │
 └─────│──────────────│──────────────│──────────────│─────────────────┘
       │              │              │              │
@@ -87,6 +88,10 @@ Student types in RichTextEditor (per question)
 
 Student clicks "Submit Assignment"
         └─ POST /api/submissions/{id}/submit
+                ├─ Backend creates version snapshot atomically
+                ├─ Frontend fetches latest version
+                ├─ For each question with internetMatches in plagiarismMap:
+                │   └─ POST /api/submissions/{id}/versions/{vId}/answers/{qId}/sources
                 └─ Redirect → /submissions/student/my-submissions
 ```
 
@@ -198,13 +203,11 @@ frontend/
     │
     └── lecturer/
         ├── page.tsx                 ← lecturer dashboard
-        ├── assignments/page.tsx     ← manage assignments
         ├── grading/page.tsx         ← grading queue
         ├── grading/[submissionId]/page.tsx ← grade one submission
         ├── analytics/page.tsx       ← class-wide analytics
-        ├── students/page.tsx        ← per-student insights
-        ├── plagiarism/page.tsx      ← plagiarism management
-        └── submissions/page.tsx     ← all submissions view
+        ├── submissions/page.tsx     ← all submissions view
+        └── settings/page.tsx        ← system configuration
 ```
 
 ---
@@ -269,8 +272,10 @@ ModuleLayout (wraps all /submissions/* pages)
 
 **JWT payload (decoded client-side):**
 ```json
-{ "userId": "<MongoDB _id>", "email": "...", "userRole": "student" | "lecture" }
+{ "userId": "<MongoDB _id>", "email": "...", "userRole": "student" | "lecture", "name": "John Smith" }
 ```
+
+> **`name` field** (added 2026-03-10): Optional field included on login and registration. Used by the answer page (`getStudentName()`) to populate student name on submissions. Falls back to `localStorage.getItem('userName')` if JWT doesn't contain it.
 
 ---
 

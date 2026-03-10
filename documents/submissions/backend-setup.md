@@ -1,7 +1,7 @@
 # Submission System — Backend Setup Guide
 
 **Module:** Submission System (IT22586766)
-**Updated:** 2026-03-02
+**Updated:** 2026-03-10
 
 This guide is for backend developers implementing the 4 Spring Boot microservices.
 
@@ -51,6 +51,7 @@ Each service must validate the `Authorization: Bearer <token>` header on every r
 // payload.userId   — MongoDB _id of the user
 // payload.userRole — "student" or "lecture"
 // payload.email    — user email
+// payload.name     — user display name (optional, added 2026-03-10)
 ```
 
 ### Response format for errors
@@ -585,13 +586,24 @@ public class RealtimeCheckRequest {
 ```java
 public class RealtimeCheckResponse {
     private String sessionId;
-    private Double similarityScore;  // ← MUST be 0.0 – 1.0 range
-    private Boolean flagged;         // true if score >= 0.70
-    private String matchedText;      // optional excerpt
+    private String studentId;
+    private Long questionId;
+    private Double similarityScore;      // ← MUST be 0.0 – 1.0 range
+    private Boolean flagged;             // true if score >= 0.70
+    private String warningMessage;
+    private Integer textLength;
+    private LocalDateTime checkedAt;
+    private List<InternetMatchResponse> internetMatches;  // matched internet sources
+    private Double internetSimilarityScore;  // 0.0-1.0 internet-only
+    private Double peerSimilarityScore;      // 0.0-1.0 peer-only
+    private Double riskScore;                // 0-100 aggregate
+    private String riskLevel;                // CLEAN | LOW | MEDIUM | HIGH
 }
 ```
 
 > The frontend converts `0.0–1.0` to `0–100%` for display. If you return `0–100` directly the UI will show `7000%`.
+
+> **FACTUAL question check:** Questions classified as FACTUAL with < 15 words skip plagiarism checks. CALCULATION and OBJECTIVE always skip. All other types always check.
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Module:** Submission System (IT22586766)
 **File:** `frontend/types/submission.types.ts`
-**Updated:** 2026-03-02
+**Updated:** 2026-03-10
 
 All Spring Boot DTOs must produce JSON that matches these TypeScript interfaces exactly. Field names, types, and nullability must correspond.
 
@@ -394,6 +394,22 @@ interface LivePlagiarismResult {
     flagged: boolean;
     matchedText?: string;             // excerpt of matched content
     checkedAt: string;                // ISO-8601
+    internetSimilarity?: number;      // 0–100 internet-only similarity
+    peerSimilarity?: number;          // 0–100 peer-only similarity
+    riskScore?: number;               // 0–100 aggregate risk score
+    riskLevel?: string;               // CLEAN | LOW | MEDIUM | HIGH
+    internetMatches?: InternetMatch[]; // matched internet sources
+}
+
+interface InternetMatch {
+    title: string;                    // source page title
+    url: string;                      // source URL
+    snippet: string;                  // excerpt from source
+    similarityScore: number;          // 0–100 similarity with this source
+    sourceDomain?: string;            // e.g. "wikipedia.org"
+    sourceCategory?: string;          // ENCYCLOPEDIA | ACADEMIC | NEWS etc.
+    confidenceLevel?: string;         // HIGH | MEDIUM | LOW
+    matchedStudentText?: string;      // the student's text that matched
 }
 ```
 
@@ -405,6 +421,39 @@ similarityScore ≥ 70  → HIGH
 ```
 
 > **Important:** Backend returns `similarityScore` as `0.0–1.0`. Frontend multiplies by 100 to get `0–100`. If backend returns `0–100` directly, the frontend will show `7000%`.
+
+> **FACTUAL question optimization (added 2026-03-10):** For FACTUAL question types, plagiarism checking is skipped if the answer has fewer than 15 words. CALCULATION and OBJECTIVE questions always skip plagiarism checks. All other question types always run checks.
+
+---
+
+### `VersionPlagiarismSource`
+
+Persisted plagiarism source for a version answer. Saved at submit time from `internetMatches` in the realtime check results.
+
+```typescript
+interface VersionPlagiarismSource {
+    id: number;
+    sourceUrl?: string;
+    sourceTitle?: string;
+    sourceSnippet?: string;
+    matchedText?: string;
+    similarityPercentage?: number;    // 0–100
+    detectedAt?: string;              // ISO-8601
+}
+
+interface SavePlagiarismSourcesPayload {
+    sources: Array<{
+        sourceUrl?: string;
+        sourceTitle?: string;
+        sourceSnippet?: string;
+        matchedText?: string;
+        similarityPercentage?: number;
+        detectedAt?: string;
+    }>;
+}
+```
+
+> **Data flow:** Realtime checks store `internetMatches` in `plagiarismMap` state. At submit time, `handleSubmit()` fetches the latest version and calls `versionService.savePlagiarismSources()` to persist these matches. The feedback page (`/submissions/student/feedback/[id]`) reads `answer.plagiarismSources` from the version data.
 
 ---
 

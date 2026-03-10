@@ -254,14 +254,18 @@ For **text-based** assignments (essays, Q&A), there are no `version_files` rows 
 5. Plagiarism check runs every 3s → scores saved to answer rows (no version created)
 6. Student clicks "Submit"
 7. System calls POST /api/submissions/{id}/submit → submission status = SUBMITTED
-8. System calls POST /api/versions/text-snapshot with:
+8. Backend calls POST /api/versions/text-snapshot server-side with:
    - All question IDs, answer texts
-   - All AI scores and feedback (from feedbackMap in page state)
-   - All plagiarism scores and internet matches (from plagiarismMap in page state)
+   - All AI scores and feedback (from Answer rows)
+   - All plagiarism scores and internet matches (from Answer rows)
    - Projected grades, max points
 9. Version 1 is created with versionNumber=1, parentVersionId=null
 10. metadata.answers[] contains frozen snapshot of all per-question data
-11. Student sees success screen → redirected to submissions list
+11. Frontend fetches the latest version via GET /api/versions/{submissionId}/latest
+12. For each question with internet matches in plagiarismMap, frontend calls
+    POST /api/submissions/{id}/versions/{versionId}/answers/{questionId}/sources
+    to persist plagiarism sources (internetMatches) to the version_plagiarism_sources table
+13. Student sees success screen → redirected to submissions list
 ```
 
 ### Resubmission (Version 2 Created)
@@ -272,9 +276,10 @@ For **text-based** assignments (essays, Q&A), there are no `version_files` rows 
 3. New AI feedback and plagiarism scores are generated for the updated text
 4. Student clicks "Resubmit"
 5. System calls POST /api/submissions/{id}/submit → submission status updated
-6. System calls POST /api/versions/text-snapshot again with:
+6. Backend calls POST /api/versions/text-snapshot server-side with:
    - Updated answers and new AI scores/plagiarism data
-7. Version 2 is created with:
+7. Frontend fetches latest version and saves plagiarism sources (same as first submit)
+8. Version 2 is created with:
    - versionNumber = 2
    - parentVersionId = Version 1's ID
    - metadata = new snapshot
