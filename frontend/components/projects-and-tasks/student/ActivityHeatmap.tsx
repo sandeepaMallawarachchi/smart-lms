@@ -162,6 +162,10 @@ export default function ActivityHeatmap() {
     return greenColors[day.level];
   };
 
+  const getDisplayCount = (day: HeatmapDay) => (
+    day.isPrediction ? Math.ceil(day.count) : day.count
+  );
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('en-US', { 
@@ -529,8 +533,8 @@ export default function ActivityHeatmap() {
           <div className="mb-4 flex items-center gap-3 text-sm text-gray-600">
             <span>
               {selectedDay.isPrediction
-                ? `Predicted ${selectedDay.count.toFixed(2)} activities`
-                : `${selectedDay.count} ${selectedDay.count === 1 ? 'activity' : 'activities'}`}
+                ? `Predicted ${getDisplayCount(selectedDay)} activities`
+                : `${getDisplayCount(selectedDay)} ${getDisplayCount(selectedDay) === 1 ? 'activity' : 'activities'}`}
             </span>
             {selectedDay.isAnomaly && (
               <span className={selectedDay.anomalyType === 'positive' ? 'text-emerald-600' : 'text-red-600'}>
@@ -602,11 +606,11 @@ export default function ActivityHeatmap() {
               <p className="text-sm">
                 {hoveredDay.isPrediction ? (
                   <span className="text-blue-300">
-                    Predicted: {hoveredDay.count.toFixed(2)} activities
+                    Predicted: {getDisplayCount(hoveredDay)} activities
                   </span>
                 ) : (
                   <span>
-                    {hoveredDay.count} {hoveredDay.count === 1 ? 'activity' : 'activities'}
+                    {getDisplayCount(hoveredDay)} {getDisplayCount(hoveredDay) === 1 ? 'activity' : 'activities'}
                   </span>
                 )}
               </p>
