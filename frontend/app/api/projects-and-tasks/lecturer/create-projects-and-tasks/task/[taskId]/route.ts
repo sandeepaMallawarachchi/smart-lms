@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Task, StudentTaskProgress } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
 import { connectDB } from '@/lib/db';
 import { scheduleReminderJobsForStudentItem, cancelReminderJobsForStudentItem } from '@/lib/projects-and-tasks/reminders/scheduler';
+import Course from '@/model/Course';
 
 type IncomingSubtask = { id?: string; title?: string; description?: string; marks?: number | string };
 
@@ -53,7 +54,7 @@ export async function GET(
       );
     }
 
-    const task = await Task.findById(taskId);
+    const task = await Task.findById(taskId).lean();
 
     if (!task) {
       return NextResponse.json(
@@ -62,10 +63,22 @@ export async function GET(
       );
     }
 
+    // Enrich with course data
+    const taskObj = task as Record<string, unknown>;
+    let courseData = undefined;
+    if (taskObj.courseId) {
+      const courseDoc = await Course.findById(taskObj.courseId)
+        .select('_id courseName courseCode')
+        .lean();
+      if (courseDoc) {
+        courseData = courseDoc;
+      }
+    }
+
     return NextResponse.json(
       {
         message: 'Task fetched successfully',
-        data: task,
+        data: { ...taskObj, course: courseData },
       },
       { status: 200 }
     );

@@ -52,9 +52,13 @@ function getStudentId(): string {
 function getStudentName(): string {
     try {
         const token = localStorage.getItem('authToken');
-        if (!token) return 'Student';
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        return payload.name ?? payload.username ?? 'Student';
+        if (token) {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            if (payload.name) return payload.name;
+        }
+        const storedName = localStorage.getItem('userName');
+        if (storedName) return storedName;
+        return 'Student';
     } catch {
         return 'Student';
     }
@@ -218,6 +222,8 @@ export default function AnswerPage({
                     sid,
                     sName,
                     asg.title,
+                    asg.moduleCode,
+                    asg.moduleName,
                 );
                 setSubmissionId(draft.id);
                 console.debug('[AnswerPage] Draft submission — id:', draft.id, '| status:', draft.status);

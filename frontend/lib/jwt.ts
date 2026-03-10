@@ -7,6 +7,7 @@ export interface TokenPayload {
   userId: string;
   email: string;
   userRole: 'student' | 'lecture' | 'superadmin';
+  name?: string;
 }
 
 export function generateToken(payload: TokenPayload): string {

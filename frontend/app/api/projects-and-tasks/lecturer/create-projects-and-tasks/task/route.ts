@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Task } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
 import { connectDB } from '@/lib/db';
 import { uploadFileToS3, validateFile } from '@/lib/s3-upload';
+import Course from '@/model/Course';
 import { getEligibleStudentsForCourse } from '@/lib/course-students';
 import { scheduleReminderJobsForStudentItem } from '@/lib/projects-and-tasks/reminders/scheduler';
 
@@ -247,11 +248,21 @@ export async function GET(request: NextRequest) {
       .sort({ createdAt: -1 })
       .lean();
 
+    // Enrich with course data
+    const courseDoc = await Course.findById(courseId)
+      .select('_id courseName courseCode')
+      .lean();
+
+    const enrichedTasks = (tasks || []).map((task) => ({
+      ...task,
+      course: courseDoc || undefined,
+    }));
+
     return NextResponse.json(
       {
         message: 'Tasks fetched successfully',
         data: {
-          tasks: tasks || [],
+          tasks: enrichedTasks,
         },
       },
       { status: 200 }

@@ -4,6 +4,7 @@ import com.example.integrity_monitoring_service.dto.request.RealtimeCheckRequest
 import com.example.integrity_monitoring_service.dto.response.ApiResponse;
 import com.example.integrity_monitoring_service.dto.response.InternetMatchResponse;
 import com.example.integrity_monitoring_service.dto.response.RealtimeCheckResponse;
+import com.example.integrity_monitoring_service.model.QuestionType;
 import com.example.integrity_monitoring_service.model.RealtimeCheck;
 import com.example.integrity_monitoring_service.repository.RealtimeCheckRepository;
 import lombok.RequiredArgsConstructor;
@@ -71,9 +72,14 @@ public class RealtimeCheckService {
             }
 
             // Check if plagiarism check needed for this question
-            boolean checkNeeded = questionAnalyzer.isPlagiarismCheckNeeded(
-                    request.getQuestionText(), null);
-            log.debug("[RealtimeCheck] isPlagiarismCheckNeeded={}", checkNeeded);
+            QuestionType questionType = questionAnalyzer.determineQuestionType(request.getQuestionText());
+            int answerWords = request.getTextContent().trim().split("\\s+").length;
+            boolean checkNeeded = switch (questionType) {
+                case FACTUAL -> answerWords >= 15;
+                case CALCULATION, OBJECTIVE -> false;
+                default -> true;
+            };
+            log.debug("[RealtimeCheck] questionType={} answerWords={} isPlagiarismCheckNeeded={}", questionType, answerWords, checkNeeded);
 
             if (!checkNeeded) {
                 log.info("[RealtimeCheck] Skipped — question type does not require plagiarism check");
@@ -104,8 +110,14 @@ public class RealtimeCheckService {
                 if (internetSimilarity >= internetSimilarityThreshold) {
                     maxSimilarity = Math.max(maxSimilarity, internetSimilarity);
                     log.info("[RealtimeCheck] Internet similarity exceeds threshold — including in score");
+                } else {
+                    log.debug("[RealtimeCheck] Internet similarity {} below threshold {} — not included in final score",
+                            internetSimilarity, internetSimilarityThreshold);
+                }
 
-                    // Collect per-source scores to send back in the response
+                // Always collect per-source scores when internet similarity is detected,
+                // so the UI can display matched sources even when not flagged.
+                if (internetSimilarity > 0 && !searchResults.isEmpty()) {
                     List<Double> perSnippet = textSimilarity.calculatePerSnippetSimilarities(
                             request.getTextContent(), searchResults);
                     for (int i = 0; i < searchResults.size(); i++) {
@@ -114,7 +126,7 @@ public class RealtimeCheckService {
                         String category = sr.getOrDefault("category", categorizeSource(domain));
                         double rawScore = i < perSnippet.size() ? perSnippet.get(i) : 0.0;
                         double displayScore = Math.round(rawScore * 1000.0) / 10.0;
-                        if (rawScore >= internetSimilarityThreshold) {
+                        if (rawScore > 0) {
                             internetMatches.add(InternetMatchResponse.builder()
                                     .url(sr.getOrDefault("url", ""))
                                     .title(sr.getOrDefault("title", ""))
@@ -128,9 +140,6 @@ public class RealtimeCheckService {
                             log.debug("[RealtimeCheck] Matched source: domain={} score={}", domain, rawScore);
                         }
                     }
-                } else {
-                    log.debug("[RealtimeCheck] Internet similarity {} below threshold {} — not included in final score",
-                            internetSimilarity, internetSimilarityThreshold);
                 }
 
                 // ── Peer comparison (TF-IDF vs other students' answers) ────────
