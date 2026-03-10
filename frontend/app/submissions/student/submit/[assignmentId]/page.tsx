@@ -1,7 +1,7 @@
 'use client';
 
 import React, { use, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
     AlertCircle,
     AlertTriangle,
@@ -294,6 +294,8 @@ export default function SubmitAssignmentPage({
 }) {
     const resolvedParams = use(params);
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const typeHint = (searchParams.get('type') as 'project' | 'task' | null) ?? undefined;
 
     // Auth
     const [studentId, setStudentId] = useState<string | null>(null);
@@ -337,7 +339,7 @@ export default function SubmitAssignmentPage({
     useEffect(() => {
         setLoadingAssignment(true);
         setLoadError(null);
-        getAssignmentWithFallback(resolvedParams.assignmentId)
+        getAssignmentWithFallback(resolvedParams.assignmentId, typeHint)
             .then((asg) => {
                 setAssignment(asg as AssignmentWithQuestions);
                 // Initialise answer slots for each question
@@ -447,7 +449,7 @@ export default function SubmitAssignmentPage({
 
         try {
             // Navigate to the full answer page for this assignment which handles submission
-            router.push(`/submissions/student/answer/${resolvedParams.assignmentId}`);
+            router.push(`/submissions/student/answer/${resolvedParams.assignmentId}${typeHint ? `?type=${typeHint}` : ''}`);
         } catch (err) {
             setSubmitError(err instanceof Error ? err.message : 'Submission failed. Please try again.');
             setIsSubmitting(false);

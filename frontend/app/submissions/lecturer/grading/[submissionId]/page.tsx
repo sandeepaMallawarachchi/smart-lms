@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, use, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
     ArrowLeft,
     Send,
@@ -342,6 +342,8 @@ export default function LecturerGradingPage({
 }) {
     const { submissionId } = use(params);
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const typeHint = (searchParams.get('type') as 'project' | 'task' | null) ?? undefined;
 
     const { data: submission, loading: subLoading } = useSubmission(submissionId);
     const { data: latestVersion, loading: versionLoading } = useLatestVersion(submissionId);
@@ -362,7 +364,7 @@ export default function LecturerGradingPage({
     // Load assignment questions
     useEffect(() => {
         if (!submission?.assignmentId) return;
-        getAssignmentWithFallback(submission.assignmentId)
+        getAssignmentWithFallback(submission.assignmentId, typeHint)
             .then(asg => {
                 const withQ = asg as AssignmentWithQuestions;
                 if (withQ.questions?.length) setApiQuestions(withQ.questions);

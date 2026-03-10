@@ -47,7 +47,9 @@ function getToken(): string | null {
 
 async function apiRequest<T>(
     url: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    /** When true, suppress console.error for non-OK responses (used for probe/fallback calls). */
+    silent = false,
 ): Promise<T> {
     const token = getToken();
     const method = options.method ?? 'GET';
@@ -75,10 +77,10 @@ async function apiRequest<T>(
         let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         try {
             const errorBody = await response.json();
-            console.error(`[apiRequest] ERROR ${method} ${url} → HTTP ${response.status}`, errorBody);
+            if (!silent) console.error(`[apiRequest] ERROR ${method} ${url} → HTTP ${response.status}`, errorBody);
             errorMessage = errorBody.message ?? errorMessage;
         } catch {
-            console.error(`[apiRequest] ERROR ${method} ${url} → HTTP ${response.status} (no parseable body)`);
+            if (!silent) console.error(`[apiRequest] ERROR ${method} ${url} → HTTP ${response.status} (no parseable body)`);
         }
         throw new Error(errorMessage);
     }
@@ -565,6 +567,24 @@ export const projectsAndTasksService = {
     },
 };
 
+/** Silent variants used by the parallel probe in getAssignmentWithFallback — no console.error on 404. */
+async function _probeProjectById(id: string): Promise<AssignmentWithQuestions> {
+    const res = await apiRequest<{ data: _RawProject }>(
+        `/api/projects-and-tasks/lecturer/create-projects-and-tasks/project/${encodeURIComponent(id)}`,
+        {},
+        true,
+    );
+    return _mapProjectFull(res.data);
+}
+async function _probeTaskById(id: string): Promise<AssignmentWithQuestions> {
+    const res = await apiRequest<{ data: _RawTask }>(
+        `/api/projects-and-tasks/lecturer/create-projects-and-tasks/task/${encodeURIComponent(id)}`,
+        {},
+        true,
+    );
+    return _mapTaskFull(res.data);
+}
+
 // ─── Version Service (new — port 8081, /api/submissions/{id}/versions) ────────
 //
 // All version endpoints now live inside submission-management-service (port 8081).
@@ -911,27 +931,35 @@ export const plagiarismService = {
 /**
  * Fetch a single assignment by ID and return it with questions[].
  *
- * Resolution order:
- *  1. Try the single-item project endpoint (mainTasks → Question[])
- *  2. Try the single-item task endpoint (subtasks → Question[])
- *  3. Fetch full student P&T lists and find by id (no port 8081 required)
+ * @param typeHint  When known ('project' | 'task'), only the matching endpoint
+ *                  is called — avoids a wasted 404 round-trip.
+ *
+ * Resolution order (when typeHint is not provided):
+ *  1. Try project and task endpoints in parallel — use whichever succeeds
+ *  2. Fetch full student P&T lists and find by id (no port 8081 required)
  */
-export async function getAssignmentWithFallback(id: string): Promise<AssignmentWithQuestions> {
-    // 1. Try as a project
-    try {
-        return await projectsAndTasksService.getProjectById(id);
-    } catch {
-        // not a project — try next
+export async function getAssignmentWithFallback(
+    id: string,
+    typeHint?: 'project' | 'task',
+): Promise<AssignmentWithQuestions> {
+    // Fast path: caller already knows the type
+    if (typeHint === 'project') {
+        return projectsAndTasksService.getProjectById(id);
+    }
+    if (typeHint === 'task') {
+        return projectsAndTasksService.getTaskById(id);
     }
 
-    // 2. Try as a task
-    try {
-        return await projectsAndTasksService.getTaskById(id);
-    } catch {
-        // not a task — search lists
-    }
+    // Unknown type — try both endpoints in parallel (silent — no console.error for the expected 404)
+    const [projectResult, taskResult] = await Promise.allSettled([
+        _probeProjectById(id),
+        _probeTaskById(id),
+    ]);
 
-    // 3. Fetch student P&T lists and find by id
+    if (projectResult.status === 'fulfilled') return projectResult.value;
+    if (taskResult.status === 'fulfilled') return taskResult.value;
+
+    // Both failed — search student lists as last resort
     const [projects, tasks] = await Promise.all([
         projectsAndTasksService.getStudentProjects().catch(() => [] as AssignmentWithQuestions[]),
         projectsAndTasksService.getStudentTasks().catch(() => [] as AssignmentWithQuestions[]),

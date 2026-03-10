@@ -27,7 +27,7 @@
  */
 
 import { useState, useEffect, useCallback, use } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
     submissionService,
     versionService,
@@ -155,6 +155,8 @@ export default function AnswerPage({
 }) {
     const { assignmentId } = use(params);
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const typeHint = (searchParams.get('type') as 'project' | 'task' | null) ?? undefined;
 
     // ── Core state ────────────────────────────────────────────
     const [studentId, setStudentId]           = useState<string>('');
@@ -186,7 +188,7 @@ export default function AnswerPage({
                 console.debug('[AnswerPage] load START — assignmentId:', assignmentId, '| studentId:', sid);
 
                 // 1. Fetch assignment (with questions); falls back to sample data if API is down
-                const raw = await getAssignmentWithFallback(assignmentId);
+                const raw = await getAssignmentWithFallback(assignmentId, typeHint);
                 // Cast — questions[] is returned by the backend but typed as optional
                 const asg = raw as AssignmentWithQuestions;
                 setAssignment(asg);

@@ -306,21 +306,21 @@ function AssignmentCard({
                         </span>
                     ) : item.status === 'not_started' ? (
                         <button
-                            onClick={() => router.push(`/submissions/student/answer/${item.assignmentId}`)}
+                            onClick={() => router.push(`/submissions/student/answer/${item.assignmentId}${item.assignmentType ? `?type=${item.assignmentType}` : ''}`)}
                             className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-colors cursor-pointer shadow-sm"
                         >
                             Start Answering <ChevronRight size={14} />
                         </button>
                     ) : item.status === 'draft' ? (
                         <button
-                            onClick={() => router.push(`/submissions/student/answer/${item.assignmentId}`)}
+                            onClick={() => router.push(`/submissions/student/answer/${item.assignmentId}${item.assignmentType ? `?type=${item.assignmentType}` : ''}`)}
                             className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-colors cursor-pointer shadow-sm"
                         >
                             Continue Writing <ChevronRight size={14} />
                         </button>
                     ) : item.status === 'submitted' && !item.isOverdue ? (
                         <button
-                            onClick={() => router.push(`/submissions/student/answer/${item.assignmentId}`)}
+                            onClick={() => router.push(`/submissions/student/answer/${item.assignmentId}${item.assignmentType ? `?type=${item.assignmentType}` : ''}`)}
                             className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-colors cursor-pointer shadow-sm"
                         >
                             Edit / Resubmit <ChevronRight size={14} />

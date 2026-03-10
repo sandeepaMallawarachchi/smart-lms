@@ -254,7 +254,7 @@ export default function StudentAssignmentsPage() {
                                     <div className="flex-shrink-0">
                                         {assignment.status === 'OPEN' && (
                                             <button
-                                                onClick={() => router.push(`/submissions/student/answer/${assignment.id}`)}
+                                                onClick={() => router.push(`/submissions/student/answer/${assignment.id}${assignment.assignmentType ? `?type=${assignment.assignmentType}` : ''}`)}
                                                 className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
                                             >
                                                 Start Answering
