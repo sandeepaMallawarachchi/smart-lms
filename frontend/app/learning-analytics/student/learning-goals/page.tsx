@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useState } from 'react';
 import {
   Target,
   Plus,
@@ -10,6 +10,14 @@ import {
   AlertCircle,
   X,
   Trash2,
+  Sparkles,
+  ChevronDown,
+  ExternalLink,
+  RefreshCw,
+  BookOpen,
+  Youtube,
+  Linkedin,
+  Search,
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
@@ -31,6 +39,30 @@ interface Goal {
   createdAt: string;
 }
 
+interface GoalSuggestion {
+  title: string;
+  description: string;
+  category: Goal['category'];
+  targetDate: string;
+  priority: Goal['priority'];
+  milestones: Array<{
+    id: string;
+    title: string;
+    completed: boolean;
+  }>;
+  tags: string[];
+}
+
+interface GoalResource {
+  title: string;
+  provider: 'youtube' | 'google' | 'linkedin';
+  resourceType: 'video' | 'article' | 'course' | 'documentation' | 'practice';
+  query: string;
+  url: string;
+  reason: string;
+  tags: string[];
+}
+
 function LearningGoalsPageContent() {
   const searchParams = useSearchParams();
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -39,6 +71,13 @@ function LearningGoalsPageContent() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
+  const [suggestions, setSuggestions] = useState<GoalSuggestion[]>([]);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
+  const [expandedGoalResources, setExpandedGoalResources] = useState<Record<string, boolean>>({});
+  const [goalResources, setGoalResources] = useState<Record<string, GoalResource[]>>({});
+  const [goalResourceLoading, setGoalResourceLoading] = useState<Record<string, boolean>>({});
+  const [goalResourceError, setGoalResourceError] = useState<Record<string, string | null>>({});
   const [stats, setStats] = useState({
     total: 0,
     todo: 0,
@@ -57,24 +96,7 @@ function LearningGoalsPageContent() {
     tags: [] as string[],
   });
 
-  useEffect(() => {
-    fetchGoals();
-  }, [filterStatus, filterCategory]);
-
-  useEffect(() => {
-    const statusParam = searchParams.get('status');
-    if (statusParam && ['all', 'todo', 'inprogress', 'done'].includes(statusParam)) {
-      setFilterStatus(statusParam);
-    }
-    if (!statusParam) {
-      setFilterStatus('all');
-    }
-
-    const actionParam = searchParams.get('action');
-    setShowCreateModal(actionParam === 'create');
-  }, [searchParams]);
-
-  const fetchGoals = async () => {
+  const fetchGoals = useCallback(async () => {
     try {
       const token = localStorage.getItem('authToken');
       if (!token) return;
@@ -97,7 +119,24 @@ function LearningGoalsPageContent() {
       console.error('Error fetching goals:', error);
       setIsLoading(false);
     }
-  };
+  }, [filterCategory, filterStatus]);
+
+  useEffect(() => {
+    fetchGoals();
+  }, [fetchGoals]);
+
+  useEffect(() => {
+    const statusParam = searchParams.get('status');
+    if (statusParam && ['all', 'todo', 'inprogress', 'done'].includes(statusParam)) {
+      setFilterStatus(statusParam);
+    }
+    if (!statusParam) {
+      setFilterStatus('all');
+    }
+
+    const actionParam = searchParams.get('action');
+    setShowCreateModal(actionParam === 'create');
+  }, [searchParams]);
 
   const handleCreateGoal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,6 +156,8 @@ function LearningGoalsPageContent() {
 
       if (response.ok) {
         setShowCreateModal(false);
+        setSuggestions([]);
+        setSuggestionError(null);
         setFormData({
           title: '',
           description: '',
@@ -130,6 +171,145 @@ function LearningGoalsPageContent() {
       }
     } catch (error) {
       console.error('Error creating goal:', error);
+    }
+  };
+
+  const handleSuggestGoals = async () => {
+    try {
+      setIsSuggesting(true);
+      setSuggestionError(null);
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        setSuggestionError('Not authenticated');
+        return;
+      }
+
+      const response = await fetch('/api/student/learning-goals/suggestions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        setSuggestionError(`Failed to generate AI suggestions: ${errorText}`);
+        return;
+      }
+
+      const data = await response.json();
+      setSuggestions(Array.isArray(data.data?.goals) ? data.data.goals : []);
+    } catch (error) {
+      console.error('Error generating AI goal suggestions:', error);
+      setSuggestionError('Failed to generate AI suggestions');
+    } finally {
+      setIsSuggesting(false);
+    }
+  };
+
+  const applySuggestionToForm = (suggestion: GoalSuggestion) => {
+    setFormData({
+      title: suggestion.title || '',
+      description: suggestion.description || '',
+      category: suggestion.category || 'academic',
+      targetDate: suggestion.targetDate || '',
+      priority: suggestion.priority || 'medium',
+      milestones: Array.isArray(suggestion.milestones) ? suggestion.milestones : [],
+      tags: Array.isArray(suggestion.tags) ? suggestion.tags : [],
+    });
+    setShowCreateModal(true);
+  };
+
+  const getProviderLabel = (provider: GoalResource['provider']) => {
+    switch (provider) {
+      case 'youtube':
+        return 'YouTube';
+      case 'linkedin':
+        return 'LinkedIn';
+      default:
+        return 'Google';
+    }
+  };
+
+  const getProviderIcon = (provider: GoalResource['provider']) => {
+    if (provider === 'youtube') {
+      return <Youtube size={14} />;
+    }
+    if (provider === 'linkedin') {
+      return <Linkedin size={14} />;
+    }
+    return <Search size={14} />;
+  };
+
+  const getProviderBadge = (provider: GoalResource['provider']) => {
+    switch (provider) {
+      case 'youtube':
+        return 'bg-red-100 text-red-700 border-red-200';
+      case 'linkedin':
+        return 'bg-blue-100 text-blue-700 border-blue-200';
+      default:
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
+
+  const getResourceTypeBadge = (resourceType: GoalResource['resourceType']) => {
+    switch (resourceType) {
+      case 'video':
+        return 'bg-rose-50 text-rose-700 border-rose-200';
+      case 'course':
+        return 'bg-amber-50 text-amber-700 border-amber-200';
+      case 'documentation':
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      case 'practice':
+        return 'bg-violet-50 text-violet-700 border-violet-200';
+      default:
+        return 'bg-slate-50 text-slate-700 border-slate-200';
+    }
+  };
+
+  const fetchGoalResources = async (goalId: string) => {
+    try {
+      setGoalResourceLoading((prev) => ({ ...prev, [goalId]: true }));
+      setGoalResourceError((prev) => ({ ...prev, [goalId]: null }));
+
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        setGoalResourceError((prev) => ({ ...prev, [goalId]: 'Not authenticated' }));
+        return;
+      }
+
+      const response = await fetch(`/api/student/learning-goals/${goalId}/resources`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        setGoalResourceError((prev) => ({ ...prev, [goalId]: `Failed to load resources: ${errorText}` }));
+        return;
+      }
+
+      const data = await response.json();
+      setGoalResources((prev) => ({
+        ...prev,
+        [goalId]: Array.isArray(data.data?.resources) ? data.data.resources : [],
+      }));
+    } catch (error) {
+      console.error('Error fetching goal resources:', error);
+      setGoalResourceError((prev) => ({ ...prev, [goalId]: 'Failed to load resources' }));
+    } finally {
+      setGoalResourceLoading((prev) => ({ ...prev, [goalId]: false }));
+    }
+  };
+
+  const handleToggleResources = async (goalId: string) => {
+    const nextExpanded = !expandedGoalResources[goalId];
+    setExpandedGoalResources((prev) => ({ ...prev, [goalId]: nextExpanded }));
+
+    if (nextExpanded && !goalResources[goalId] && !goalResourceLoading[goalId]) {
+      await fetchGoalResources(goalId);
     }
   };
 
@@ -360,11 +540,94 @@ function LearningGoalsPageContent() {
           <Plus size={20} />
           Create New Goal
         </button>
+
+        <button
+          onClick={handleSuggestGoals}
+          disabled={isSuggesting}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-60"
+        >
+          <Sparkles size={20} />
+          {isSuggesting ? 'Generating...' : 'AI Suggest Goals'}
+        </button>
       </div>
 
       {actionError && (
         <div className="mb-6 p-3 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm">
           {actionError}
+        </div>
+      )}
+
+      {suggestionError && (
+        <div className="mb-6 p-3 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm">
+          {suggestionError}
+        </div>
+      )}
+
+      {suggestions.length > 0 && (
+        <div className="mb-8 rounded-lg border border-slate-200 bg-white p-5 shadow-lg">
+          <div className="mb-4 flex items-center gap-2">
+            <Sparkles className="text-amber-500" size={22} />
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">AI Goal Suggestions</h2>
+              <p className="text-sm text-gray-600">
+                Built from your recent coursework, current progress, and saved learning analytics.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            {suggestions.map((suggestion, index) => (
+              <div key={`${suggestion.title}-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <h3 className="text-base font-semibold text-slate-900">{suggestion.title}</h3>
+                  <span className={`px-2 py-1 rounded text-xs font-medium border ${getPriorityColor(suggestion.priority)}`}>
+                    {suggestion.priority}
+                  </span>
+                </div>
+
+                <p className="mb-3 text-sm text-slate-600">{suggestion.description}</p>
+
+                <div className="mb-3 flex flex-wrap gap-2">
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(suggestion.category)}`}>
+                    {suggestion.category}
+                  </span>
+                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-white text-slate-700 border border-slate-200">
+                    due {new Date(suggestion.targetDate).toLocaleDateString()}
+                  </span>
+                </div>
+
+                {suggestion.milestones.length > 0 && (
+                  <div className="mb-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Milestones</p>
+                    <div className="space-y-1">
+                      {suggestion.milestones.map((milestone) => (
+                        <div key={milestone.id} className="text-sm text-slate-700">
+                          - {milestone.title}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {suggestion.tags.length > 0 && (
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {suggestion.tags.map((tag) => (
+                      <span key={tag} className="px-2 py-1 bg-white text-slate-600 rounded text-xs border border-slate-200">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => applySuggestionToForm(suggestion)}
+                  className="w-full rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
+                >
+                  Create Goal
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -457,6 +720,104 @@ function LearningGoalsPageContent() {
                   ))}
                 </div>
               )}
+
+              <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50">
+                <button
+                  onClick={() => handleToggleResources(goal._id)}
+                  className="flex w-full items-center justify-between px-4 py-3 text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <BookOpen size={18} className="text-slate-700" />
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">Suggested Resources</p>
+                      <p className="text-xs text-slate-500">
+                        AI-curated search links for YouTube, Google, and LinkedIn.
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronDown
+                    size={18}
+                    className={`text-slate-500 transition-transform ${expandedGoalResources[goal._id] ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {expandedGoalResources[goal._id] && (
+                  <div className="border-t border-slate-200 px-4 py-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-sm text-slate-600">
+                        Open a resource search directly or refresh suggestions for this goal.
+                      </p>
+                      <button
+                        onClick={() => fetchGoalResources(goal._id)}
+                        disabled={goalResourceLoading[goal._id]}
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                      >
+                        <RefreshCw size={14} className={goalResourceLoading[goal._id] ? 'animate-spin' : ''} />
+                        {goalResources[goal._id]?.length ? 'Refresh' : 'Generate'}
+                      </button>
+                    </div>
+
+                    {goalResourceError[goal._id] && (
+                      <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                        {goalResourceError[goal._id]}
+                      </div>
+                    )}
+
+                    {goalResourceLoading[goal._id] ? (
+                      <div className="space-y-3">
+                        {[0, 1, 2].map((item) => (
+                          <div key={item} className="rounded-lg border border-slate-200 bg-white p-4">
+                            <div className="mb-3 h-4 w-2/3 animate-pulse rounded bg-slate-200" />
+                            <div className="mb-2 h-3 w-full animate-pulse rounded bg-slate-100" />
+                            <div className="h-3 w-4/5 animate-pulse rounded bg-slate-100" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : goalResources[goal._id]?.length ? (
+                      <div className="space-y-3">
+                        {goalResources[goal._id].map((resource, index) => (
+                          <div key={`${resource.url}-${index}`} className="rounded-lg border border-slate-200 bg-white p-4">
+                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                              <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${getProviderBadge(resource.provider)}`}>
+                                {getProviderIcon(resource.provider)}
+                                {getProviderLabel(resource.provider)}
+                              </span>
+                              <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${getResourceTypeBadge(resource.resourceType)}`}>
+                                {resource.resourceType}
+                              </span>
+                            </div>
+
+                            <h4 className="mb-2 text-sm font-semibold text-slate-900">{resource.title}</h4>
+                            <p className="mb-3 text-sm text-slate-600">{resource.reason}</p>
+
+                            <div className="mb-3 flex flex-wrap gap-2">
+                              {resource.tags.map((tag) => (
+                                <span key={tag} className="rounded bg-slate-100 px-2 py-1 text-[11px] text-slate-600">
+                                  #{tag}
+                                </span>
+                              ))}
+                            </div>
+
+                            <a
+                              href={resource.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 text-sm font-medium text-amber-700 hover:text-amber-800"
+                            >
+                              Open search
+                              <ExternalLink size={14} />
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">
+                        No resources generated yet. Use the button above to get suggestions for this goal.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Footer */}
               <div className="flex items-center justify-between pt-4 border-t border-gray-200">
@@ -645,6 +1006,29 @@ function LearningGoalsPageContent() {
                       </div>
                     ))}
                   </div>
+                </div>
+
+                {/* Tags */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tags (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.tags.join(', ')}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        tags: e.target.value
+                          .split(',')
+                          .map((tag) => tag.trim().toLowerCase())
+                          .filter(Boolean),
+                      })
+                    }
+                    placeholder="study-plan, react, time-management"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Separate tags with commas.</p>
                 </div>
 
                 {/* Actions */}

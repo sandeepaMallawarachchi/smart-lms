@@ -123,6 +123,72 @@ def predict_single():
         }), 500
 
 
+@api_bp.route('/goal-suggestions', methods=['POST'])
+def suggest_goals():
+    """
+    Generate AI-assisted goal suggestions that match the frontend learning-goal form.
+    """
+    try:
+        if not request.is_json:
+            return jsonify({
+                'success': False,
+                'error': 'Content-Type must be application/json',
+                'timestamp': datetime.utcnow().isoformat()
+            }), 400
+
+        data = request.get_json() or {}
+        from app.llm_service import llm_service
+        suggestions = llm_service.generate_goal_suggestions(data)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'goals': suggestions
+            },
+            'timestamp': datetime.utcnow().isoformat()
+        }), 200
+    except Exception as e:
+        logger.error(f"Goal suggestion error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.utcnow().isoformat()
+        }), 500
+
+
+@api_bp.route('/goal-resources', methods=['POST'])
+def suggest_goal_resources():
+    """
+    Generate AI-assisted resource suggestions for a specific goal.
+    """
+    try:
+        if not request.is_json:
+            return jsonify({
+                'success': False,
+                'error': 'Content-Type must be application/json',
+                'timestamp': datetime.utcnow().isoformat()
+            }), 400
+
+        data = request.get_json() or {}
+        from app.llm_service import llm_service
+        resources = llm_service.generate_goal_resources(data)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'resources': resources
+            },
+            'timestamp': datetime.utcnow().isoformat()
+        }), 200
+    except Exception as e:
+        logger.error(f"Goal resource suggestion error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.utcnow().isoformat()
+        }), 500
+
+
 @api_bp.route('/features', methods=['GET'])
 def get_features():
     """
