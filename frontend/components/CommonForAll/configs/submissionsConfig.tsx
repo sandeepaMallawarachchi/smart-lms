@@ -11,10 +11,8 @@ import {
     GitBranch,
     Eye,
     TrendingUp,
-    Users,
     Settings,
     Plus,
-    ListChecks,
     MessageSquare,
     Award,
     BarChart3,
@@ -224,26 +222,11 @@ export const submissionsConfig: Record<'student' | 'lecture', ModuleConfig> = {
                 //     href: '/submissions/lecturer/assignments/create',
                 // },
                 {
-                    id: 'assignments',
-                    label: 'Manage Assignments',
-                    icon: <ListChecks size={22} />,
-                    description: 'All assignments',
-                    href: '/submissions/lecturer/assignments',
-                },
-                {
                     id: 'submissions',
                     label: 'All Submissions',
                     icon: <FileText size={22} />,
                     description: 'Student submissions',
                     href: '/submissions/lecturer/submissions',
-                },
-
-                {
-                    id: 'plagiarism',
-                    label: 'Plagiarism Detection',
-                    icon: <Shield size={22} />,
-                    description: 'Academic integrity',
-                    href: '/submissions/lecturer/plagiarism',
                 },
                 {
                     id: 'analytics',
@@ -251,13 +234,6 @@ export const submissionsConfig: Record<'student' | 'lecture', ModuleConfig> = {
                     icon: <BarChart3 size={22} />,
                     description: 'Performance insights',
                     href: '/submissions/lecturer/analytics',
-                },
-                {
-                    id: 'students',
-                    label: 'Student Insights',
-                    icon: <Users size={22} />,
-                    description: 'Individual progress',
-                    href: '/submissions/lecturer/students',
                 },
                 {
                     id: 'settings',
