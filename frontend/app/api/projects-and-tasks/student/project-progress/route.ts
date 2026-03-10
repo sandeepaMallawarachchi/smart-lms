@@ -120,6 +120,18 @@ export async function GET(request: NextRequest) {
             });
 
             await progress.save();
+
+        }
+
+        if (progress.status !== 'done' && visibleProject.deadlineDate) {
+            await scheduleReminderJobsForStudentItem({
+                studentId: payload.userId,
+                itemType: 'project',
+                itemId: projectId,
+                itemName: visibleProject.projectName,
+                deadlineDate: visibleProject.deadlineDate,
+                deadlineTime: visibleProject.deadlineTime || '23:59',
+            });
         }
 
         progress.mainTasks = applyProjectMarks(
@@ -221,7 +233,7 @@ export async function POST(request: NextRequest) {
                 studentId: payload.userId,
                 projectId,
             });
-        } else if (progress.status === 'inprogress') {
+        } else {
             if (visibleProject.deadlineDate) {
                 await scheduleReminderJobsForStudentItem({
                     studentId: payload.userId,
@@ -232,11 +244,6 @@ export async function POST(request: NextRequest) {
                     deadlineTime: visibleProject.deadlineTime || '23:59',
                 });
             }
-        } else {
-            await cancelReminderJobsForStudentItem({
-                studentId: payload.userId,
-                projectId,
-            });
         }
 
         return successResponse('Project progress updated', { progress }, 200);

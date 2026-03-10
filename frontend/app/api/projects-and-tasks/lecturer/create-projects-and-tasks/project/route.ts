@@ -5,6 +5,8 @@ import { Project } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
 import { connectDB } from '@/lib/db';
 import { uploadFileToS3, validateFile } from '@/lib/s3-upload';
 import CourseGroup from '@/model/CourseGroup';
+import { getEligibleStudentsForCourse } from '@/lib/course-students';
+import { scheduleReminderJobsForStudentItem } from '@/lib/projects-and-tasks/reminders/scheduler';
 
 type ProjectWithGroupsLite = { assignedGroupIds?: string[] } & Record<string, unknown>;
 type GroupLite = { _id: { toString(): string } } & Record<string, unknown>;
@@ -16,6 +18,8 @@ type IncomingMainTask = {
   marks?: number | string;
   subtasks?: IncomingSubtask[];
 };
+type GroupStudentsLite = { studentIds?: unknown[] };
+type EligibleStudentLite = { _id: { toString(): string } };
 
 function normalizeProjectMainTasks(mainTasks: unknown): { ok: true; value: IncomingMainTask[] } | { ok: false; message: string } {
   if (!Array.isArray(mainTasks)) {
@@ -251,6 +255,53 @@ export async function POST(request: NextRequest) {
     });
 
     await project.save();
+
+    // Schedule deadline reminders immediately for assigned students.
+    if ((project.isPublished ?? true) && deadlineDate) {
+      try {
+        let recipientStudentIds: string[] = [];
+
+        if (projectType === 'group') {
+          const groupsWithStudents = await CourseGroup.find({
+            _id: { $in: normalizedAssignedGroupIds },
+            courseId,
+            isArchived: false,
+          })
+            .select('studentIds')
+            .lean();
+
+          recipientStudentIds = [
+            ...new Set(
+              (groupsWithStudents as GroupStudentsLite[]).flatMap((group) =>
+                Array.isArray(group.studentIds)
+                  ? group.studentIds.map((id) => String(id))
+                  : []
+              )
+            ),
+          ];
+        } else {
+          const courseAndStudents = await getEligibleStudentsForCourse(courseId);
+          recipientStudentIds = ((courseAndStudents?.students || []) as EligibleStudentLite[]).map((student) =>
+            student._id.toString()
+          );
+        }
+
+        await Promise.all(
+          recipientStudentIds.map((studentId) =>
+            scheduleReminderJobsForStudentItem({
+              studentId,
+              itemType: 'project',
+              itemId: project._id.toString(),
+              itemName: project.projectName,
+              deadlineDate: project.deadlineDate,
+              deadlineTime: project.deadlineTime || '23:59',
+            })
+          )
+        );
+      } catch (scheduleError) {
+        console.error('Project reminder scheduling warning:', scheduleError);
+      }
+    }
 
     return NextResponse.json(
       {

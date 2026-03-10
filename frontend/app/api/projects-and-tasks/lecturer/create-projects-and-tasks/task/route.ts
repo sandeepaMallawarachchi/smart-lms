@@ -4,8 +4,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Task } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
 import { connectDB } from '@/lib/db';
 import { uploadFileToS3, validateFile } from '@/lib/s3-upload';
+import { getEligibleStudentsForCourse } from '@/lib/course-students';
+import { scheduleReminderJobsForStudentItem } from '@/lib/projects-and-tasks/reminders/scheduler';
 
 type IncomingSubtask = { id?: string; title?: string; description?: string; marks?: number | string };
+type EligibleStudentLite = { _id: { toString(): string } };
 
 function normalizeTaskSubtasks(subtasks: unknown): { ok: true; value: IncomingSubtask[] } | { ok: false; message: string } {
   if (!Array.isArray(subtasks)) {
@@ -171,6 +174,31 @@ export async function POST(request: NextRequest) {
 
     await task.save();
 
+    // Schedule deadline reminders immediately for all students in the module.
+    if ((task.isPublished ?? true) && deadlineDate) {
+      try {
+        const courseAndStudents = await getEligibleStudentsForCourse(courseId);
+        const recipientStudentIds = ((courseAndStudents?.students || []) as EligibleStudentLite[]).map((student) =>
+          student._id.toString()
+        );
+
+        await Promise.all(
+          recipientStudentIds.map((studentId) =>
+            scheduleReminderJobsForStudentItem({
+              studentId,
+              itemType: 'task',
+              itemId: task._id.toString(),
+              itemName: task.taskName,
+              deadlineDate: task.deadlineDate,
+              deadlineTime: task.deadlineTime || '23:59',
+            })
+          )
+        );
+      } catch (scheduleError) {
+        console.error('Task reminder scheduling warning:', scheduleError);
+      }
+    }
+
     return NextResponse.json(
       {
         message: 'Task created successfully',
@@ -236,8 +264,6 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
-
 
 
 

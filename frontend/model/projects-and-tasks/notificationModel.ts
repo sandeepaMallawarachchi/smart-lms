@@ -1,4 +1,8 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import {
+  publishNotificationEvent,
+  toRealtimeNotificationDoc,
+} from '@/lib/projects-and-tasks/notifications/realtime';
 
 interface ITaskProgress {
   mainTaskId?: string;
@@ -21,7 +25,17 @@ export interface INotification extends Document {
   taskId?: string;
   itemType?: 'project' | 'task';
   itemName?: string;
-  reminderType?: 'project_25' | 'project_50' | 'project_75' | 'project_deadline' | 'task_25' | 'task_50' | 'task_75' | 'task_deadline';
+  reminderType?:
+    | 'project_25'
+    | 'project_50'
+    | 'project_75'
+    | 'project_deadline'
+    | 'project_overdue'
+    | 'task_25'
+    | 'task_50'
+    | 'task_75'
+    | 'task_deadline'
+    | 'task_overdue';
   dedupeKey?: string;
   type: 'project_reminder' | 'task_reminder' | 'deadline_warning' | 'overdue' | 'progress_update' | 'lecturer_alert';
   reminderPercentage?: number;
@@ -88,7 +102,18 @@ const notificationSchema = new Schema<INotification>(
     },
     reminderType: {
       type: String,
-      enum: ['project_25', 'project_50', 'project_75', 'project_deadline', 'task_25', 'task_50', 'task_75', 'task_deadline'],
+      enum: [
+        'project_25',
+        'project_50',
+        'project_75',
+        'project_deadline',
+        'project_overdue',
+        'task_25',
+        'task_50',
+        'task_75',
+        'task_deadline',
+        'task_overdue',
+      ],
     },
     dedupeKey: {
       type: String,
@@ -138,6 +163,32 @@ notificationSchema.index(
     partialFilterExpression: { dedupeKey: { $exists: true, $type: 'string' } },
   }
 );
+
+notificationSchema.post('save', function (doc) {
+  const notification = toRealtimeNotificationDoc(doc);
+  const studentId = String((doc as INotification).studentId || '');
+  if (!studentId) return;
+  void publishNotificationEvent({
+    type: 'notification_created',
+    studentId,
+    notification,
+    at: new Date().toISOString(),
+  });
+});
+
+notificationSchema.post('insertMany', function (docs: INotification[]) {
+  docs.forEach((doc) => {
+    const notification = toRealtimeNotificationDoc(doc);
+    const studentId = String(doc?.studentId || '');
+    if (!studentId) return;
+    void publishNotificationEvent({
+      type: 'notification_created',
+      studentId,
+      notification,
+      at: new Date().toISOString(),
+    });
+  });
+});
 
 export const Notification =
   mongoose.models.Notification || mongoose.model<INotification>('Notification', notificationSchema);

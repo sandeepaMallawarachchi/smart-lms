@@ -279,7 +279,7 @@ export async function PUT(
     if (shouldRescheduleReminders || publishStateChanged) {
       const activeProgress = await StudentProjectProgress.find({
         projectId,
-        status: 'inprogress',
+        status: { $ne: 'done' },
       })
         .select('studentId')
         .lean();

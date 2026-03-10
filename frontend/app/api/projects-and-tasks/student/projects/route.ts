@@ -5,7 +5,6 @@ import Course from '@/model/Course';
 import { Project } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
 import { successResponse, unauthorizedResponse, notFoundResponse, serverErrorResponse } from '@/lib/api-response';
 import { verifyToken } from '@/lib/jwt';
-import mongoose from 'mongoose';
 
 export async function GET(request: NextRequest) {
   try {
@@ -63,7 +62,7 @@ export async function GET(request: NextRequest) {
     // Step 3: Find all projects for these courses
     const projects = await Project.find({
       courseId: { $in: courseIds },
-      isArchived: { $ne: true }, 
+      isArchived: { $ne: true },
       isPublished: { $ne: false },
     })
       .populate('lecturerId', 'name email position')

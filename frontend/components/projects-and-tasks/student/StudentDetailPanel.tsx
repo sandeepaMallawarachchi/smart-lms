@@ -134,8 +134,8 @@ const formatFileSize = (bytes: number): string => {
 interface StudentDetailPanelProps {
   item: KanbanItem | null;
   onClose: () => void;
-  onTaskUpdate?: (projectId: string, mainTasks: MainTask[]) => void;
-  onSubtaskUpdate?: (taskId: string, subtasks: Subtask[]) => void;
+  onTaskUpdate?: (projectId: string, mainTasks: MainTask[], progressUpdatedAt?: string) => void;
+  onSubtaskUpdate?: (taskId: string, subtasks: Subtask[], progressUpdatedAt?: string) => void;
 }
 
 export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubtaskUpdate }: StudentDetailPanelProps) {
@@ -349,8 +349,10 @@ export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubt
       });
 
       if (response.ok) {
+        const payload = await response.json().catch(() => null);
+        const progressUpdatedAt = payload?.data?.progress?.updatedAt as string | undefined;
         if (onTaskUpdate) {
-          onTaskUpdate(project._id, tasks);
+          onTaskUpdate(project._id, tasks, progressUpdatedAt);
         }
         if (item && newStatus !== item.status) {
           item.status = newStatus;
@@ -385,8 +387,10 @@ export default function StudentDetailPanel({ item, onClose, onTaskUpdate, onSubt
       });
 
       if (response.ok) {
+        const payload = await response.json().catch(() => null);
+        const progressUpdatedAt = payload?.data?.progress?.updatedAt as string | undefined;
         if (onSubtaskUpdate) {
-          onSubtaskUpdate(task._id, subs);
+          onSubtaskUpdate(task._id, subs, progressUpdatedAt);
         }
         if (item && newStatus !== item.status) {
           item.status = newStatus;

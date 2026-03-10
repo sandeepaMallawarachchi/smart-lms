@@ -37,13 +37,6 @@ interface NotificationBellProps {
 export default function NotificationBell({ pollInterval = 30000 }: NotificationBellProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, pollInterval);
-    return () => clearInterval(interval);
-  }, [pollInterval]);
 
   const fetchNotifications = async () => {
     try {
@@ -63,6 +56,37 @@ export default function NotificationBell({ pollInterval = 30000 }: NotificationB
       console.error('Error fetching notifications:', error);
     }
   };
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      void fetchNotifications();
+    });
+
+    const token = localStorage.getItem('authToken');
+    let stream: EventSource | null = null;
+
+    if (token) {
+      stream = new EventSource(
+        `/api/projects-and-tasks/student/notifications/stream?token=${encodeURIComponent(token)}`
+      );
+      stream.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload?.type === 'notification_created' || payload?.type === 'notification_read') {
+            fetchNotifications();
+          }
+        } catch {
+          // Ignore invalid payloads.
+        }
+      };
+    }
+
+    const interval = setInterval(fetchNotifications, pollInterval);
+    return () => {
+      clearInterval(interval);
+      stream?.close();
+    };
+  }, [pollInterval]);
 
   const handleMarkRead = async (notificationId: string) => {
     try {

@@ -115,18 +115,18 @@ export default function StudentSidebar() {
         { id: 'time-management', label: 'Time Management' },
       ],
     },
-    {
-      id: 'help',
-      label: 'Tips & Learning',
-      icon: <Lightbulb size={20} />,
-      description: 'How to manage tasks effectively',
-      href: '/student/help',
-      subsections: [
-        { id: 'getting-started', label: 'Getting Started' },
-        { id: 'kanban-guide', label: 'Kanban Guide' },
-        { id: 'best-practices', label: 'Best Practices' },
-      ],
-    },
+    // {
+    //   id: 'help',
+    //   label: 'Tips & Learning',
+    //   icon: <Lightbulb size={20} />,
+    //   description: 'How to manage tasks effectively',
+    //   href: '/student/help',
+    //   subsections: [
+    //     { id: 'getting-started', label: 'Getting Started' },
+    //     { id: 'kanban-guide', label: 'Kanban Guide' },
+    //     { id: 'best-practices', label: 'Best Practices' },
+    //   ],
+    // },
   ];
 
   const toggleSection = (id: string) => {

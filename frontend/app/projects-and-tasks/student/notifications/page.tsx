@@ -38,6 +38,30 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     fetchNotifications();
+    const token = localStorage.getItem('authToken');
+    if (!token) return;
+
+    const stream = new EventSource(
+      `/api/projects-and-tasks/student/notifications/stream?token=${encodeURIComponent(token)}`
+    );
+
+    stream.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload?.type === 'notification_created' || payload?.type === 'notification_read') {
+          fetchNotifications();
+        }
+      } catch {
+        // Ignore invalid payloads.
+      }
+    };
+
+    const fallbackPoll = window.setInterval(fetchNotifications, 60000);
+
+    return () => {
+      window.clearInterval(fallbackPoll);
+      stream.close();
+    };
   }, []);
 
   const fetchNotifications = async () => {

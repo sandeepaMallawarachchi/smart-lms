@@ -1,10 +1,160 @@
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/db';
 import { Notification } from '@/model/projects-and-tasks/notificationModel';
-import { Project, Task } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
+import Student from '@/model/Student';
+import Course from '@/model/Course';
+import {
+  Project,
+  StudentProjectProgress,
+  StudentTaskProgress,
+  Task,
+} from '@/model/projects-and-tasks/lecturer/projectTaskModel';
 import { successResponse, unauthorizedResponse, serverErrorResponse } from '@/lib/api-response';
 import { verifyToken } from '@/lib/jwt';
 import { scheduleReminderJobsForStudentItem } from '@/lib/projects-and-tasks/reminders/scheduler';
+
+type ItemLite = {
+  _id: { toString(): string };
+  projectName?: string;
+  taskName?: string;
+  deadlineDate?: string;
+  deadlineTime?: string;
+};
+type ProjectProgressLite = { projectId: string; status?: 'todo' | 'inprogress' | 'done' };
+type TaskProgressLite = { taskId: string; status?: 'todo' | 'inprogress' | 'done' };
+type StudentLite = { academicYear?: string | number; semester?: string | number; specialization?: string };
+type CourseLite = { _id: { toString(): string } };
+
+function parseDeadline(deadlineDate?: string, deadlineTime?: string): Date | null {
+  if (!deadlineDate) return null;
+  const parsed = new Date(`${deadlineDate}T${deadlineTime || '23:59'}:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+async function backfillOverdueNotifications(studentId: string) {
+  const student = (await Student.findById(studentId).lean()) as StudentLite | null;
+  if (!student) return;
+
+  const assignedCourses = await Course.find({
+    year: parseInt(String(student.academicYear), 10),
+    semester: parseInt(String(student.semester), 10),
+    specializations: student.specialization,
+    isArchived: false,
+  })
+    .select('_id')
+    .lean();
+
+  const courseIds = (assignedCourses as CourseLite[]).map((course) => course._id.toString());
+  if (courseIds.length === 0) return;
+
+  const [projects, tasks, projectProgress, taskProgress] = await Promise.all([
+    Project.find({
+      courseId: { $in: courseIds },
+      isPublished: { $ne: false },
+      isArchived: { $ne: true },
+    })
+      .select('_id projectName deadlineDate deadlineTime')
+      .lean(),
+    Task.find({
+      courseId: { $in: courseIds },
+      isPublished: { $ne: false },
+      isArchived: { $ne: true },
+    })
+      .select('_id taskName deadlineDate deadlineTime')
+      .lean(),
+    StudentProjectProgress.find({ studentId }).select('projectId status').lean(),
+    StudentTaskProgress.find({ studentId }).select('taskId status').lean(),
+  ]);
+
+  const now = Date.now();
+  const projectProgressById = new Map(
+    (projectProgress as ProjectProgressLite[]).map((row) => [String(row.projectId), row.status || 'todo'])
+  );
+  const taskProgressById = new Map(
+    (taskProgress as TaskProgressLite[]).map((row) => [String(row.taskId), row.status || 'todo'])
+  );
+
+  const overdueDocs: Array<{
+    studentId: string;
+    projectId?: string;
+    taskId?: string;
+    itemType: 'project' | 'task';
+    itemName: string;
+    reminderType: 'project_overdue' | 'task_overdue';
+    dedupeKey: string;
+    type: 'overdue';
+    reminderPercentage: number;
+    title: string;
+    message: string;
+    description: string;
+    isRead: boolean;
+    isSent: boolean;
+    sentAt: Date;
+    scheduledFor: Date;
+  }> = [];
+
+  (projects as ItemLite[]).forEach((project) => {
+    const itemId = project._id.toString();
+    const status = projectProgressById.get(itemId) || 'todo';
+    if (status === 'done') return;
+
+    const deadline = parseDeadline(project.deadlineDate, project.deadlineTime);
+    if (!deadline || deadline.getTime() > now) return;
+
+    const itemName = String(project.projectName || 'Project');
+    overdueDocs.push({
+      studentId,
+      projectId: itemId,
+      itemType: 'project',
+      itemName,
+      reminderType: 'project_overdue',
+      dedupeKey: `notif:${studentId}:${itemId}:project_overdue`,
+      type: 'overdue',
+      reminderPercentage: 100,
+      title: `Project: ${itemName} - Overdue`,
+      message: `${itemName} is overdue.`,
+      description: 'The deadline has passed. Submit as soon as possible.',
+      isRead: false,
+      isSent: true,
+      sentAt: new Date(),
+      scheduledFor: deadline,
+    });
+  });
+
+  (tasks as ItemLite[]).forEach((task) => {
+    const itemId = task._id.toString();
+    const status = taskProgressById.get(itemId) || 'todo';
+    if (status === 'done') return;
+
+    const deadline = parseDeadline(task.deadlineDate, task.deadlineTime);
+    if (!deadline || deadline.getTime() > now) return;
+
+    const itemName = String(task.taskName || 'Task');
+    overdueDocs.push({
+      studentId,
+      taskId: itemId,
+      itemType: 'task',
+      itemName,
+      reminderType: 'task_overdue',
+      dedupeKey: `notif:${studentId}:${itemId}:task_overdue`,
+      type: 'overdue',
+      reminderPercentage: 100,
+      title: `Task: ${itemName} - Overdue`,
+      message: `${itemName} is overdue.`,
+      description: 'The deadline has passed. Submit as soon as possible.',
+      isRead: false,
+      isSent: true,
+      sentAt: new Date(),
+      scheduledFor: deadline,
+    });
+  });
+
+  for (const doc of overdueDocs) {
+    const existing = await Notification.findOne({ dedupeKey: doc.dedupeKey }).select('_id').lean();
+    if (existing) continue;
+    await Notification.create(doc);
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,7 +182,7 @@ export async function POST(request: NextRequest) {
 
     let itemType: 'project' | 'task' | null = null;
     let itemId: string | null = null;
-    let item: any = null;
+    let item: Record<string, unknown> | null = null;
 
     if (projectId) {
       const project = await Project.findOne({ _id: projectId, isPublished: { $ne: false } }).lean();
@@ -68,7 +218,9 @@ export async function POST(request: NextRequest) {
 
     const resolvedItemType = itemType as 'project' | 'task';
     const resolvedItemId = itemId as string;
-    const itemName = resolvedItemType === 'project' ? item.projectName : item.taskName;
+    const itemName = resolvedItemType === 'project'
+      ? String(item.projectName || '')
+      : String(item.taskName || '');
     const scheduledJobs = await scheduleReminderJobsForStudentItem({
       studentId: payload.userId,
       itemType: resolvedItemType,
@@ -88,7 +240,7 @@ export async function POST(request: NextRequest) {
       },
       200
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Schedule reminders error:', error);
     return serverErrorResponse('An error occurred while scheduling reminders');
   }
@@ -111,6 +263,8 @@ export async function GET(request: NextRequest) {
       return unauthorizedResponse('Unauthorized access');
     }
 
+    await backfillOverdueNotifications(payload.userId);
+
     const notifications = await Notification.find({
       studentId: payload.userId,
     })
@@ -118,18 +272,24 @@ export async function GET(request: NextRequest) {
       .limit(100)
       .lean();
 
+    type NotificationRow = {
+      projectId?: string;
+      taskId?: string;
+    };
+    type ObjectIdLite = { _id: { toString(): string } };
+
     const projectIds = Array.from(
       new Set(
-        notifications
-          .map((n: any) => n.projectId)
-          .filter((id: string | undefined): id is string => Boolean(id))
+        (notifications as NotificationRow[])
+          .map((n) => n.projectId)
+          .filter((id): id is string => Boolean(id))
       )
     );
     const taskIds = Array.from(
       new Set(
-        notifications
-          .map((n: any) => n.taskId)
-          .filter((id: string | undefined): id is string => Boolean(id))
+        (notifications as NotificationRow[])
+          .map((n) => n.taskId)
+          .filter((id): id is string => Boolean(id))
       )
     );
 
@@ -142,15 +302,11 @@ export async function GET(request: NextRequest) {
         : Promise.resolve([]),
     ]);
 
-    const visibleProjectSet = new Set(
-      visibleProjects.map((project: any) => project._id.toString())
-    );
-    const visibleTaskSet = new Set(
-      visibleTasks.map((task: any) => task._id.toString())
-    );
+    const visibleProjectSet = new Set((visibleProjects as ObjectIdLite[]).map((project) => project._id.toString()));
+    const visibleTaskSet = new Set((visibleTasks as ObjectIdLite[]).map((task) => task._id.toString()));
 
-    const filteredNotifications = notifications
-      .filter((notification: any) => {
+    const filteredNotifications = (notifications as Array<{ projectId?: string; taskId?: string }>)
+      .filter((notification) => {
         if (notification.projectId) return visibleProjectSet.has(notification.projectId);
         if (notification.taskId) return visibleTaskSet.has(notification.taskId);
         return true;
@@ -158,7 +314,7 @@ export async function GET(request: NextRequest) {
       .slice(0, 50);
 
     return successResponse('Notifications retrieved', { notifications: filteredNotifications }, 200);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get notifications error:', error);
     return serverErrorResponse('An error occurred while fetching notifications');
   }
