@@ -346,7 +346,7 @@ export default function StudentDashboardPage() {
                                                     </div>
                                                 </div>
                                                 <button
-                                                    onClick={() => router.push(`/submissions/student/answer/${assignment.id}`)}
+                                                    onClick={() => router.push(`/submissions/student/answer/${assignment.id}${assignment.assignmentType ? `?type=${assignment.assignmentType}` : ''}`)}
                                                     className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 active:bg-purple-800 transition-all text-sm font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm hover:shadow-md"
                                                 >
                                                     <Edit size={14}/>

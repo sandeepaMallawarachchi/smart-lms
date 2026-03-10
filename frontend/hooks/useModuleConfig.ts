@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
-import { 
-  projectsTasksConfig, 
-  updateConfigWithCourses, 
+import {
+  projectsTasksConfig,
+  updateConfigWithCourses,
   CoursesApiResponse,
   ModuleConfig as ProjectsTasksModuleConfig,
 } from '@/components/CommonForAll/configs/projectsTasksConfig'
@@ -20,8 +20,8 @@ type ConfigState = {
 }
 
 const getSidebarDeadline = (
-  deadlineDate?: string,
-  deadlineTime?: string
+    deadlineDate?: string,
+    deadlineTime?: string
 ) => {
   if (!deadlineDate) return null
   const parsed = new Date(`${deadlineDate}T${deadlineTime || '23:59'}`)
@@ -31,12 +31,12 @@ const getSidebarDeadline = (
 export function useModuleConfig(userRole: UserRole) {
   const pathname = usePathname()
   const currentModule = pathname.includes('/projects-and-tasks')
-    ? 'projects-tasks'
-    : pathname.includes('/learning-analytics')
-    ? 'learning-analytics'
-    : pathname.includes('/submissions')
-    ? 'submissions'
-    : null
+      ? 'projects-tasks'
+      : pathname.includes('/learning-analytics')
+          ? 'learning-analytics'
+          : pathname.includes('/submissions')
+              ? 'submissions'
+              : null
 
   const getBaseConfig = useCallback(() => {
     if (userRole === 'superadmin') return null
@@ -106,8 +106,8 @@ export function useModuleConfig(userRole: UserRole) {
             if (userId) {
               try {
                 const res = await fetch(
-                  `${SUBMISSION_API}/api/submissions?studentId=${encodeURIComponent(userId)}`,
-                  { headers }
+                    `${SUBMISSION_API}/api/submissions?studentId=${encodeURIComponent(userId)}`,
+                    { headers }
                 )
                 if (res.ok) {
                   const data = await res.json()
@@ -127,10 +127,10 @@ export function useModuleConfig(userRole: UserRole) {
                     ...base.sidebar,
                     stats: { total: submissionCount, dueSoon: dueSoonCount },
                     navItems: base.sidebar.navItems.map(
-                      (item: { id: string; [key: string]: unknown }) =>
-                        item.id === 'my-assignments'
-                          ? { ...item, badge: assignmentCount > 0 ? assignmentCount : undefined }
-                          : item
+                        (item: { id: string; [key: string]: unknown }) =>
+                            item.id === 'my-assignments'
+                                ? { ...item, badge: assignmentCount > 0 ? assignmentCount : undefined }
+                                : item
                     ),
                   },
                 },
@@ -147,11 +147,11 @@ export function useModuleConfig(userRole: UserRole) {
               if (res.ok) {
                 const data = await res.json()
                 const items: Array<{ status?: string }> = Array.isArray(data)
-                  ? data
-                  : (data?.content ?? data?.data ?? [])
+                    ? data
+                    : (data?.content ?? data?.data ?? [])
                 totalCount = items.length
                 pendingCount = items.filter(
-                  s => s.status === 'SUBMITTED' || s.status === 'PENDING_REVIEW'
+                    s => s.status === 'SUBMITTED' || s.status === 'PENDING_REVIEW'
                 ).length
               }
             } catch { /* silent */ }
@@ -175,15 +175,15 @@ export function useModuleConfig(userRole: UserRole) {
                   sidebar: {
                     ...base.sidebar,
                     navItems: base.sidebar.navItems.map(
-                      (item: { id: string; [key: string]: unknown }) => {
-                        if (item.id === 'submissions')
-                          return { ...item, badge: totalCount > 0 ? totalCount : undefined }
-                        if (item.id === 'grading')
-                          return { ...item, badge: pendingCount > 0 ? pendingCount : undefined }
-                        if (item.id === 'plagiarism')
-                          return { ...item, badge: flaggedCount > 0 ? flaggedCount : undefined }
-                        return item
-                      }
+                        (item: { id: string; [key: string]: unknown }) => {
+                          if (item.id === 'submissions')
+                            return { ...item, badge: totalCount > 0 ? totalCount : undefined }
+                          if (item.id === 'grading')
+                            return { ...item, badge: pendingCount > 0 ? pendingCount : undefined }
+                          if (item.id === 'plagiarism')
+                            return { ...item, badge: flaggedCount > 0 ? flaggedCount : undefined }
+                          return item
+                        }
                     ),
                   },
                 },
@@ -289,9 +289,9 @@ export function useModuleConfig(userRole: UserRole) {
   }
 
   const resolvedConfig =
-    configState.module === currentModule && configState.role === userRole
-      ? configState.value
-      : baseConfig
+      configState.module === currentModule && configState.role === userRole
+          ? configState.value
+          : baseConfig
 
   return {
     currentModule,
