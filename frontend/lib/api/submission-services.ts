@@ -524,18 +524,18 @@ export const projectsAndTasksService = {
         return (res.data?.tasks ?? []).map(_mapTaskFull);
     },
 
-    /** Lecturer: all projects for a specific course. */
+    /** Lecturer: published projects for a specific course. */
     async getLecturerProjects(courseId: string, lecturerId: string): Promise<Assignment[]> {
         const res = await apiRequest<{ data: { projects: _RawProject[] } }>(
-            `/api/projects-and-tasks/lecturer/create-projects-and-tasks/project?courseId=${encodeURIComponent(courseId)}&lecturerId=${encodeURIComponent(lecturerId)}`
+            `/api/submissions/lecturer/published-projects?courseId=${encodeURIComponent(courseId)}&lecturerId=${encodeURIComponent(lecturerId)}`
         );
         return (res.data?.projects ?? []).map(_mapProject);
     },
 
-    /** Lecturer: all tasks for a specific course. */
+    /** Lecturer: published tasks for a specific course. */
     async getLecturerTasks(courseId: string, lecturerId: string): Promise<Assignment[]> {
         const res = await apiRequest<{ data: { tasks: _RawTask[] } }>(
-            `/api/projects-and-tasks/lecturer/create-projects-and-tasks/task?courseId=${encodeURIComponent(courseId)}&lecturerId=${encodeURIComponent(lecturerId)}`
+            `/api/submissions/lecturer/published-tasks?courseId=${encodeURIComponent(courseId)}&lecturerId=${encodeURIComponent(lecturerId)}`
         );
         return (res.data?.tasks ?? []).map(_mapTask);
     },

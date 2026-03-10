@@ -30,6 +30,7 @@ import { useState, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     submissionService,
+    versionService,
     getAssignmentWithFallback,
 } from '@/lib/api/submission-services';
 import { QuestionCard } from '@/components/submissions/QuestionCard';
@@ -328,6 +329,39 @@ export default function AnswerPage({
             // The backend creates the version snapshot atomically in the same transaction
             // as submitSubmission — no frontend fallback needed.
             console.debug('[AnswerPage] Server-side snapshot created — v', versionNumber);
+
+            // ── Persist plagiarism sources to the new version ─────────────
+            // The realtime plagiarism checks stored internetMatches in plagiarismMap,
+            // but those aren't saved to the version snapshot automatically.
+            try {
+                const latestVersion = await versionService.getLatestVersion(submissionId);
+                if (latestVersion?.id) {
+                    const savePromises: Promise<void>[] = [];
+                    for (const [qId, pResult] of Object.entries(plagiarismMap)) {
+                        const matches = pResult?.internetMatches;
+                        if (matches && matches.length > 0) {
+                            console.debug('[AnswerPage] Saving', matches.length, 'plagiarism sources for questionId:', qId, '| versionId:', latestVersion.id);
+                            savePromises.push(
+                                versionService.savePlagiarismSources(submissionId, latestVersion.id, qId, {
+                                    sources: matches.map(m => ({
+                                        sourceUrl: m.url,
+                                        sourceTitle: m.title,
+                                        sourceSnippet: m.snippet,
+                                        matchedText: m.matchedStudentText,
+                                        similarityPercentage: m.similarityScore,
+                                    })),
+                                })
+                            );
+                        }
+                    }
+                    if (savePromises.length > 0) {
+                        await Promise.all(savePromises);
+                        console.debug('[AnswerPage] Plagiarism sources saved for', savePromises.length, 'questions');
+                    }
+                }
+            } catch (srcErr) {
+                console.warn('[AnswerPage] Failed to save plagiarism sources (non-fatal):', srcErr);
+            }
 
             // Short delay so the user sees the success state before redirect.
             setTimeout(() => {
