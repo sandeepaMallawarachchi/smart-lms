@@ -111,8 +111,8 @@ export function useModuleConfig(userRole: UserRole) {
                 )
                 if (res.ok) {
                   const data = await res.json()
-                  const items = Array.isArray(data) ? data : (data?.data ?? data?.content ?? [])
-                  submissionCount = items.length
+                  const items: Array<{ status?: string }> = Array.isArray(data) ? data : (data?.data ?? data?.content ?? [])
+                  submissionCount = items.filter(s => s.status !== 'DRAFT').length
                 }
               } catch { /* silent */ }
             }
@@ -149,8 +149,9 @@ export function useModuleConfig(userRole: UserRole) {
                 const items: Array<{ status?: string }> = Array.isArray(data)
                     ? data
                     : (data?.content ?? data?.data ?? [])
-                totalCount = items.length
-                pendingCount = items.filter(
+                const nonDraft = items.filter(s => s.status !== 'DRAFT')
+                totalCount = nonDraft.length
+                pendingCount = nonDraft.filter(
                     s => s.status === 'SUBMITTED' || s.status === 'PENDING_REVIEW'
                 ).length
               }
