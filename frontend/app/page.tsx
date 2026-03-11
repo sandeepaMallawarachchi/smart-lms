@@ -10,7 +10,6 @@ export default function Home() {
     <main>
       <Header
         logoText="Smart Learning Management System"
-        showForgotPassword={true}
         navItems={[
           { label: 'Home', href: '/' },
           {

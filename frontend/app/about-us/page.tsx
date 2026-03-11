@@ -55,7 +55,6 @@ export default function AboutUsPage() {
     <main className="min-h-screen bg-white">
       <Header
         logoText="Smart Learning Management System"
-        showForgotPassword
         navItems={mainNavItems}
       />
 
