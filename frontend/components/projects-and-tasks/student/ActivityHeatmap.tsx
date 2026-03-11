@@ -560,9 +560,6 @@ export default function ActivityHeatmap() {
                 </span>
                 <div>
                   <p className="font-medium text-gray-900">{work.name}</p>
-                  <p className="text-sm text-gray-600">
-                    {formatDate(work.date)}
-                  </p>
                 </div>
               </div>
               <span
