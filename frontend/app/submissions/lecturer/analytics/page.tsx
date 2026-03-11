@@ -46,7 +46,7 @@ export default function LecturerAnalyticsPage() {
     const { refetch: refetchAssgs } = useAssignments();
 
     const submissions = useMemo(() => {
-        const all = rawSubmissions ?? [];
+        const all = (rawSubmissions ?? []).filter((s) => s.status !== 'DRAFT');
         return selectedModule === 'all' ? all : all.filter((s) => s.moduleCode === selectedModule);
     }, [rawSubmissions, selectedModule]);
 

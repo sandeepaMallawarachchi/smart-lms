@@ -7,9 +7,10 @@ import UnifiedSidebar from '@/components/CommonForAll/Dashboard/UnifiedSidebar';
 
 interface ModuleLayoutProps {
   children: React.ReactNode;
+  headerExtra?: React.ReactNode;
 }
 
-export default function ModuleLayout({ children }: ModuleLayoutProps) {
+export default function ModuleLayout({ children, headerExtra }: ModuleLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [userRole, setUserRole] = useState<'student' | 'lecture' | null>(null);
@@ -113,7 +114,7 @@ export default function ModuleLayout({ children }: ModuleLayoutProps) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <UnifiedHeader userRole={userRole} />
+        <UnifiedHeader userRole={userRole} headerExtra={headerExtra} />
 
         {/* Page Content */}
         <main className="flex-1 overflow-auto bg-gray-50 p-8">
