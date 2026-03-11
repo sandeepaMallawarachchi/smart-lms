@@ -73,6 +73,7 @@ const getSpecializationColor = (spec: string): string => {
 
 interface UnifiedHeaderProps {
   userRole: UserRole;
+  headerExtra?: React.ReactNode;
 }
 
 function buildLecturerCourseData(course: Course) {
@@ -88,7 +89,7 @@ function buildLecturerCourseData(course: Course) {
   };
 }
 
-export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
+export default function UnifiedHeader({ userRole, headerExtra }: UnifiedHeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { headerConfig } = useModuleConfig(userRole);
@@ -578,6 +579,7 @@ export default function UnifiedHeader({ userRole }: UnifiedHeaderProps) {
           </div>
 
           <div className="flex items-center gap-6">
+            {headerExtra}
             <div className="w-0.5 h-8 bg-brand-blue"></div>
 
             <div className="relative">

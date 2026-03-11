@@ -15,11 +15,7 @@ export default function SubmissionsLayout({
     children: ReactNode;
 }) {
     return (
-        <ModuleLayout>
-            {/* Notification bell in top-right */}
-            <div className="fixed top-4 right-6 z-50">
-                <SubmissionNotificationBell />
-            </div>
+        <ModuleLayout headerExtra={<SubmissionNotificationBell />}>
             {children}
             <FloatingNavMenu />
         </ModuleLayout>
