@@ -63,7 +63,34 @@ function VersionCard({
     compareDisabled: boolean;
 }) {
     const [expanded, setExpanded] = useState(false);
+    const [downloadingReport, setDownloadingReport] = useState<'plagiarism' | 'feedback' | null>(null);
     const answers: VersionAnswer[] = version.answers ?? [];
+
+    const handleDownload = async (type: 'plagiarism' | 'feedback') => {
+        const submissionId = version.submissionId?.toString() ?? '';
+        if (!submissionId) return;
+        setDownloadingReport(type);
+        try {
+            const { plagiarismService } = await import('@/lib/api/submission-services');
+            const blob = type === 'plagiarism'
+                ? await plagiarismService.downloadPlagiarismReport(submissionId)
+                : await plagiarismService.downloadFeedbackReport(submissionId);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = type === 'plagiarism'
+                ? `Plagiarism_Report_V${version.versionNumber ?? 1}.pdf`
+                : `Complete_Report_V${version.versionNumber ?? 1}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Download failed:', err);
+        } finally {
+            setDownloadingReport(null);
+        }
+    };
 
     const plagColor = (score?: number | null) => {
         if (!score || score < 20) return 'text-green-600';
@@ -156,6 +183,34 @@ function VersionCard({
                             Revert
                         </button>
                     )}
+                    <button
+                        onClick={() => handleDownload('plagiarism')}
+                        disabled={downloadingReport !== null}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors disabled:opacity-50"
+                    >
+                        {downloadingReport === 'plagiarism' ? (
+                            <span className="animate-spin text-xs">⟳</span>
+                        ) : (
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        )}
+                        Plagiarism Report
+                    </button>
+                    <button
+                        onClick={() => handleDownload('feedback')}
+                        disabled={downloadingReport !== null}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200 rounded-md hover:bg-purple-100 transition-colors disabled:opacity-50"
+                    >
+                        {downloadingReport === 'feedback' ? (
+                            <span className="animate-spin text-xs">⟳</span>
+                        ) : (
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        )}
+                        Full Report
+                    </button>
                     <button
                         onClick={onViewReport}
                         className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors cursor-pointer"

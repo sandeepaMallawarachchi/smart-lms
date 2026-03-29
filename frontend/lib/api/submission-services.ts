@@ -926,6 +926,20 @@ export const plagiarismService = {
         console.debug('[plagiarismService] checkLiveSimilarity — rawScore:', rawScore, '| normalised:', result.similarityScore, '%', '| severity:', severity, '| flagged:', result.flagged);
         return result;
     },
+
+    async downloadPlagiarismReport(submissionId: string): Promise<Blob> {
+        const url = `${PLAGIARISM_API}/api/integrity/reports/${submissionId}/plagiarism`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to generate report: ${response.statusText}`);
+        return response.blob();
+    },
+
+    async downloadFeedbackReport(submissionId: string): Promise<Blob> {
+        const url = `${PLAGIARISM_API}/api/integrity/reports/${submissionId}/feedback`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to generate report: ${response.statusText}`);
+        return response.blob();
+    },
 };
 
 /**

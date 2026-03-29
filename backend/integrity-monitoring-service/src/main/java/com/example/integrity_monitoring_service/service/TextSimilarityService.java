@@ -169,6 +169,58 @@ public class TextSimilarityService {
     }
 
     /**
+     * Compute the best similarity between two texts using multiple algorithms.
+     * Returns the maximum of TF-IDF cosine, Jaccard, 3-gram, and 5-gram overlap.
+     * This catches plagiarism that any single algorithm might miss.
+     */
+    public double calculateBestSimilarity(String text1, String text2) {
+        if (text1 == null || text2 == null || text1.isBlank() || text2.isBlank()) return 0.0;
+
+        double cosine = calculateSimilarity(text1, text2);
+        double jaccard = computeJaccard(text1, text2);
+        double ngram3  = computeNgramDice(text1, text2, 3);
+        double ngram5  = computeNgramDice(text1, text2, 5);
+
+        return Math.max(Math.max(cosine, jaccard), Math.max(ngram3, ngram5));
+    }
+
+    private double computeJaccard(String t1, String t2) {
+        Set<String> s1 = new HashSet<>(tokenize(t1));
+        Set<String> s2 = new HashSet<>(tokenize(t2));
+        if (s1.isEmpty() || s2.isEmpty()) return 0.0;
+        Set<String> inter = new HashSet<>(s1); inter.retainAll(s2);
+        Set<String> union = new HashSet<>(s1); union.addAll(s2);
+        return (double) inter.size() / union.size();
+    }
+
+    private double computeNgramDice(String t1, String t2, int n) {
+        String n1 = t1.toLowerCase().replaceAll("[^a-z0-9 ]", " ").replaceAll("\\s+", " ").trim();
+        String n2 = t2.toLowerCase().replaceAll("[^a-z0-9 ]", " ").replaceAll("\\s+", " ").trim();
+        if (n1.length() < n || n2.length() < n) return 0.0;
+
+        Map<String, Long> f1 = buildNgramFreq(n1, n);
+        Map<String, Long> f2 = buildNgramFreq(n2, n);
+
+        long intersection = 0;
+        for (Map.Entry<String, Long> e : f1.entrySet()) {
+            intersection += Math.min(e.getValue(), f2.getOrDefault(e.getKey(), 0L));
+        }
+
+        long total = f1.values().stream().mapToLong(Long::longValue).sum()
+                   + f2.values().stream().mapToLong(Long::longValue).sum();
+        return total == 0 ? 0.0 : (2.0 * intersection) / total;
+    }
+
+    private Map<String, Long> buildNgramFreq(String text, int n) {
+        Map<String, Long> freq = new HashMap<>();
+        for (int i = 0; i <= text.length() - n; i++) {
+            String ng = text.substring(i, i + n);
+            freq.merge(ng, 1L, Long::sum);
+        }
+        return freq;
+    }
+
+    /**
      * Return the TF-IDF cosine similarity score for each individual search result.
      * Used to annotate matched sources in the real-time check response.
      *
