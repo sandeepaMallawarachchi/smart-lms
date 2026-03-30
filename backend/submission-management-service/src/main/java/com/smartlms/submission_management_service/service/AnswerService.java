@@ -69,11 +69,14 @@ public class AnswerService {
             log.debug("[AnswerService] Existing answer found id={} — UPDATE", answer.getId());
         }
 
-        // Update mutable fields regardless of whether this is an INSERT or UPDATE
+        // Update mutable fields regardless of whether this is an INSERT or UPDATE.
+        // Word count is recomputed server-side from answerText so that a client sending
+        // an inflated wordCount cannot bypass minimum-word-count enforcement at submit time.
+        String answerText = request.getAnswerText();
         answer.setQuestionText(request.getQuestionText());
-        answer.setAnswerText(request.getAnswerText());
-        answer.setWordCount(request.getWordCount());
-        answer.setCharacterCount(request.getCharacterCount());
+        answer.setAnswerText(answerText);
+        answer.setWordCount(countWords(answerText));
+        answer.setCharacterCount(answerText != null ? answerText.length() : 0);
         if (request.getStudentId() != null) answer.setStudentId(request.getStudentId());
 
         Answer saved = answerRepository.save(answer);
@@ -289,5 +292,14 @@ public class AnswerService {
 
     private List<String> splitPipe(String value) {
         return AnswerScoreUtils.splitPipe(value);
+    }
+
+    /**
+     * Count words in a plain-text string by splitting on whitespace.
+     * Returns 0 for null or blank input.
+     */
+    static int countWords(String text) {
+        if (text == null || text.isBlank()) return 0;
+        return text.trim().split("\\s+").length;
     }
 }

@@ -14,6 +14,7 @@ import {
     Shield,
     User,
     XCircle,
+    Zap,
 } from 'lucide-react';
 import { useAllPlagiarismReports } from '@/hooks/usePlagiarism';
 import type { PlagiarismReport, PlagiarismReviewStatus } from '@/types/submission.types';
@@ -68,6 +69,172 @@ function ReviewBadge({ status }: { status: ReviewStatus | undefined }) {
 }
 
 /* ─── Report Card ──────────────────────────────────────────── */
+
+// ─── Bulk Recheck Panel ────────────────────────────────────────
+
+interface AssignmentOption {
+    id: string;
+    title: string;
+    submissionIds: string[];
+}
+
+function BulkRecheckPanel({
+    assignments,
+    onDone,
+}: {
+    assignments: AssignmentOption[];
+    onDone: () => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const [selectedId, setSelectedId] = useState('');
+    const [progress, setProgress] = useState<{ done: number; total: number; errors: number } | null>(null);
+    const [finished, setFinished] = useState(false);
+    const [triggerError, setTriggerError] = useState<string | null>(null);
+
+    const selected = assignments.find(a => a.id === selectedId) ?? null;
+
+    const handleStart = useCallback(async () => {
+        if (!selected) return;
+        setTriggerError(null);
+        setFinished(false);
+        const { plagiarismService } = await import('@/lib/api/submission-services');
+        const total = selected.submissionIds.length;
+        setProgress({ done: 0, total, errors: 0 });
+
+        let errors = 0;
+        for (const submissionId of selected.submissionIds) {
+            try {
+                await plagiarismService.checkPlagiarism({ submissionId, force: true });
+            } catch {
+                errors++;
+            }
+            setProgress(p => p ? { ...p, done: p.done + 1, errors } : null);
+        }
+
+        setProgress(null);
+        setFinished(true);
+    }, [selected]);
+
+    const handleClose = useCallback(() => {
+        setOpen(false);
+        setSelectedId('');
+        setProgress(null);
+        setFinished(false);
+        setTriggerError(null);
+    }, []);
+
+    const isRunning = progress !== null;
+
+    if (!open) {
+        return (
+            <button
+                onClick={() => setOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer shadow-sm"
+            >
+                <Zap size={15} />
+                Bulk Re-check
+            </button>
+        );
+    }
+
+    return (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-5">
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                    <Zap size={18} className="text-red-600" />
+                    <h3 className="text-sm font-bold text-red-800">Bulk Plagiarism Re-check</h3>
+                </div>
+                {!isRunning && (
+                    <button onClick={handleClose} className="text-red-400 hover:text-red-700 cursor-pointer text-xs">
+                        Close
+                    </button>
+                )}
+            </div>
+
+            {finished ? (
+                <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2 text-sm text-green-700 font-medium">
+                        <CheckCircle2 size={16} />
+                        All checks triggered for <strong>{selected?.title}</strong>.
+                        Results update as the integrity service completes each check — usually within 1–2 minutes.
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => { onDone(); handleClose(); }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                        >
+                            <RefreshCw size={12} /> Refresh Results
+                        </button>
+                        <button
+                            onClick={handleClose}
+                            className="px-3 py-1.5 border border-gray-300 bg-white text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                        >
+                            Done
+                        </button>
+                    </div>
+                </div>
+            ) : isRunning ? (
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs text-gray-700 font-medium">
+                        <span className="flex items-center gap-1.5">
+                            <Loader2 size={13} className="animate-spin text-red-600" />
+                            Triggering checks — {progress!.done} / {progress!.total} done
+                            {progress!.errors > 0 && (
+                                <span className="text-red-500">({progress!.errors} failed)</span>
+                            )}
+                        </span>
+                        <span className="text-gray-400">{Math.round((progress!.done / progress!.total) * 100)}%</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-red-100 overflow-hidden">
+                        <div
+                            className="h-full bg-red-500 rounded-full transition-all duration-300"
+                            style={{ width: `${(progress!.done / progress!.total) * 100}%` }}
+                        />
+                    </div>
+                    <p className="text-xs text-gray-500">
+                        Do not close this panel — checks are being triggered sequentially to avoid overloading the service.
+                    </p>
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    <p className="text-xs text-red-700">
+                        Select an assignment to trigger a fresh plagiarism check on all its submissions simultaneously.
+                        Checks run sequentially to protect the integrity service.
+                    </p>
+                    <div className="flex flex-wrap items-end gap-3">
+                        <div className="flex-1 min-w-[220px]">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Assignment</label>
+                            <select
+                                value={selectedId}
+                                onChange={e => setSelectedId(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-white"
+                            >
+                                <option value="">Select an assignment…</option>
+                                {assignments.map(a => (
+                                    <option key={a.id} value={a.id}>
+                                        {a.title} ({a.submissionIds.length} submission{a.submissionIds.length !== 1 ? 's' : ''})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <button
+                            onClick={handleStart}
+                            disabled={!selected}
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer"
+                        >
+                            Start {selected ? `(${selected.submissionIds.length})` : ''}
+                        </button>
+                    </div>
+                    {triggerError && (
+                        <p className="text-xs text-red-600 flex items-center gap-1">
+                            <AlertTriangle size={11} />{triggerError}
+                        </p>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
 
 type RecheckStatus = 'idle' | 'checking' | 'done' | 'error';
 
@@ -379,6 +546,23 @@ export default function LecturerPlagiarismDetectionPage() {
         return [...filtered].sort((a, b) => sortBy === 'matches' ? (b.matchesFound ?? 0) - (a.matchesFound ?? 0) : b.overallScore - a.overallScore);
     }, [enrichedReports, searchQuery, filterStatus, filterSeverity, sortBy]);
 
+    // Build the list of unique assignments present in the current reports for bulk re-check.
+    const assignmentOptions = useMemo<AssignmentOption[]>(() => {
+        const map = new Map<string, AssignmentOption>();
+        for (const r of enrichedReports) {
+            const aId = r.assignmentId ?? '';
+            if (!aId) continue;
+            if (!map.has(aId)) {
+                map.set(aId, { id: aId, title: r.assignmentTitle ?? aId, submissionIds: [] });
+            }
+            const sid = r.submissionId?.toString() ?? '';
+            if (sid && !map.get(aId)!.submissionIds.includes(sid)) {
+                map.get(aId)!.submissionIds.push(sid);
+            }
+        }
+        return Array.from(map.values()).sort((a, b) => a.title.localeCompare(b.title));
+    }, [enrichedReports]);
+
     const stats = useMemo(() => {
         const l = enrichedReports;
         return {
@@ -416,13 +600,18 @@ export default function LecturerPlagiarismDetectionPage() {
                 <StatCard label="Medium (20-29%)" value={stats.medium} bgClass="bg-amber-100 border-amber-300" textClass="text-amber-800" />
             </div>
 
-            {/* Action required alert */}
-            {stats.pending > 0 && (
-                <div className="flex items-center gap-2 p-3 mb-4 bg-amber-50 border-l-4 border-amber-500 rounded-r-lg text-sm text-amber-800">
-                    <AlertTriangle size={16} className="text-amber-600 shrink-0" />
-                    <span><strong>{stats.pending}</strong> submission{stats.pending > 1 ? 's' : ''} waiting for your review.</span>
-                </div>
-            )}
+            {/* Bulk re-check + action required */}
+            <div className="flex flex-wrap items-start gap-4 mb-4">
+                {assignmentOptions.length > 0 && (
+                    <BulkRecheckPanel assignments={assignmentOptions} onDone={refetch} />
+                )}
+                {stats.pending > 0 && (
+                    <div className="flex-1 flex items-center gap-2 p-3 bg-amber-50 border-l-4 border-amber-500 rounded-r-lg text-sm text-amber-800">
+                        <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                        <span><strong>{stats.pending}</strong> submission{stats.pending > 1 ? 's' : ''} waiting for your review.</span>
+                    </div>
+                )}
+            </div>
 
             {/* Filters */}
             <FilterToolbar>

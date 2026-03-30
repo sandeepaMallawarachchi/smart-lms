@@ -194,27 +194,34 @@ public class SubmissionService {
             throw new AccessDeniedException("You do not have permission to submit submission " + id);
         }
 
-        // ── Validate: no blank answers; warn on short answers ────────────────
+        // ── Validate answers ──────────────────────────────────────────────────
         List<Answer> answers = answerRepository.findBySubmissionIdOrderByQuestionId(id);
         if (answers.isEmpty()) {
             throw new IllegalStateException("Cannot submit without text answers");
         }
-        List<String> blankAnswers = answers.stream()
-                .filter(a -> a.getWordCount() == null || a.getWordCount() == 0)
-                .map(Answer::getQuestionId)
-                .toList();
-        if (!blankAnswers.isEmpty()) {
-            throw new IllegalStateException(
-                    "All questions must be answered before submitting. "
-                    + "The following questions have no content: " + blankAnswers);
+
+        // Recount words server-side from stored answerText as the authoritative check.
+        // This is a second layer of defence: AnswerService already stores the server-
+        // recomputed value, but we recount here to guard against any historical rows
+        // that were saved before that fix was deployed.
+        List<String> violations = new ArrayList<>();
+        for (Answer a : answers) {
+            int actual = AnswerService.countWords(a.getAnswerText());
+            if (actual != (a.getWordCount() != null ? a.getWordCount() : 0)) {
+                log.info("[submitSubmission] Correcting stale wordCount for questionId={}: stored={} actual={}",
+                        a.getQuestionId(), a.getWordCount(), actual);
+                a.setWordCount(actual);
+            }
+            if (actual < minWordsPerAnswer) {
+                violations.add(String.format("question %s (%d/%d words)",
+                        a.getQuestionId(), actual, minWordsPerAnswer));
+            }
         }
-        // Short answers (below minimum but non-blank) are allowed — some questions
-        // legitimately require only a word or phrase. Log for audit purposes only.
-        answers.stream()
-                .filter(a -> a.getWordCount() < minWordsPerAnswer)
-                .forEach(a -> log.info(
-                        "[submitSubmission] Short answer on questionId={} wordCount={} (min={})",
-                        a.getQuestionId(), a.getWordCount(), minWordsPerAnswer));
+        if (!violations.isEmpty()) {
+            throw new IllegalStateException(
+                    "Each answer must be at least " + minWordsPerAnswer + " words. "
+                    + "The following answers are too short: " + String.join("; ", violations));
+        }
 
         // ── Block post-deadline resubmission ──────────────────────────────────
         if (submission.getDueDate() != null
