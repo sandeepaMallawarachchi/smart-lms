@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     AlertTriangle,
@@ -10,6 +10,7 @@ import {
     Flag,
     Globe,
     Loader2,
+    RefreshCw,
     Shield,
     User,
     XCircle,
@@ -68,16 +69,66 @@ function ReviewBadge({ status }: { status: ReviewStatus | undefined }) {
 
 /* ─── Report Card ──────────────────────────────────────────── */
 
-function ReportCard({ report, onUpdate, updating }: {
+type RecheckStatus = 'idle' | 'checking' | 'done' | 'error';
+
+function ReportCard({ report, onUpdate, updating, onRecheck }: {
     report: PlagiarismReport;
     onUpdate: (id: string, status: ReviewStatus, notes: string) => void;
     updating: boolean;
+    onRecheck: () => void;
 }) {
     const [noteText, setNoteText] = useState('');
     const [showNote, setShowNote] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const [downloadError, setDownloadError] = useState<string | null>(null);
+    const [recheckStatus, setRecheckStatus] = useState<RecheckStatus>('idle');
+    const [recheckError, setRecheckError] = useState<string | null>(null);
+    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const router = useRouter();
+
+    // Clean up polling interval on unmount
+    useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+    const handleRecheck = useCallback(async () => {
+        setRecheckStatus('checking');
+        setRecheckError(null);
+        try {
+            const { plagiarismService } = await import('@/lib/api/submission-services');
+            const newReport = await plagiarismService.checkPlagiarism({
+                submissionId: report.submissionId?.toString() ?? '',
+                force: true,
+            });
+            const reportId = newReport.id;
+
+            // Poll until COMPLETED / FAILED or 20 attempts (~60s)
+            let attempts = 0;
+            pollRef.current = setInterval(async () => {
+                attempts++;
+                try {
+                    const status = await plagiarismService.getCheckStatus(reportId);
+                    if (status.status === 'COMPLETED') {
+                        clearInterval(pollRef.current!);
+                        pollRef.current = null;
+                        setRecheckStatus('done');
+                        onRecheck();
+                    } else if (status.status === 'FAILED' || attempts >= 20) {
+                        clearInterval(pollRef.current!);
+                        pollRef.current = null;
+                        setRecheckStatus('error');
+                        setRecheckError(status.status === 'FAILED' ? 'Check failed on the server.' : 'Timed out — check may still be running.');
+                    }
+                } catch {
+                    clearInterval(pollRef.current!);
+                    pollRef.current = null;
+                    setRecheckStatus('error');
+                    setRecheckError('Lost contact with the plagiarism service.');
+                }
+            }, 3_000);
+        } catch {
+            setRecheckStatus('error');
+            setRecheckError('Could not start re-check. Ensure the integrity service is running.');
+        }
+    }, [report.submissionId, onRecheck]);
 
     const sev = severity(report.overallScore);
     const isPending = report.reviewStatus === 'PENDING_REVIEW' || !report.reviewStatus;
@@ -109,6 +160,18 @@ function ReportCard({ report, onUpdate, updating }: {
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-3">
                     <button onClick={() => router.push(`/submissions/lecturer/grading/${report.submissionId}`)} className="p-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 cursor-pointer" title="View Submission"><Eye size={14} /></button>
+                    <button
+                        onClick={handleRecheck}
+                        disabled={recheckStatus === 'checking'}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200 rounded hover:bg-gray-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                        title={recheckStatus === 'checking' ? 'Re-check in progress…' : 'Trigger a fresh plagiarism re-check'}
+                    >
+                        {recheckStatus === 'checking'
+                            ? <Loader2 size={12} className="animate-spin" />
+                            : <RefreshCw size={12} className={recheckStatus === 'done' ? 'text-green-600' : ''} />
+                        }
+                        {recheckStatus === 'checking' ? 'Checking…' : recheckStatus === 'done' ? 'Done' : 'Re-check'}
+                    </button>
                     <button
                         onClick={async () => {
                             setDownloadError(null);
@@ -147,6 +210,24 @@ function ReportCard({ report, onUpdate, updating }: {
                     </button>
                 </div>
             </div>
+
+            {/* Re-check status */}
+            {recheckStatus === 'checking' && (
+                <div className="mx-4 mb-2 flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                    <Loader2 size={12} className="animate-spin shrink-0" />
+                    Running fresh plagiarism check — this may take up to a minute…
+                </div>
+            )}
+            {recheckStatus === 'error' && recheckError && (
+                <div className="mx-4 mb-2 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    <AlertTriangle size={12} className="shrink-0" />{recheckError}
+                </div>
+            )}
+            {recheckStatus === 'done' && (
+                <div className="mx-4 mb-2 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
+                    <CheckCircle2 size={12} className="shrink-0" />Re-check complete — scores updated.
+                </div>
+            )}
 
             {/* Download error */}
             {downloadError && (
@@ -370,7 +451,7 @@ export default function LecturerPlagiarismDetectionPage() {
                 {loading && !reports ? (
                     [1, 2, 3].map((i) => <Skeleton key={i} className="h-36" />)
                 ) : processed.length > 0 ? (
-                    processed.map((r) => <ReportCard key={r.id} report={r} onUpdate={handleUpdate} updating={false} />)
+                    processed.map((r) => <ReportCard key={r.id} report={r} onUpdate={handleUpdate} updating={false} onRecheck={refetch} />)
                 ) : (
                     <EmptyState icon={CheckCircle2} message={!reports || reports.length === 0 ? 'All submissions have excellent academic integrity!' : 'No reports match your current filters.'} />
                 )}
