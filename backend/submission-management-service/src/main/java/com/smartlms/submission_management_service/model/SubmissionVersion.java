@@ -26,7 +26,7 @@ import java.util.List;
         name = "uq_submission_version_number",
         columnNames = {"submission_id", "version_number"}
     ),
-    indexes = @Index(name = "idx_sv_submission_id", columnList = "submission_id")
+    indexes = @Index(name = "idx_sv_submission_id_version_number", columnList = "submission_id, version_number")
 )
 @Data
 @NoArgsConstructor
