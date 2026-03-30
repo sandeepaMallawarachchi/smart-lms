@@ -17,6 +17,7 @@ import com.smartlms.submission_management_service.repository.SubmissionRepositor
 import com.smartlms.submission_management_service.util.AnswerScoreUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -47,6 +48,9 @@ public class SubmissionService {
     private final SubmissionRepository submissionRepository;
     private final AnswerRepository answerRepository;
     private final VersionService versionService;
+
+    @Value("${submission.min-words-per-answer:10}")
+    private int minWordsPerAnswer;
     private final ObjectMapper objectMapper;
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -190,13 +194,27 @@ public class SubmissionService {
             throw new AccessDeniedException("You do not have permission to submit submission " + id);
         }
 
-        // ── Validate: at least one answer with content ────────────────────────
+        // ── Validate: no blank answers; warn on short answers ────────────────
         List<Answer> answers = answerRepository.findBySubmissionIdOrderByQuestionId(id);
-        boolean hasAnswers = answers.stream()
-                .anyMatch(a -> a.getWordCount() != null && a.getWordCount() >= 1);
-        if (!hasAnswers) {
+        if (answers.isEmpty()) {
             throw new IllegalStateException("Cannot submit without text answers");
         }
+        List<String> blankAnswers = answers.stream()
+                .filter(a -> a.getWordCount() == null || a.getWordCount() == 0)
+                .map(Answer::getQuestionId)
+                .toList();
+        if (!blankAnswers.isEmpty()) {
+            throw new IllegalStateException(
+                    "All questions must be answered before submitting. "
+                    + "The following questions have no content: " + blankAnswers);
+        }
+        // Short answers (below minimum but non-blank) are allowed — some questions
+        // legitimately require only a word or phrase. Log for audit purposes only.
+        answers.stream()
+                .filter(a -> a.getWordCount() < minWordsPerAnswer)
+                .forEach(a -> log.info(
+                        "[submitSubmission] Short answer on questionId={} wordCount={} (min={})",
+                        a.getQuestionId(), a.getWordCount(), minWordsPerAnswer));
 
         // ── Block post-deadline resubmission ──────────────────────────────────
         if (submission.getDueDate() != null
