@@ -80,6 +80,13 @@ export interface UseAnswerEditorReturn {
     autoSaving: boolean;
     /** Timestamp of the last successful auto-save (null before first save). */
     lastSaved: Date | null;
+    /**
+     * Non-null when auto-save has failed 3 or more times in a row without a
+     * successful save in between. Cleared automatically on the next success.
+     * The page should display this prominently so the student knows to copy
+     * their work before navigating away.
+     */
+    saveError: string | null;
     /** Call this from the textarea onChange event. */
     handleChange: (newText: string) => void;
 }
@@ -128,8 +135,11 @@ export function useAnswerEditor({
     const [plagiarismLoading, setPlagiarismLoading] = useState<boolean>(false);
 
     // ── Auto-save state ────────────────────────────────────────
-    const [autoSaving, setAutoSaving]   = useState<boolean>(false);
-    const [lastSaved, setLastSaved]     = useState<Date | null>(null);
+    const [autoSaving, setAutoSaving]         = useState<boolean>(false);
+    const [lastSaved, setLastSaved]           = useState<Date | null>(null);
+    const [saveError, setSaveError]           = useState<string | null>(null);
+    const consecutiveFailuresRef              = useRef<number>(0);
+    const SAVE_ERROR_THRESHOLD                = 3;
 
     // ── Debounce timer refs ────────────────────────────────────
     // Using refs (not state) so resetting timers doesn't cause re-renders.
@@ -267,6 +277,8 @@ export function useAnswerEditor({
             });
             const savedAt = new Date();
             setLastSaved(savedAt);
+            consecutiveFailuresRef.current = 0;
+            setSaveError(null);
             console.debug('[useAnswerEditor] Auto-save DONE at', savedAt.toLocaleTimeString(), '— submissionId:', submissionId, '| questionId:', questionId);
 
             // ── Flush deferred analysis ────────────────────────
@@ -299,7 +311,15 @@ export function useAnswerEditor({
                 }).catch(err => console.warn('[useAnswerEditor] Deferred analysis flush FAILED:', err));
             }
         } catch (err) {
-            console.warn('[useAnswerEditor] Auto-save FAILED for submissionId:', submissionId, '| questionId:', questionId, '—', err);
+            consecutiveFailuresRef.current += 1;
+            console.warn('[useAnswerEditor] Auto-save FAILED for submissionId:', submissionId,
+                '| questionId:', questionId,
+                '| consecutiveFailures:', consecutiveFailuresRef.current, '—', err);
+            if (consecutiveFailuresRef.current >= SAVE_ERROR_THRESHOLD) {
+                setSaveError(
+                    'Your answer is not saving. Check your connection — copy your work to avoid losing it.'
+                );
+            }
         } finally {
             setAutoSaving(false);
         }
@@ -414,6 +434,7 @@ export function useAnswerEditor({
         plagiarismLoading,
         autoSaving,
         lastSaved,
+        saveError,
         handleChange,
     };
 }

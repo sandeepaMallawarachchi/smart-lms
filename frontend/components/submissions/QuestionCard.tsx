@@ -182,6 +182,7 @@ export function QuestionCard({
         plagiarismLoading,
         autoSaving,
         lastSaved,
+        saveError,
         handleChange,
     } = useAnswerEditor({
         submissionId,
@@ -313,6 +314,17 @@ export function QuestionCard({
 
                         {/* Plagiarism warning — invisible unless severity ≥ LOW with a result */}
                         <PlagiarismWarning result={plagiarismResult} loading={plagiarismLoading} />
+
+                        {/* Auto-save failure warning */}
+                        {!disabled && saveError && (
+                            <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                                <svg className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                        d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                                </svg>
+                                <span>{saveError}</span>
+                            </div>
+                        )}
 
                         {/* Auto-save status */}
                         {!disabled && (
