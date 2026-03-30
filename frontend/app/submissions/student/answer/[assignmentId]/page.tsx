@@ -67,9 +67,9 @@ function getStudentName(): string {
 }
 
 /** Returns a human-friendly due-date label and whether it's overdue. */
-function dueDateLabel(dueDateStr: string): { label: string; overdue: boolean } {
-    const now = Date.now();
+function dueDateLabel(dueDateStr: string, nowMs: number): { label: string; overdue: boolean } {
     const due = new Date(dueDateStr).getTime();
+    const now = nowMs;
     const diffMs = due - now;
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
@@ -174,6 +174,13 @@ export default function AnswerPage({
     const [submitting, setSubmitting]         = useState<boolean>(false);
     const [submitDone, setSubmitDone]         = useState<boolean>(false);
     const [showConfirm, setShowConfirm]       = useState<boolean>(false);
+
+    // ── Real-time clock for deadline countdown ────────────────
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        const id = setInterval(() => setNow(Date.now()), 60_000);
+        return () => clearInterval(id);
+    }, []);
 
     console.debug('[AnswerPage] assignmentId:', assignmentId, '| submissionId:', submissionId);
 
@@ -495,7 +502,7 @@ export default function AnswerPage({
         );
     }
 
-    const due = assignment?.dueDate ? dueDateLabel(assignment.dueDate) : null;
+    const due = assignment?.dueDate ? dueDateLabel(assignment.dueDate, now) : null;
 
     /** True when the deadline has passed — editing is locked. */
     const isDeadlinePassed = due?.overdue === true;
