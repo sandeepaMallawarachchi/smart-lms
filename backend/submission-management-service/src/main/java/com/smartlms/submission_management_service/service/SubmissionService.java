@@ -5,15 +5,19 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartlms.submission_management_service.dto.request.GradeRequest;
 import com.smartlms.submission_management_service.dto.request.SubmissionRequest;
 import com.smartlms.submission_management_service.dto.response.SubmissionResponse;
+import com.smartlms.submission_management_service.exception.AccessDeniedException;
 import com.smartlms.submission_management_service.exception.DeadlineNotPassedException;
 import com.smartlms.submission_management_service.exception.ResourceNotFoundException;
 import com.smartlms.submission_management_service.model.Answer;
 import com.smartlms.submission_management_service.model.Submission;
 import com.smartlms.submission_management_service.model.SubmissionStatus;
+import com.smartlms.submission_management_service.model.SubmissionType;
 import com.smartlms.submission_management_service.repository.AnswerRepository;
 import com.smartlms.submission_management_service.repository.SubmissionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,7 +46,7 @@ public class SubmissionService {
     private final SubmissionRepository submissionRepository;
     private final AnswerRepository answerRepository;
     private final VersionService versionService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     // ─────────────────────────────────────────────────────────────────────────
     // CRUD
@@ -51,6 +55,17 @@ public class SubmissionService {
     @Transactional
     public SubmissionResponse createSubmission(SubmissionRequest request) {
         log.info("Creating submission for student: {}", request.getStudentId());
+
+        // Return the existing draft instead of creating a duplicate.
+        if (request.getStudentId() != null && request.getAssignmentId() != null) {
+            Optional<Submission> existing = submissionRepository
+                    .findDraftByStudentIdAndAssignmentId(request.getStudentId(), request.getAssignmentId());
+            if (existing.isPresent()) {
+                log.info("Draft already exists (id={}) for student={} assignment={} — returning existing draft",
+                        existing.get().getId(), request.getStudentId(), request.getAssignmentId());
+                return convertToResponse(existing.get());
+            }
+        }
 
         Submission submission = Submission.builder()
                 .title(request.getTitle())
@@ -63,7 +78,9 @@ public class SubmissionService {
                 .assignmentTitle(request.getAssignmentTitle())
                 .moduleCode(request.getModuleCode())
                 .moduleName(request.getModuleName())
-                .submissionType(request.getSubmissionType())
+                .submissionType(request.getSubmissionType() != null
+                        ? request.getSubmissionType()
+                        : SubmissionType.TEXT_ANSWER)
                 .status(SubmissionStatus.DRAFT)
                 .dueDate(request.getDueDate())
                 .maxGrade(request.getMaxGrade())
@@ -83,10 +100,9 @@ public class SubmissionService {
     }
 
     @Transactional(readOnly = true)
-    public List<SubmissionResponse> getAllSubmissions() {
-        return submissionRepository.findAll().stream()
-                .map(this::convertToResponse)
-                .collect(Collectors.toList());
+    public Page<SubmissionResponse> getAllSubmissions(Pageable pageable) {
+        return submissionRepository.findAll(pageable)
+                .map(this::convertToResponse);
     }
 
     @Transactional(readOnly = true)
@@ -111,9 +127,19 @@ public class SubmissionService {
     }
 
     @Transactional
-    public SubmissionResponse updateSubmission(Long id, SubmissionRequest request) {
+    public SubmissionResponse updateSubmission(Long id, SubmissionRequest request, String callerId) {
         Submission submission = submissionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found with ID: " + id));
+
+        if (!submission.getStudentId().equals(callerId)) {
+            throw new AccessDeniedException("You do not have permission to update submission " + id);
+        }
+
+        if (submission.getStatus() != SubmissionStatus.DRAFT) {
+            throw new IllegalStateException(
+                    "Cannot update submission " + id + " — only DRAFT submissions may be edited (current status: "
+                    + submission.getStatus() + ")");
+        }
 
         submission.setTitle(request.getTitle());
         submission.setDescription(request.getDescription());
@@ -126,9 +152,11 @@ public class SubmissionService {
     }
 
     @Transactional
-    public void deleteSubmission(Long id) {
-        if (!submissionRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Submission not found with ID: " + id);
+    public void deleteSubmission(Long id, String callerId) {
+        Submission submission = submissionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Submission not found with ID: " + id));
+        if (!submission.getStudentId().equals(callerId)) {
+            throw new AccessDeniedException("You do not have permission to delete submission " + id);
         }
         submissionRepository.deleteById(id);
     }
@@ -151,14 +179,18 @@ public class SubmissionService {
      *   7. versionService.createVersionSnapshot() — same transaction, rolls back together
      */
     @Transactional
-    public SubmissionResponse submitSubmission(Long id) {
+    public SubmissionResponse submitSubmission(Long id, String callerId) {
         log.info("Submitting submission with ID: {}", id);
 
         Submission submission = submissionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found with ID: " + id));
 
+        if (!submission.getStudentId().equals(callerId)) {
+            throw new AccessDeniedException("You do not have permission to submit submission " + id);
+        }
+
         // ── Validate: at least one answer with content ────────────────────────
-        List<Answer> answers = answerRepository.findBySubmissionIdOrderByQuestionId(String.valueOf(id));
+        List<Answer> answers = answerRepository.findBySubmissionIdOrderByQuestionId(id);
         boolean hasAnswers = answers.stream()
                 .anyMatch(a -> a.getWordCount() != null && a.getWordCount() >= 1);
         if (!hasAnswers) {
@@ -183,12 +215,8 @@ public class SubmissionService {
                     .filter(a -> a.getGrammarScore() != null || a.getClarityScore() != null
                             || a.getCompletenessScore() != null || a.getRelevanceScore() != null)
                     .mapToDouble(a -> {
-                        double sum = 0; int cnt = 0;
-                        if (a.getGrammarScore()      != null) { sum += a.getGrammarScore();      cnt++; }
-                        if (a.getClarityScore()      != null) { sum += a.getClarityScore();      cnt++; }
-                        if (a.getCompletenessScore() != null) { sum += a.getCompletenessScore(); cnt++; }
-                        if (a.getRelevanceScore()    != null) { sum += a.getRelevanceScore();    cnt++; }
-                        return cnt > 0 ? (sum / cnt) * 10.0 : 0;
+                        Double mark = computeWeightedMark(a);
+                        return mark != null ? mark * 10.0 : 0.0;
                     })
                     .average().orElse(0);
             submission.setAiScore(Math.round(totalAi * 10.0) / 10.0);
@@ -299,7 +327,7 @@ public class SubmissionService {
         allQuestionIds.addAll(feedbacks.keySet());
 
         for (String questionId : allQuestionIds) {
-            answerRepository.findBySubmissionIdAndQuestionId(String.valueOf(id), questionId)
+            answerRepository.findBySubmissionIdAndQuestionId(id, questionId)
                     .ifPresent(answer -> {
                         if (scores.containsKey(questionId))    answer.setLecturerMark(scores.get(questionId));
                         if (feedbacks.containsKey(questionId)) answer.setLecturerFeedbackText(feedbacks.get(questionId));

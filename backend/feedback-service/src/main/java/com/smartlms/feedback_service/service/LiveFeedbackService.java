@@ -7,8 +7,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import org.springframework.scheduling.annotation.Async;
+
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -48,13 +51,15 @@ public class LiveFeedbackService {
 
     // ─── Public entry point ───────────────────────────────────────────────────
 
-    public ApiResponse<LiveFeedbackResponse> generateLiveFeedback(LiveFeedbackRequest request) {
+    @Async("feedbackTaskExecutor")
+    public CompletableFuture<ApiResponse<LiveFeedbackResponse>> generateLiveFeedback(LiveFeedbackRequest request) {
         log.info("Generating live feedback for questionId={} textLength={}",
                 request.getQuestionId(), request.getAnswerText().length());
 
         if (isGibberish(request.getAnswerText())) {
             log.info("Gibberish detected for questionId={} — returning zero scores", request.getQuestionId());
-            return ApiResponse.success("Gibberish detected", buildGibberishResponse(request.getQuestionId()));
+            return CompletableFuture.completedFuture(
+                    ApiResponse.success("Gibberish detected", buildGibberishResponse(request.getQuestionId())));
         }
 
         try {
@@ -71,11 +76,13 @@ public class LiveFeedbackService {
                     feedback.getGrammarScore(), feedback.getClarityScore(),
                     feedback.getCompletenessScore(), feedback.getRelevanceScore());
 
-            return ApiResponse.success("Live feedback generated", feedback);
+            return CompletableFuture.completedFuture(ApiResponse.success("Live feedback generated", feedback));
 
         } catch (Exception e) {
             log.warn("Live feedback AI call failed for questionId={}: {}", request.getQuestionId(), e.getMessage());
-            throw new RuntimeException("AI feedback service unavailable", e);
+            CompletableFuture<ApiResponse<LiveFeedbackResponse>> failed = new CompletableFuture<>();
+            failed.completeExceptionally(new RuntimeException("AI feedback service unavailable", e));
+            return failed;
         }
     }
 
@@ -97,8 +104,8 @@ public class LiveFeedbackService {
 
         double ratio = (double) gibberishCount / words.length;
         boolean flagged = ratio > 0.40;
-        log.info("[LiveFeedback] Gibberish check: {}/{} words flagged ({:.0f}%) — {}",
-                gibberishCount, words.length, ratio * 100, flagged ? "GIBBERISH" : "OK");
+        log.info("[LiveFeedback] Gibberish check: {}/{} words flagged ({}%) — {}",
+                gibberishCount, words.length, String.format("%.0f", ratio * 100), flagged ? "GIBBERISH" : "OK");
         return flagged;
     }
 
@@ -244,7 +251,7 @@ public class LiveFeedbackService {
 
         // ── Rule B: Question repetition detection ─────────────────────────────
         double repetitionRatio = computeRepetitionRatio(answerText, questionText);
-        log.info("[LiveFeedback] questionId={} repetitionRatio={:.2f}", request.getQuestionId(), repetitionRatio);
+        log.info("[LiveFeedback] questionId={} repetitionRatio={}", request.getQuestionId(), String.format("%.2f", repetitionRatio));
         if (repetitionRatio >= 0.65) {
             // Answer is mostly question words — no new information
             completeness = Math.min(completeness, 3.0);
@@ -267,8 +274,8 @@ public class LiveFeedbackService {
             List<String> keywords = extractMeaningfulWords(questionText);
             int matches = countWordMatches(answerText, keywords);
             double coverage = keywords.isEmpty() ? 0.0 : (double) matches / keywords.size();
-            log.info("[LiveFeedback] questionId={} shortAnswer keywordCoverage={:.0f}% ({}/{})",
-                    request.getQuestionId(), coverage * 100, matches, keywords.size());
+            log.info("[LiveFeedback] questionId={} shortAnswer keywordCoverage={}% ({}/{})",
+                    request.getQuestionId(), String.format("%.0f", coverage * 100), matches, keywords.size());
 
             if (coverage >= 0.30) {
                 // Concept vocabulary detected — floor relevance and completeness
@@ -432,25 +439,4 @@ public class LiveFeedbackService {
         return results;
     }
 
-    // ─── Fallback ─────────────────────────────────────────────────────────────
-
-    @SuppressWarnings("unused")
-    private LiveFeedbackResponse buildFallback(LiveFeedbackRequest request) {
-        int wordCount = request.getAnswerText().trim().split("\\s+").length;
-        int expected  = request.getExpectedWordCount() != null ? request.getExpectedWordCount() : 200;
-        double completeness = Math.min(10.0, (wordCount / (double) expected) * 10.0);
-
-        return LiveFeedbackResponse.builder()
-                .questionId(request.getQuestionId())
-                .grammarScore(0.0).clarityScore(0.0)
-                .completenessScore(Math.round(completeness * 10.0) / 10.0)
-                .relevanceScore(0.0)
-                .strengths(List.of("AI analysis temporarily unavailable."))
-                .improvements(List.of("Continue writing; analysis will retry automatically.",
-                        "Ensure your answer addresses the question directly."))
-                .suggestions(List.of("Review your answer for grammar and clarity.",
-                        "Add specific details to strengthen your response."))
-                .generatedAt(LocalDateTime.now().toString())
-                .build();
-    }
 }

@@ -1,7 +1,10 @@
 package com.smartlms.submission_management_service.repository;
 
 import com.smartlms.submission_management_service.model.Answer;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -21,18 +24,20 @@ public interface AnswerRepository extends JpaRepository<Answer, Long> {
      * Returns all answers for a given submission, ordered by question ID
      * so the grading view receives them in a consistent order.
      */
-    List<Answer> findBySubmissionIdOrderByQuestionId(String submissionId);
+    List<Answer> findBySubmissionIdOrderByQuestionId(Long submissionId);
 
     /**
      * Used by the upsert logic: check whether an answer already exists
      * before deciding to INSERT vs UPDATE.
      */
-    Optional<Answer> findBySubmissionIdAndQuestionId(String submissionId, String questionId);
+    Optional<Answer> findBySubmissionIdAndQuestionId(Long submissionId, String questionId);
 
     /**
      * Used by the integrity service for peer-comparison plagiarism detection.
-     * Returns all answers across all submissions for a given question,
-     * so they can be compared against the current student's answer via TF-IDF cosine similarity.
+     * Returns the most recently modified answers for a question, capped by the
+     * supplied Pageable limit, so the result set does not grow unboundedly with
+     * student count. Callers should pass PageRequest.of(0, PEER_COMPARISON_LIMIT).
      */
-    List<Answer> findByQuestionId(String questionId);
+    @Query("SELECT a FROM Answer a WHERE a.questionId = :questionId ORDER BY a.lastModified DESC")
+    List<Answer> findByQuestionId(@Param("questionId") String questionId, Pageable pageable);
 }

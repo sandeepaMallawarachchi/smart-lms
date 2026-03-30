@@ -204,10 +204,9 @@ export default function AnswerPage({
                         // Check whether the student already submitted this assignment
                         let hasSubmitted = false;
                         try {
-                            const allSubs = await submissionService.getStudentSubmissions(sid);
-                            hasSubmitted = allSubs.some(
-                                (s) => s.assignmentId === assignmentId &&
-                                       (s.status === 'SUBMITTED' || s.status === 'GRADED')
+                            const subs = await submissionService.getStudentSubmissionsForAssignment(sid, assignmentId);
+                            hasSubmitted = subs.some(
+                                (s) => s.status === 'SUBMITTED' || s.status === 'GRADED'
                             );
                         } catch { /* non-fatal — default to redirect */ }
 

@@ -260,6 +260,13 @@ public class VersionService {
                     });
         }
 
+        // Store the explicit overall grade on the version so toVersionResponse()
+        // can use it directly instead of re-deriving it from per-question marks.
+        if (request.getGrade() != null) {
+            latest.setLecturerGrade(request.getGrade());
+            versionRepository.save(latest);
+        }
+
         log.info("Lecturer grades written to latest version id={} for submissionId={} by={}",
                 latest.getId(), submissionId, lecturerId);
     }
@@ -271,6 +278,7 @@ public class VersionService {
     private VersionResponse toVersionResponse(SubmissionVersion v, boolean includeAnswers) {
         List<VersionAnswerResponse> answerResponses = null;
         boolean hasLecturerOverride = false;
+        boolean partiallyGraded = false;
         Double finalGrade = v.getAiGrade();
 
         if (includeAnswers) {
@@ -279,13 +287,24 @@ public class VersionService {
                     .map(this::toVersionAnswerResponse)
                     .collect(Collectors.toList());
 
-            // Compute finalGrade from lecturer marks if any are set
-            boolean anyLecturerMark = answers.stream().anyMatch(a -> a.getLecturerMark() != null);
-            if (anyLecturerMark) {
+            // Use the stored lecturer grade if available; fall back to per-question
+            // summation only when no explicit overall grade was set.
+            List<VersionAnswer> gradedAnswers = answers.stream()
+                    .filter(a -> a.getLecturerMark() != null)
+                    .collect(Collectors.toList());
+            boolean anyLecturerMark = !gradedAnswers.isEmpty();
+            partiallyGraded = anyLecturerMark && gradedAnswers.size() < answers.size();
+
+            if (v.getLecturerGrade() != null) {
                 hasLecturerOverride = true;
-                double maxMarksTotal = answers.size() * 10.0; // default 10 per question
-                double lecturerTotal = answers.stream()
-                        .mapToDouble(a -> a.getLecturerMark() != null ? a.getLecturerMark() : 0.0)
+                finalGrade = v.getLecturerGrade();
+            } else if (anyLecturerMark) {
+                hasLecturerOverride = true;
+                // Denominator covers only the graded questions so that ungraded questions
+                // do not silently count as 0 and drag down the student's grade.
+                double maxMarksTotal = gradedAnswers.size() * 10.0;
+                double lecturerTotal = gradedAnswers.stream()
+                        .mapToDouble(VersionAnswer::getLecturerMark)
                         .sum();
                 if (v.getMaxGrade() != null && v.getMaxGrade() > 0 && maxMarksTotal > 0) {
                     finalGrade = Math.round((lecturerTotal / maxMarksTotal) * v.getMaxGrade() * 10.0) / 10.0;
@@ -298,7 +317,7 @@ public class VersionService {
                 .submissionId(v.getSubmissionId())
                 .versionNumber(v.getVersionNumber())
                 .studentId(v.getStudentId())
-                .submittedAt(v.getSubmittedAt() != null ? v.getSubmittedAt().toString() : null)
+                .submittedAt(formatUtc(v.getSubmittedAt()))
                 .isLate(v.getIsLate())
                 .aiScore(v.getAiScore())
                 .plagiarismScore(v.getPlagiarismScore())
@@ -307,8 +326,9 @@ public class VersionService {
                 .maxGrade(v.getMaxGrade())
                 .finalGrade(finalGrade)
                 .hasLecturerOverride(hasLecturerOverride)
+                .partiallyGraded(partiallyGraded)
                 .commitMessage(v.getCommitMessage())
-                .createdAt(v.getCreatedAt() != null ? v.getCreatedAt().toString() : null)
+                .createdAt(formatUtc(v.getCreatedAt()))
                 .answers(answerResponses)
                 .build();
     }
@@ -324,7 +344,7 @@ public class VersionService {
                         .sourceSnippet(s.getSourceSnippet())
                         .matchedText(s.getMatchedText())
                         .similarityPercentage(s.getSimilarityPercentage())
-                        .detectedAt(s.getDetectedAt() != null ? s.getDetectedAt().toString() : null)
+                        .detectedAt(formatUtc(s.getDetectedAt()))
                         .build())
                 .collect(Collectors.toList());
 
@@ -347,13 +367,13 @@ public class VersionService {
                 .similarityScore(va.getSimilarityScore())
                 .plagiarismSeverity(va.getPlagiarismSeverity())
                 .plagiarismFlagged(va.getPlagiarismFlagged())
-                .plagiarismCheckedAt(va.getPlagiarismCheckedAt() != null ? va.getPlagiarismCheckedAt().toString() : null)
+                .plagiarismCheckedAt(formatUtc(va.getPlagiarismCheckedAt()))
                 .plagiarismSources(sources)
                 .lecturerMark(va.getLecturerMark())
                 .lecturerFeedbackText(va.getLecturerFeedbackText())
-                .lecturerUpdatedAt(va.getLecturerUpdatedAt() != null ? va.getLecturerUpdatedAt().toString() : null)
+                .lecturerUpdatedAt(formatUtc(va.getLecturerUpdatedAt()))
                 .lecturerUpdatedBy(va.getLecturerUpdatedBy())
-                .snapshotCreatedAt(va.getSnapshotCreatedAt() != null ? va.getSnapshotCreatedAt().toString() : null)
+                .snapshotCreatedAt(formatUtc(va.getSnapshotCreatedAt()))
                 .build();
     }
 
@@ -389,7 +409,16 @@ public class VersionService {
     }
 
     private List<String> splitPipe(String value) {
-        if (value == null || value.isBlank()) return null;
+        if (value == null || value.isBlank()) return List.of();
         return List.of(value.split("\\|\\|"));
+    }
+
+    /**
+     * Serialises a LocalDateTime to an ISO-8601 string with a trailing 'Z' suffix,
+     * indicating UTC. {@code LocalDateTime.toString()} alone omits the timezone
+     * designator, which causes ambiguous parsing in JavaScript across different locales.
+     */
+    private static String formatUtc(LocalDateTime dt) {
+        return dt != null ? dt.toString() + "Z" : null;
     }
 }

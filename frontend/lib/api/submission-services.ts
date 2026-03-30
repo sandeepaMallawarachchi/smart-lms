@@ -1,6 +1,11 @@
 // ============================================================
 // Submission System - API Services
-// Connects to all 4 Spring Boot microservices
+// Connects to 3 Spring Boot microservices:
+//   8081 submission-management-service (submissions, versions, answers)
+//   8083 feedback-service              (live AI feedback)
+//   8084 integrity-monitoring-service  (plagiarism detection)
+// version_control_service (8082) is not integrated — version
+// snapshots are managed internally by submission-management-service.
 // ============================================================
 
 import type {
@@ -98,6 +103,17 @@ export const submissionService = {
     async getStudentSubmissions(studentId: string): Promise<Submission[]> {
         const res = await apiRequest<Submission[] | { data?: Submission[]; content?: Submission[] }>(
             `${SUBMISSION_API}/api/submissions?studentId=${encodeURIComponent(studentId)}`
+        );
+        if (Array.isArray(res)) return res;
+        return (res as { data?: Submission[]; content?: Submission[] }).data
+            ?? (res as { data?: Submission[]; content?: Submission[] }).content
+            ?? [];
+    },
+
+    /** Get submissions for a student scoped to a single assignment */
+    async getStudentSubmissionsForAssignment(studentId: string, assignmentId: string): Promise<Submission[]> {
+        const res = await apiRequest<Submission[] | { data?: Submission[]; content?: Submission[] }>(
+            `${SUBMISSION_API}/api/submissions?studentId=${encodeURIComponent(studentId)}&assignmentId=${encodeURIComponent(assignmentId)}`
         );
         if (Array.isArray(res)) return res;
         return (res as { data?: Submission[]; content?: Submission[] }).data

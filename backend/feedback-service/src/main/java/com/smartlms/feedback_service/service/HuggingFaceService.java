@@ -52,11 +52,18 @@ public class HuggingFaceService {
                 model, apiUrl, maxTokens, timeout);
     }
 
+    private static final int MAX_503_RETRIES = 3;
+
     /**
      * Generate completion using Hugging Face OpenAI-compatible chat completions API.
      * Endpoint: POST {apiUrl}/chat/completions
+     * Retries up to MAX_503_RETRIES times on HTTP 503 (model loading) before giving up.
      */
     public String generateCompletion(String prompt) {
+        return generateCompletion(prompt, 0);
+    }
+
+    private String generateCompletion(String prompt, int attempt) {
         String url = apiUrl + "/chat/completions";
         log.info("[HuggingFace] POST {} | model='{}' | promptChars={}", url, model, prompt.length());
 
@@ -93,9 +100,14 @@ public class HuggingFaceService {
                             response.code(), url, model, errorBody);
 
                     if (response.code() == 503) {
-                        log.info("[HuggingFace] Model loading (503), waiting 20 s then retrying...");
+                        if (attempt >= MAX_503_RETRIES) {
+                            throw new FeedbackGenerationException(
+                                    "Model unavailable after " + MAX_503_RETRIES + " retries (HTTP 503)");
+                        }
+                        log.info("[HuggingFace] Model loading (503), waiting 20 s then retrying (attempt {}/{})...",
+                                attempt + 1, MAX_503_RETRIES);
                         Thread.sleep(20000);
-                        return generateCompletion(prompt);
+                        return generateCompletion(prompt, attempt + 1);
                     }
 
                     throw new FeedbackGenerationException(

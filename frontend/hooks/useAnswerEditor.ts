@@ -95,8 +95,10 @@ const PLAGIARISM_DEBOUNCE_MS = 2000;
 /** Milliseconds of inactivity after which the text is auto-saved to the backend. */
 const AUTO_SAVE_DEBOUNCE_MS = 5000;
 
-/** Minimum character length to trigger AI feedback / plagiarism (matches backend config). */
-const MIN_TEXT_LENGTH = 2;
+/** Minimum character length to trigger AI feedback / plagiarism.
+ *  50 characters ≈ 8–10 words — enough for the AI to produce meaningful scores
+ *  and for plagiarism to have something worth comparing. */
+const MIN_TEXT_LENGTH = 50;
 
 // ─── Hook ─────────────────────────────────────────────────────
 
@@ -142,6 +144,11 @@ export function useAnswerEditor({
     // persisted and available on the next "continue writing" session.
     const pendingFeedbackRef   = useRef<LiveFeedback | null>(null);
     const pendingPlagiarismRef = useRef<LivePlagiarismResult | null>(null);
+
+    // Tracks whether the one-time initialText seed has been applied.
+    // Prevents re-seeding on subsequent renders and guards the race-condition
+    // where initialText arrives after the student has already started typing.
+    const hasSeededRef = useRef<boolean>(false);
 
     // Stable session ID for the plagiarism realtime endpoint (stays constant for
     // the lifetime of this question editor to let the backend correlate requests).
@@ -296,7 +303,7 @@ export function useAnswerEditor({
         } finally {
             setAutoSaving(false);
         }
-    }, [submissionId, questionId, questionText]);
+    }, [submissionId, questionId, questionText, studentId]);
 
     // ── Main change handler ────────────────────────────────────
 
@@ -344,16 +351,30 @@ export function useAnswerEditor({
 
     // ── Sync initialText on load ───────────────────────────────
     // When the parent loads previously saved answers and updates initialText,
-    // sync the editor text/wordCount.  Feedback and plagiarism state are already
-    // seeded from initialFeedback / initialPlagiarism — no need to re-call the APIs.
+    // sync the editor text/wordCount.  The seed is applied exactly once
+    // (hasSeededRef) so re-renders or parent re-fetches don't overwrite the
+    // student's subsequent edits.
+    //
+    // Race-condition handling: if initialText arrives after the student has
+    // already started typing, only apply the saved answer when it contains
+    // MORE content than what the student typed — recovering more work rather
+    // than discarding it.
     useEffect(() => {
-        if (initialText && answerText === '') {
-            console.debug('[useAnswerEditor] Syncing initialText for questionId:', questionId, '| words:', countWords(initialText));
-            setAnswerText(initialText);
-            setWordCount(countWords(initialText));
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [initialText]);
+        if (!initialText || hasSeededRef.current) return;
+        hasSeededRef.current = true;
+        // Read the current editor value via functional-update to avoid adding
+        // answerText to the dependency array (which would cause repeated firing).
+        setAnswerText(current => {
+            if (initialText.length > current.length) {
+                console.debug('[useAnswerEditor] Seeding initialText for questionId:', questionId,
+                    '| saved words:', countWords(initialText), '| typed so far:', countWords(current));
+                setWordCount(countWords(initialText));
+                return initialText;
+            }
+            console.debug('[useAnswerEditor] Skipping initialText seed — student already typed more for questionId:', questionId);
+            return current;
+        });
+    }, [initialText, questionId]);
 
     // ── Generate feedback on mount for pre-loaded text without feedback ─────
     // If the student returns to a partially answered assignment and their

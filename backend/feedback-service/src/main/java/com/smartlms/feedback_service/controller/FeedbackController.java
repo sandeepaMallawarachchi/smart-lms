@@ -36,7 +36,7 @@ public class FeedbackController {
      * POST /api/feedback/live
      */
     @PostMapping("/live")
-    public ResponseEntity<ApiResponse<LiveFeedbackResponse>> generateLiveFeedback(
+    public CompletableFuture<ResponseEntity<ApiResponse<LiveFeedbackResponse>>> generateLiveFeedback(
             @Valid @RequestBody LiveFeedbackRequest request) {
         log.info("POST /api/feedback/live — questionId={} textLen={} questionPrompt='{}'",
                 request.getQuestionId(),
@@ -45,19 +45,20 @@ public class FeedbackController {
                         ? request.getQuestionPrompt().substring(0, Math.min(60, request.getQuestionPrompt().length()))
                         : "(none)");
 
-        ApiResponse<LiveFeedbackResponse> response = liveFeedbackService.generateLiveFeedback(request);
-        log.info("POST /api/feedback/live — DONE questionId={} grammar={} clarity={}",
-                request.getQuestionId(),
-                response.getData() != null ? response.getData().getGrammarScore() : "null",
-                response.getData() != null ? response.getData().getClarityScore() : "null");
-        return ResponseEntity.ok(response);
-    }
-
-    @org.springframework.web.bind.annotation.ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ApiResponse<Void>> handleRuntimeException(RuntimeException ex) {
-        log.error("Unhandled exception in FeedbackController: {}", ex.getMessage(), ex);
-        return ResponseEntity.status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
-                .body(ApiResponse.error("AI feedback service temporarily unavailable: " + ex.getMessage()));
+        return liveFeedbackService.generateLiveFeedback(request)
+                .thenApply(response -> {
+                    log.info("POST /api/feedback/live — DONE questionId={} grammar={} clarity={}",
+                            request.getQuestionId(),
+                            response.getData() != null ? response.getData().getGrammarScore() : "null",
+                            response.getData() != null ? response.getData().getClarityScore() : "null");
+                    return ResponseEntity.ok(response);
+                })
+                .exceptionally(ex -> {
+                    log.error("POST /api/feedback/live — FAILED questionId={}: {}",
+                            request.getQuestionId(), ex.getMessage());
+                    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                            .body(ApiResponse.error("AI feedback service temporarily unavailable: " + ex.getMessage()));
+                });
     }
 
     /**

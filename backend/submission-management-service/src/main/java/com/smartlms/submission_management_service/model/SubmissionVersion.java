@@ -82,6 +82,14 @@ public class SubmissionVersion {
     @Column(name = "max_grade")
     private Double maxGrade;
 
+    /**
+     * Lecturer-assigned overall grade for this version.
+     * Set when the lecturer submits a grade via GradeRequest.grade.
+     * Null until a lecturer override is saved.
+     */
+    @Column(name = "lecturer_grade")
+    private Double lecturerGrade;
+
     /** Human-readable label, e.g. "Java Assignment — v2". */
     @Column(name = "commit_message", length = 500)
     private String commitMessage;

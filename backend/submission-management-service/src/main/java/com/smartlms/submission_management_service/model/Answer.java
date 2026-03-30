@@ -20,7 +20,17 @@ import java.util.List;
  * whether to INSERT or UPDATE.
  */
 @Entity
-@Table(name = "answers", schema = "submission_schema")
+@Table(
+    name = "answers",
+    schema = "submission_schema",
+    indexes = {
+        // Covers upsert lookup (findBySubmissionIdAndQuestionId) and
+        // ordered fetch (findBySubmissionIdOrderByQuestionId).
+        @Index(name = "idx_answers_submission_id_question_id", columnList = "submission_id, question_id"),
+        // Covers peer plagiarism query (findByQuestionId ORDER BY last_modified DESC).
+        @Index(name = "idx_answers_question_id_last_modified", columnList = "question_id, last_modified")
+    }
+)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -31,10 +41,9 @@ public class Answer {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** Foreign key to the parent submission. Stored as a string to match
-     *  the submission ID type used in the Submission entity (Long mapped to String). */
+    /** Foreign key to the parent submission. Matches Submission.id (Long / BIGINT). */
     @Column(name = "submission_id", nullable = false)
-    private String submissionId;
+    private Long submissionId;
 
     /** Student who wrote this answer. Stored so peer-comparison can exclude
      *  ALL of a student's answers (across all their submission versions) at once. */

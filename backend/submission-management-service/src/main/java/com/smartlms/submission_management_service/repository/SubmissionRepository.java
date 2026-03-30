@@ -27,6 +27,10 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
     List<Submission> findByStudentIdAndAssignmentId(@Param("studentId") String studentId,
                                                     @Param("assignmentId") String assignmentId);
 
+    @Query("SELECT s FROM Submission s WHERE s.studentId = :studentId AND s.assignmentId = :assignmentId AND s.status = 'DRAFT'")
+    Optional<Submission> findDraftByStudentIdAndAssignmentId(@Param("studentId") String studentId,
+                                                             @Param("assignmentId") String assignmentId);
+
     @Query("SELECT s FROM Submission s WHERE s.dueDate < :now AND s.status = 'SUBMITTED' AND s.isLate = false")
     List<Submission> findOverdueSubmissions(@Param("now") LocalDateTime now);
 

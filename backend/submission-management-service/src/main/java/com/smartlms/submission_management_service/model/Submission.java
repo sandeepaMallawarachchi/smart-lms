@@ -80,7 +80,7 @@ public class Submission {
     @Column(name = "max_grade")
     private Double maxGrade;
 
-    @Column(name = "feedback_text", length = 5000)
+    @Column(name = "feedback_text", columnDefinition = "TEXT")
     private String feedbackText;
 
     @Column(name = "is_late")
