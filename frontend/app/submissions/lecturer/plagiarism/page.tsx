@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import {
     AlertTriangle,
     CheckCircle2,
-    Download,
     Eye,
     FileText,
     Flag,
     Globe,
+    Loader2,
     Shield,
     User,
     XCircle,
@@ -75,6 +75,8 @@ function ReportCard({ report, onUpdate, updating }: {
 }) {
     const [noteText, setNoteText] = useState('');
     const [showNote, setShowNote] = useState(false);
+    const [downloading, setDownloading] = useState(false);
+    const [downloadError, setDownloadError] = useState<string | null>(null);
     const router = useRouter();
 
     const sev = severity(report.overallScore);
@@ -109,6 +111,8 @@ function ReportCard({ report, onUpdate, updating }: {
                     <button onClick={() => router.push(`/submissions/lecturer/grading/${report.submissionId}`)} className="p-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 cursor-pointer" title="View Submission"><Eye size={14} /></button>
                     <button
                         onClick={async () => {
+                            setDownloadError(null);
+                            setDownloading(true);
                             try {
                                 const { plagiarismService } = await import('@/lib/api/submission-services');
                                 const blob = await plagiarismService.downloadPlagiarismReport(report.submissionId?.toString() ?? '');
@@ -122,18 +126,34 @@ function ReportCard({ report, onUpdate, updating }: {
                                 URL.revokeObjectURL(url);
                             } catch (e) {
                                 console.error('Download failed:', e);
+                                setDownloadError('Download failed. Please try again.');
+                            } finally {
+                                setDownloading(false);
                             }
                         }}
-                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200 rounded hover:bg-gray-100 transition-colors"
-                        title="Download Plagiarism Report"
+                        disabled={downloading}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200 rounded hover:bg-gray-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                        title={downloading ? 'Generating PDF…' : 'Download Plagiarism Report'}
                     >
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        PDF
+                        {downloading
+                            ? <Loader2 size={12} className="animate-spin" />
+                            : (
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                            )
+                        }
+                        {downloading ? 'Generating…' : 'PDF'}
                     </button>
                 </div>
             </div>
+
+            {/* Download error */}
+            {downloadError && (
+                <p className="mb-2 text-xs text-red-600 flex items-center gap-1">
+                    <AlertTriangle size={12} />{downloadError}
+                </p>
+            )}
 
             {/* Score + stats */}
             <div className="flex items-center gap-4 mb-3">
