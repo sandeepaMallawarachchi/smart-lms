@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     FileText,
@@ -16,8 +16,14 @@ import {
     Clock,
     Award,
     AlertCircle,
+    CheckSquare,
+    Square,
+    Sparkles,
+    X,
+    Loader2,
 } from 'lucide-react';
 import { useAllSubmissions } from '@/hooks/useSubmissions';
+import { submissionService } from '@/lib/api/submission-services';
 import {
     PageHeader,
     StatCard,
@@ -62,23 +68,203 @@ const PRIORITY_CFG: Record<Priority, { label: string; cls: string }> = {
     low: { label: 'Low', cls: 'bg-green-100 text-green-700' },
 };
 
+// ─── Bulk Grade Panel ─────────────────────────────────────────
+
+interface BulkGradeResult { succeeded: number; failed: number; }
+
+function BulkGradePanel({
+    selected,
+    submissions,
+    onClear,
+    onDone,
+}: {
+    selected: Set<string>;
+    submissions: Submission[];
+    onClear: () => void;
+    onDone: () => void;
+}) {
+    const [mode, setMode] = useState<'ai' | 'fixed'>('ai');
+    const [fixedGrade, setFixedGrade] = useState('');
+    const [feedback, setFeedback] = useState('');
+    const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+    const [result, setResult] = useState<BulkGradeResult | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    const selectedList = useMemo(
+        () => submissions.filter((s) => selected.has(s.id)),
+        [submissions, selected],
+    );
+
+    function getLecturerId() {
+        try {
+            const token = localStorage.getItem('authToken') ?? '';
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return String(payload.userId ?? payload.sub ?? 'unknown');
+        } catch { return 'unknown'; }
+    }
+
+    const handleApply = useCallback(async () => {
+        setError(null);
+        setResult(null);
+        const total = selectedList.length;
+        setProgress({ done: 0, total });
+        let succeeded = 0, failed = 0;
+        const lecturerId = getLecturerId();
+
+        for (const s of selectedList) {
+            try {
+                const grade = mode === 'ai'
+                    ? (s.aiScore ?? 0)
+                    : parseFloat(fixedGrade);
+                await submissionService.gradeSubmission(s.id, {
+                    grade,
+                    lecturerFeedback: feedback.trim() || `Graded via bulk action.`,
+                    lecturerId,
+                });
+                succeeded++;
+            } catch {
+                failed++;
+            }
+            setProgress((p) => p ? { ...p, done: p.done + 1 } : null);
+        }
+
+        setProgress(null);
+        setResult({ succeeded, failed });
+        if (failed === 0) {
+            setTimeout(() => { onClear(); onDone(); }, 1200);
+        }
+    }, [selectedList, mode, fixedGrade, feedback, onClear, onDone]);
+
+    const isFixed = mode === 'fixed';
+    const fixedVal = parseFloat(fixedGrade);
+    const canApply = progress === null && (
+        mode === 'ai' || (!isNaN(fixedVal) && fixedVal >= 0 && fixedVal <= 100)
+    );
+
+    return (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-blue-200 bg-blue-50 shadow-lg">
+            <div className="mx-auto max-w-5xl px-4 py-3">
+                {/* Header row */}
+                <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-blue-800">
+                        {selected.size} submission{selected.size !== 1 ? 's' : ''} selected
+                    </span>
+                    <button onClick={onClear} className="text-blue-500 hover:text-blue-700 cursor-pointer">
+                        <X size={16} />
+                    </button>
+                </div>
+
+                {result ? (
+                    <div className={`flex items-center gap-2 text-sm font-medium ${result.failed === 0 ? 'text-green-700' : 'text-amber-700'}`}>
+                        <CheckCircle2 size={14} />
+                        {result.succeeded} graded{result.failed > 0 ? `, ${result.failed} failed` : ' successfully'}.
+                        {result.failed > 0 && (
+                            <button onClick={() => setResult(null)} className="ml-2 underline text-xs cursor-pointer">Retry failed</button>
+                        )}
+                    </div>
+                ) : progress ? (
+                    <div className="flex items-center gap-2 text-sm text-blue-700">
+                        <Loader2 size={14} className="animate-spin" />
+                        Grading {progress.done} / {progress.total}…
+                    </div>
+                ) : (
+                    <div className="flex flex-wrap items-end gap-3">
+                        {/* Mode toggle */}
+                        <div className="flex rounded-lg border border-blue-200 overflow-hidden text-xs font-medium">
+                            <button
+                                onClick={() => setMode('ai')}
+                                className={`px-3 py-1.5 cursor-pointer transition-colors ${mode === 'ai' ? 'bg-blue-600 text-white' : 'bg-white text-blue-700 hover:bg-blue-50'}`}
+                            >
+                                <span className="flex items-center gap-1"><Sparkles size={11} /> Apply AI grade</span>
+                            </button>
+                            <button
+                                onClick={() => setMode('fixed')}
+                                className={`px-3 py-1.5 cursor-pointer transition-colors ${mode === 'fixed' ? 'bg-blue-600 text-white' : 'bg-white text-blue-700 hover:bg-blue-50'}`}
+                            >
+                                Fixed grade
+                            </button>
+                        </div>
+
+                        {/* Fixed grade input */}
+                        {isFixed && (
+                            <div className="flex items-center gap-1">
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    step={0.5}
+                                    value={fixedGrade}
+                                    onChange={(e) => setFixedGrade(e.target.value)}
+                                    placeholder="0–100"
+                                    className="w-20 px-2 py-1.5 border border-blue-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <span className="text-xs text-blue-600">%</span>
+                            </div>
+                        )}
+
+                        {/* Feedback */}
+                        <input
+                            type="text"
+                            value={feedback}
+                            onChange={(e) => setFeedback(e.target.value)}
+                            placeholder="Bulk feedback (optional)…"
+                            className="flex-1 min-w-[180px] px-2 py-1.5 border border-blue-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+
+                        {/* Apply */}
+                        <button
+                            onClick={handleApply}
+                            disabled={!canApply}
+                            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors cursor-pointer"
+                        >
+                            Apply to {selected.size}
+                        </button>
+                    </div>
+                )}
+
+                {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+            </div>
+        </div>
+    );
+}
+
+// ─── Submission Row ───────────────────────────────────────────
+
 function SubmissionRow({
     submission: s,
     onView,
     onGrade,
     showPriority,
+    selected,
+    onToggle,
 }: {
     submission: Submission;
     onView: (id: string) => void;
     onGrade: (id: string) => void;
     showPriority?: boolean;
+    selected?: boolean;
+    onToggle?: (id: string) => void;
 }) {
     const plagHigh = (s.plagiarismScore ?? 0) >= 20;
     const priority = getPriority(s);
 
     return (
-        <div className={`bg-white rounded-lg border p-4 hover:shadow-md transition-all ${s.isLate ? 'border-l-4 border-l-purple-400 border-gray-200' : plagHigh ? 'border-l-4 border-l-red-400 border-gray-200' : 'border-gray-200'}`}>
+        <div className={`bg-white rounded-lg border p-4 hover:shadow-md transition-all ${selected ? 'ring-2 ring-blue-400 border-blue-300' : s.isLate ? 'border-l-4 border-l-purple-400 border-gray-200' : plagHigh ? 'border-l-4 border-l-red-400 border-gray-200' : 'border-gray-200'}`}>
             <div className="flex items-center justify-between gap-3">
+                {/* Selection checkbox */}
+                {onToggle && (
+                    <button
+                        onClick={() => onToggle(s.id)}
+                        className="shrink-0 text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
+                        aria-label={selected ? 'Deselect' : 'Select'}
+                    >
+                        {selected
+                            ? <CheckSquare size={16} className="text-blue-600" />
+                            : <Square size={16} />
+                        }
+                    </button>
+                )}
+
                 {/* Left info */}
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -182,7 +368,22 @@ export default function LecturerAllSubmissionsPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
     const [sortBy, setSortBy] = useState<SortKey>('date');
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const { data: submissions, loading, error, refetch } = useAllSubmissions();
+
+    const toggleSelect = useCallback((id: string) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    }, []);
+
+    const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+    const selectAllVisible = useCallback((list: Submission[]) => {
+        setSelectedIds(new Set(list.map((s) => s.id)));
+    }, []);
 
     const processed = useMemo(() => {
         const list = submissions ?? [];
@@ -265,6 +466,25 @@ export default function LecturerAllSubmissionsPage() {
                     <option value="plagiarism">Sort: Plagiarism</option>
                     <option value="ai">Sort: AI Score</option>
                 </select>
+
+                {/* Select-all toggle — only visible when there are rows */}
+                {processed.length > 0 && (
+                    <button
+                        onClick={() =>
+                            selectedIds.size === processed.length
+                                ? clearSelection()
+                                : selectAllVisible(processed)
+                        }
+                        className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+                        title={selectedIds.size === processed.length ? 'Deselect all' : 'Select all visible'}
+                    >
+                        {selectedIds.size === processed.length && processed.length > 0
+                            ? <CheckSquare size={14} className="text-blue-600" />
+                            : <Square size={14} />
+                        }
+                        {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select all'}
+                    </button>
+                )}
             </FilterToolbar>
 
             {/* List */}
@@ -279,13 +499,15 @@ export default function LecturerAllSubmissionsPage() {
                             showPriority={sortBy === 'priority' || filterStatus === 'NEEDS_GRADING'}
                             onView={(id) => router.push(`/submissions/lecturer/submissions/${id}`)}
                             onGrade={(id) => router.push(`/submissions/lecturer/grading/${id}`)}
+                            selected={selectedIds.has(submission.id)}
+                            onToggle={toggleSelect}
                         />
                     ))
                 ) : (
                     <EmptyState
                         icon={FileText}
                         message={submissions?.length === 0 ? 'No submissions yet' : 'No submissions match your filters'}
-                        onClear={searchQuery || filterStatus !== 'all' ? () => { setSearchQuery(''); setFilterStatus('all'); setSortBy('date'); } : undefined}
+                        onClear={searchQuery || filterStatus !== 'all' ? () => { setSearchQuery(''); setFilterStatus('all'); setSortBy('date'); clearSelection(); } : undefined}
                     />
                 )}
             </div>
@@ -294,6 +516,16 @@ export default function LecturerAllSubmissionsPage() {
                 <p className="text-xs text-gray-400 text-right mt-2">
                     Showing {processed.length} of {stats.total}
                 </p>
+            )}
+
+            {/* Bulk grade panel — slides up when at least one row is selected */}
+            {selectedIds.size > 0 && (
+                <BulkGradePanel
+                    selected={selectedIds}
+                    submissions={processed}
+                    onClear={clearSelection}
+                    onDone={refetch}
+                />
             )}
         </div>
     );
