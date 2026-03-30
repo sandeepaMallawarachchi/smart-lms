@@ -43,6 +43,49 @@ function scoreBar(value?: number | null, max = 10) {
     );
 }
 
+// ─── Version Diff Summary ─────────────────────────────────────
+
+interface VersionDiffSummary {
+    wordsAdded: number;
+    wordsRemoved: number;
+    questionsChanged: number;
+    questionsAdded: number;
+}
+
+/**
+ * Count word-level additions and removals between two sets of answers.
+ * Uses the same diffWords function used by ComparisonView so the numbers
+ * are consistent with what the student sees in the full diff modal.
+ */
+function computeVersionDiff(
+    prevAnswers: VersionAnswer[],
+    nextAnswers: VersionAnswer[],
+): VersionDiffSummary {
+    const prevMap = new Map(prevAnswers.map(a => [a.questionId, a.answerText ?? '']));
+    let wordsAdded = 0, wordsRemoved = 0, questionsChanged = 0, questionsAdded = 0;
+
+    for (const next of nextAnswers) {
+        const oldText = prevMap.get(next.questionId) ?? '';
+        const newText = next.answerText ?? '';
+        if (oldText === '' && newText !== '') {
+            questionsAdded++;
+            wordsAdded += newText.trim().split(/\s+/).filter(Boolean).length;
+            questionsChanged++;
+            continue;
+        }
+        if (oldText === newText) continue;
+        questionsChanged++;
+        const tokens = diffWords(oldText, newText);
+        for (const t of tokens) {
+            const wordCount = t.value.trim().split(/\s+/).filter(Boolean).length;
+            if (t.type === 'added')   wordsAdded   += wordCount;
+            if (t.type === 'removed') wordsRemoved += wordCount;
+        }
+    }
+
+    return { wordsAdded, wordsRemoved, questionsChanged, questionsAdded };
+}
+
 // ─── VersionCard ──────────────────────────────────────────────
 
 function VersionCard({
@@ -53,6 +96,7 @@ function VersionCard({
     compareSelected,
     onCompareToggle,
     compareDisabled,
+    diffSummary,
 }: {
     version: SubmissionVersion;
     isLatest: boolean;
@@ -61,6 +105,8 @@ function VersionCard({
     compareSelected: boolean;
     onCompareToggle: () => void;
     compareDisabled: boolean;
+    /** Change summary vs the immediately preceding version. Undefined for v1. */
+    diffSummary?: VersionDiffSummary;
 }) {
     const [expanded, setExpanded] = useState(false);
     const [downloadingReport, setDownloadingReport] = useState<'plagiarism' | 'feedback' | null>(null);
@@ -139,6 +185,38 @@ function VersionCard({
                         <Clock size={12} />
                         <span>Submitted {formatDate(version.submittedAt)}</span>
                     </div>
+
+                    {/* Change summary vs previous version */}
+                    {diffSummary && (
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                            {diffSummary.wordsAdded === 0 && diffSummary.wordsRemoved === 0 && diffSummary.questionsAdded === 0 ? (
+                                <span className="text-xs text-gray-400 italic">No text changes from previous version</span>
+                            ) : (
+                                <>
+                                    {diffSummary.wordsAdded > 0 && (
+                                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-xs font-medium">
+                                            +{diffSummary.wordsAdded} word{diffSummary.wordsAdded !== 1 ? 's' : ''}
+                                        </span>
+                                    )}
+                                    {diffSummary.wordsRemoved > 0 && (
+                                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-xs font-medium">
+                                            −{diffSummary.wordsRemoved} word{diffSummary.wordsRemoved !== 1 ? 's' : ''}
+                                        </span>
+                                    )}
+                                    {diffSummary.questionsAdded > 0 && (
+                                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 text-xs font-medium">
+                                            {diffSummary.questionsAdded} new answer{diffSummary.questionsAdded !== 1 ? 's' : ''}
+                                        </span>
+                                    )}
+                                    {diffSummary.questionsChanged > 0 && (
+                                        <span className="text-xs text-gray-400">
+                                            across {diffSummary.questionsChanged} question{diffSummary.questionsChanged !== 1 ? 's' : ''}
+                                        </span>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Metrics */}
@@ -843,6 +921,18 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
         return () => { cancelled = true; };
     }, [versions, id]);
 
+    /* ── Per-version diff summaries (versionId → summary vs prev) ── */
+    const diffSummaries = useMemo<Map<string, VersionDiffSummary>>(() => {
+        const map = new Map<string, VersionDiffSummary>();
+        // detailedVersions is sorted ascending (v1, v2, v3…)
+        for (let i = 1; i < detailedVersions.length; i++) {
+            const prev = detailedVersions[i - 1];
+            const curr = detailedVersions[i];
+            map.set(curr.id, computeVersionDiff(prev.answers ?? [], curr.answers ?? []));
+        }
+        return map;
+    }, [detailedVersions]);
+
     /* ── Comparison state ── */
     const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
     const [comparing, setComparing] = useState(false);
@@ -1073,6 +1163,7 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
                             compareSelected={compareIds.has(v.id)}
                             onCompareToggle={() => toggleCompare(v.id)}
                             compareDisabled={compareIds.size >= 2}
+                            diffSummary={diffSummaries.get(v.id)}
                         />
                     ))}
                 </div>
