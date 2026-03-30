@@ -9,6 +9,7 @@ import com.smartlms.submission_management_service.exception.DeadlineNotPassedExc
 import com.smartlms.submission_management_service.exception.ResourceNotFoundException;
 import com.smartlms.submission_management_service.model.*;
 import com.smartlms.submission_management_service.repository.*;
+import com.smartlms.submission_management_service.util.AnswerScoreUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -382,25 +383,9 @@ public class VersionService {
      * Weights: relevance 40%, completeness 30%, clarity 15%, grammar 15%.
      */
     private Double computeAiMark(Answer a) {
+        // Prefer the pre-computed mark stored on the answer (set by AnswerService at analysis time).
         if (a.getAiGeneratedMark() != null) return a.getAiGeneratedMark();
-
-        final double W_RELEVANCE    = 0.40;
-        final double W_COMPLETENESS = 0.30;
-        final double W_CLARITY      = 0.15;
-        final double W_GRAMMAR      = 0.15;
-
-        boolean hasAny = a.getRelevanceScore() != null || a.getCompletenessScore() != null
-                || a.getClarityScore() != null || a.getGrammarScore() != null;
-        if (!hasAny) return null;
-
-        double weightedSum = 0.0, appliedWeight = 0.0;
-        if (a.getRelevanceScore()    != null) { weightedSum += W_RELEVANCE    * a.getRelevanceScore();    appliedWeight += W_RELEVANCE;    }
-        if (a.getCompletenessScore() != null) { weightedSum += W_COMPLETENESS * a.getCompletenessScore(); appliedWeight += W_COMPLETENESS; }
-        if (a.getClarityScore()      != null) { weightedSum += W_CLARITY      * a.getClarityScore();      appliedWeight += W_CLARITY;      }
-        if (a.getGrammarScore()      != null) { weightedSum += W_GRAMMAR      * a.getGrammarScore();      appliedWeight += W_GRAMMAR;      }
-
-        double mark = appliedWeight > 0 ? weightedSum / appliedWeight : 0.0;
-        return Math.round(mark * 100.0) / 100.0;
+        return AnswerScoreUtils.computeWeightedMark(a);
     }
 
     private String buildCommitMessage(Submission s) {

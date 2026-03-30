@@ -14,6 +14,7 @@ import com.smartlms.submission_management_service.model.SubmissionStatus;
 import com.smartlms.submission_management_service.model.SubmissionType;
 import com.smartlms.submission_management_service.repository.AnswerRepository;
 import com.smartlms.submission_management_service.repository.SubmissionRepository;
+import com.smartlms.submission_management_service.util.AnswerScoreUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -402,28 +403,6 @@ public class SubmissionService {
      * Only dimensions that have a non-null score contribute; if none exist, returns null.
      */
     private Double computeWeightedMark(Answer a) {
-        // weights must sum to 1.0
-        final double W_RELEVANCE    = 0.40;
-        final double W_COMPLETENESS = 0.30;
-        final double W_CLARITY      = 0.15;
-        final double W_GRAMMAR      = 0.15;
-
-        boolean hasAny = a.getRelevanceScore() != null
-                || a.getCompletenessScore() != null
-                || a.getClarityScore()      != null
-                || a.getGrammarScore()      != null;
-        if (!hasAny) return null;
-
-        double weightedSum   = 0.0;
-        double appliedWeight = 0.0;
-
-        if (a.getRelevanceScore()    != null) { weightedSum += W_RELEVANCE    * a.getRelevanceScore();    appliedWeight += W_RELEVANCE;    }
-        if (a.getCompletenessScore() != null) { weightedSum += W_COMPLETENESS * a.getCompletenessScore(); appliedWeight += W_COMPLETENESS; }
-        if (a.getClarityScore()      != null) { weightedSum += W_CLARITY      * a.getClarityScore();      appliedWeight += W_CLARITY;      }
-        if (a.getGrammarScore()      != null) { weightedSum += W_GRAMMAR      * a.getGrammarScore();      appliedWeight += W_GRAMMAR;      }
-
-        // Normalise in case some dimensions are missing (so the result stays on 0–10)
-        double mark = appliedWeight > 0 ? weightedSum / appliedWeight : 0.0;
-        return Math.round(mark * 100.0) / 100.0;
+        return AnswerScoreUtils.computeWeightedMark(a);
     }
 }
