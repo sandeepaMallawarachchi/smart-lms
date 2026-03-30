@@ -10,6 +10,7 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.awt.*;
@@ -17,6 +18,7 @@ import java.io.ByteArrayOutputStream;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Generates professional PDF plagiarism reports similar to Turnitin's format.
@@ -66,7 +68,32 @@ public class PdfReportGeneratorService {
 
     // ── Public API ────────────────────────────────────────────────────────────
 
-    public byte[] generatePlagiarismReport(PlagiarismReportData data) {
+    @Async("plagiarismTaskExecutor")
+    public CompletableFuture<byte[]> generatePlagiarismReport(PlagiarismReportData data) {
+        try {
+            return CompletableFuture.completedFuture(buildPdf(data));
+        } catch (Exception e) {
+            log.error("[PDF] Error generating plagiarism report: {}", e.getMessage(), e);
+            CompletableFuture<byte[]> failed = new CompletableFuture<>();
+            failed.completeExceptionally(new RuntimeException("PDF generation failed: " + e.getMessage(), e));
+            return failed;
+        }
+    }
+
+    @Async("plagiarismTaskExecutor")
+    public CompletableFuture<byte[]> generateFeedbackReport(PlagiarismReportData data) {
+        try {
+            return CompletableFuture.completedFuture(buildPdf(data));
+        } catch (Exception e) {
+            log.error("[PDF] Error generating feedback report: {}", e.getMessage(), e);
+            CompletableFuture<byte[]> failed = new CompletableFuture<>();
+            failed.completeExceptionally(new RuntimeException("PDF generation failed: " + e.getMessage(), e));
+            return failed;
+        }
+    }
+
+    /** Synchronous PDF build — called by both public async entry points. */
+    private byte[] buildPdf(PlagiarismReportData data) throws Exception {
         try (PDDocument doc = new PDDocument()) {
             int totalPages = 3 + estimateContentPages(data.getAnswerText()) + 1;
             addCoverPage(doc, data, totalPages);
@@ -79,14 +106,7 @@ public class PdfReportGeneratorService {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             doc.save(out);
             return out.toByteArray();
-        } catch (Exception e) {
-            log.error("[PDF] Error generating plagiarism report: {}", e.getMessage(), e);
-            throw new RuntimeException("PDF generation failed: " + e.getMessage(), e);
         }
-    }
-
-    public byte[] generateFeedbackReport(PlagiarismReportData data) {
-        return generatePlagiarismReport(data);
     }
 
     // ── Page 1: Cover ─────────────────────────────────────────────────────────

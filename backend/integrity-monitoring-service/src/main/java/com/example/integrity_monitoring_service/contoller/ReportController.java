@@ -7,9 +7,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Endpoints for downloading PDF plagiarism and feedback reports.
@@ -28,14 +31,20 @@ public class ReportController {
      * GET /api/integrity/reports/{submissionId}/plagiarism
      */
     @GetMapping("/{submissionId}/plagiarism")
-    public ResponseEntity<byte[]> downloadPlagiarismReport(@PathVariable Long submissionId) {
+    public CompletableFuture<ResponseEntity<byte[]>> downloadPlagiarismReport(@PathVariable Long submissionId) {
         log.info("[ReportController] Generating plagiarism report for submission {}", submissionId);
 
         PlagiarismReportData data = reportDataService.buildReportData(submissionId);
-        byte[] pdf = pdfGenerator.generatePlagiarismReport(data);
-
         String filename = "Plagiarism_Report_Submission_" + submissionId + ".pdf";
-        return pdfResponse(pdf, filename);
+
+        return pdfGenerator.generatePlagiarismReport(data)
+                .thenApply(pdf -> pdfResponse(pdf, filename))
+                .exceptionally(ex -> {
+                    log.error("[ReportController] Plagiarism report failed for submission {}: {}",
+                            submissionId, ex.getMessage());
+                    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                            .<byte[]>build();
+                });
     }
 
     /**
@@ -43,14 +52,20 @@ public class ReportController {
      * GET /api/integrity/reports/{submissionId}/feedback
      */
     @GetMapping("/{submissionId}/feedback")
-    public ResponseEntity<byte[]> downloadFeedbackReport(@PathVariable Long submissionId) {
+    public CompletableFuture<ResponseEntity<byte[]>> downloadFeedbackReport(@PathVariable Long submissionId) {
         log.info("[ReportController] Generating feedback report for submission {}", submissionId);
 
         PlagiarismReportData data = reportDataService.buildReportData(submissionId);
-        byte[] pdf = pdfGenerator.generateFeedbackReport(data);
-
         String filename = "Complete_Report_Submission_" + submissionId + ".pdf";
-        return pdfResponse(pdf, filename);
+
+        return pdfGenerator.generateFeedbackReport(data)
+                .thenApply(pdf -> pdfResponse(pdf, filename))
+                .exceptionally(ex -> {
+                    log.error("[ReportController] Feedback report failed for submission {}: {}",
+                            submissionId, ex.getMessage());
+                    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                            .<byte[]>build();
+                });
     }
 
     private ResponseEntity<byte[]> pdfResponse(byte[] pdf, String filename) {
