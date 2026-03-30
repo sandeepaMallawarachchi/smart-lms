@@ -242,14 +242,18 @@ public class SubmissionService {
             // aiGeneratedMark per answer — set only once; never overwritten on resubmit.
             // Weighted formula: relevance (40%) + completeness (30%) + clarity (15%) + grammar (15%).
             // This prioritises concept correctness over surface-level writing quality.
+            List<Answer> toUpdate = new ArrayList<>();
             for (Answer a : answers) {
                 if (a.getAiGeneratedMark() == null) {
                     Double mark = computeWeightedMark(a);
                     if (mark != null) {
                         a.setAiGeneratedMark(mark);
-                        answerRepository.save(a);
+                        toUpdate.add(a);
                     }
                 }
+            }
+            if (!toUpdate.isEmpty()) {
+                answerRepository.saveAll(toUpdate);
             }
         }
 
