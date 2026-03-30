@@ -317,6 +317,30 @@ export function useGradeSubmission() {
     return { ...state, gradeSubmission };
 }
 
+// ─── Assignment cache (module-level, survives remounts, TTL = 5 min) ─────────
+
+const ASSIGNMENT_CACHE_TTL_MS = 5 * 60 * 1000;
+
+interface AssignmentCacheEntry {
+    data: Assignment[];
+    fetchedAt: number;
+}
+
+const assignmentCache = new Map<string, AssignmentCacheEntry>();
+
+function makeAssignmentCacheKey(
+    role: string | null,
+    status: string | undefined,
+    moduleCode: string | undefined,
+    lecturerId: string | undefined,
+    courseId: string | undefined,
+    jwtUserId: string | null,
+): string {
+    return [role, status, moduleCode, lecturerId, courseId, jwtUserId]
+        .map((v) => v ?? '')
+        .join('|');
+}
+
 // ─── useAssignments ───────────────────────────────────────────
 
 export function useAssignments(params?: {
@@ -358,6 +382,14 @@ export function useAssignments(params?: {
                         const payload = JSON.parse(atob(token.split('.')[1]));
                         jwtUserId = payload.userId ?? payload.sub ?? null;
                     } catch { /* ignore */ }
+                }
+
+                // Check module-level cache before hitting any API.
+                const cacheKey = makeAssignmentCacheKey(role, status, moduleCode, lecturerId, courseId, jwtUserId);
+                const cached = assignmentCache.get(cacheKey);
+                if (cached && Date.now() - cached.fetchedAt < ASSIGNMENT_CACHE_TTL_MS) {
+                    if (!cancelled) setState({ data: cached.data, loading: false, error: null });
+                    return;
                 }
 
                 let data: Assignment[];
@@ -446,6 +478,9 @@ export function useAssignments(params?: {
                 if (status)     data = data.filter((a) => a.status === status);
                 if (moduleCode) data = data.filter((a) => a.moduleCode === moduleCode);
 
+                // Populate cache for subsequent mounts within the TTL window.
+                assignmentCache.set(cacheKey, { data, fetchedAt: Date.now() });
+
                 if (!cancelled) setState({ data, loading: false, error: null });
             } catch (err) {
                 console.error('[useAssignments] Failed to load assignments:', err);
@@ -461,6 +496,10 @@ export function useAssignments(params?: {
         return () => { cancelled = true; };
     }, [status, moduleCode, lecturerId, courseId, trigger]);
 
-    const refetch = useCallback(() => setTrigger((t) => t + 1), []);
+    const refetch = useCallback(() => {
+        // Invalidate all cache entries so the next load hits the network.
+        assignmentCache.clear();
+        setTrigger((t) => t + 1);
+    }, []);
     return { ...state, refetch };
 }
