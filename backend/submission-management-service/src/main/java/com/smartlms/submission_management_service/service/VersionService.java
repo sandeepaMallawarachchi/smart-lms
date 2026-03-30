@@ -394,8 +394,7 @@ public class VersionService {
     }
 
     private List<String> splitPipe(String value) {
-        if (value == null || value.isBlank()) return List.of();
-        return List.of(value.split("\\|\\|"));
+        return AnswerScoreUtils.splitPipe(value);
     }
 
     /**

@@ -6,6 +6,7 @@ import com.smartlms.submission_management_service.dto.response.AnswerResponse;
 import com.smartlms.submission_management_service.dto.response.ApiResponse;
 import com.smartlms.submission_management_service.model.Answer;
 import com.smartlms.submission_management_service.repository.AnswerRepository;
+import com.smartlms.submission_management_service.util.AnswerScoreUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -286,9 +287,7 @@ public class AnswerService {
         }
     }
 
-    /** Splits a "||"-delimited string back into a List, or returns an empty list if blank. */
     private List<String> splitPipe(String value) {
-        if (value == null || value.isBlank()) return List.of();
-        return List.of(value.split("\\|\\|"));
+        return AnswerScoreUtils.splitPipe(value);
     }
 }

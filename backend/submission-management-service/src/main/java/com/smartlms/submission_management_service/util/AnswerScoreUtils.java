@@ -2,6 +2,8 @@ package com.smartlms.submission_management_service.util;
 
 import com.smartlms.submission_management_service.model.Answer;
 
+import java.util.List;
+
 /**
  * Shared scoring logic for AI-generated answer marks.
  *
@@ -20,6 +22,15 @@ public final class AnswerScoreUtils {
     private static final double W_GRAMMAR      = 0.15;
 
     private AnswerScoreUtils() {}
+
+    /**
+     * Splits a {@code "||"}-delimited string into a list of trimmed tokens.
+     * Returns an empty list for null or blank input.
+     */
+    public static List<String> splitPipe(String value) {
+        if (value == null || value.isBlank()) return List.of();
+        return List.of(value.split("\\|\\|"));
+    }
 
     /**
      * Computes the weighted AI mark for an answer (0–10, rounded to 2 d.p.).
