@@ -207,17 +207,18 @@ export default function AnswerPage({
                 if (asg.dueDate) {
                     const deadlineMs = new Date(asg.dueDate).getTime();
                     if (deadlineMs < Date.now()) {
-                        // Check whether the student already submitted this assignment
+                        // Only allow access if the student already submitted (read-only view).
+                        // Drafts are not accepted after deadline — redirect to my-submissions.
                         let hasSubmitted = false;
                         try {
                             const subs = await submissionService.getStudentSubmissionsForAssignment(sid, assignmentId);
                             hasSubmitted = subs.some(
-                                (s) => s.status === 'SUBMITTED' || s.status === 'GRADED'
+                                (s) => s.status === 'SUBMITTED' || s.status === 'LATE' || s.status === 'GRADED'
                             );
                         } catch { /* non-fatal — default to redirect */ }
 
                         if (!hasSubmitted) {
-                            console.debug('[AnswerPage] Deadline passed & no submission — redirecting (404 equivalent)');
+                            console.debug('[AnswerPage] Deadline passed & no terminal submission — redirecting');
                             router.replace('/submissions/student/my-submissions');
                             return;
                         }

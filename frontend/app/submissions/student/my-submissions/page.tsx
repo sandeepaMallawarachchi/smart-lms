@@ -300,7 +300,8 @@ function AssignmentCard({
                 <div className="flex flex-col items-end gap-2 shrink-0 justify-center">
 
                     {/* Primary action button */}
-                    {item.status === 'overdue' && !sub && !item.hasDraft ? (
+                    {item.isOverdue && !sub ? (
+                        /* Deadline passed — no terminal submission (draft or nothing) */
                         <span className="text-xs text-red-500 font-medium px-3 py-1.5 rounded-lg bg-red-100">
                             Deadline passed
                         </span>
@@ -326,7 +327,7 @@ function AssignmentCard({
                             Edit / Resubmit <ChevronRight size={14} />
                         </button>
                     ) : (
-                        /* Graded, overdue-submitted, or late — read-only view */
+                        /* Graded, overdue-submitted, or late — read-only */
                         <button
                             onClick={() => sub && router.push(`/submissions/student/feedback/${sub.id}`)}
                             disabled={!sub}
