@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Calendar, FileText, GitBranch, Shield, AlertCircle,
-    RefreshCw, Clock, ChevronRight, X, Download,
+    RefreshCw, Clock, ChevronRight, ChevronLeft, X, Download,
 } from 'lucide-react';
 import { useAssignments, useSubmissions } from '@/hooks/useSubmissions';
 import { useVersions } from '@/hooks/useVersions';
@@ -365,11 +365,84 @@ function AssignmentCard({
     );
 }
 
+// ─── Pagination ───────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 10;
+
+function PaginationBar({
+    page,
+    totalPages,
+    totalItems,
+    onPage,
+}: {
+    page: number;
+    totalPages: number;
+    totalItems: number;
+    onPage: (p: number) => void;
+}) {
+    if (totalPages <= 1) return null;
+    const from = page * PAGE_SIZE + 1;
+    const to   = Math.min((page + 1) * PAGE_SIZE, totalItems);
+
+    const pages: (number | '…')[] = [];
+    if (totalPages <= 7) {
+        for (let i = 0; i < totalPages; i++) pages.push(i);
+    } else {
+        pages.push(0);
+        if (page > 2)              pages.push('…');
+        for (let i = Math.max(1, page - 1); i <= Math.min(totalPages - 2, page + 1); i++) pages.push(i);
+        if (page < totalPages - 3) pages.push('…');
+        pages.push(totalPages - 1);
+    }
+
+    return (
+        <div className="flex items-center justify-between mt-5 px-1">
+            <span className="text-xs text-gray-500">
+                {from}–{to} of {totalItems} assignments
+            </span>
+            <div className="flex items-center gap-1">
+                <button
+                    onClick={() => onPage(page - 1)}
+                    disabled={page === 0}
+                    className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                >
+                    <ChevronLeft size={14} />
+                </button>
+                {pages.map((p, i) =>
+                    p === '…' ? (
+                        <span key={`el-${i}`} className="px-1 text-gray-400 text-xs select-none">…</span>
+                    ) : (
+                        <button
+                            key={p}
+                            onClick={() => onPage(p as number)}
+                            className={`min-w-[28px] h-7 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                                p === page
+                                    ? 'bg-purple-600 border-purple-600 text-white'
+                                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                            }`}
+                        >
+                            {(p as number) + 1}
+                        </button>
+                    )
+                )}
+                <button
+                    onClick={() => onPage(page + 1)}
+                    disabled={page >= totalPages - 1}
+                    className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                >
+                    <ChevronRight size={14} />
+                </button>
+            </div>
+        </div>
+    );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function MySubmissionsPage() {
     const router = useRouter();
     const [filter, setFilter] = useState<FilterKey>('all');
+    const [page, setPage] = useState(0);
 
     const [studentId] = useState<string | null>(getStudentId);
 
@@ -503,6 +576,12 @@ export default function MySubmissionsPage() {
         overdue:     courseFiltered.filter(i => i.status === 'overdue').length,
     }), [courseFiltered]);
 
+    // Reset to page 0 whenever the visible list changes
+    useEffect(() => { setPage(0); }, [filter, selectedCourse]);
+
+    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+    const paginated  = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
     // ─────────────────────────────────────────────────────────
     return (
         <div>
@@ -616,11 +695,19 @@ export default function MySubmissionsPage() {
                     {[1, 2, 3, 4].map(i => <CardSkeleton key={i} />)}
                 </div>
             ) : filtered.length > 0 ? (
-                <div className="space-y-3">
-                    {filtered.map(item => (
-                        <AssignmentCard key={item.assignmentId} item={item} router={router} />
-                    ))}
-                </div>
+                <>
+                    <div className="space-y-3">
+                        {paginated.map(item => (
+                            <AssignmentCard key={item.assignmentId} item={item} router={router} />
+                        ))}
+                    </div>
+                    <PaginationBar
+                        page={page}
+                        totalPages={totalPages}
+                        totalItems={filtered.length}
+                        onPage={(p) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    />
+                </>
             ) : (
                 <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
                     <FileText size={48} className="mx-auto text-gray-300 mb-4" />
