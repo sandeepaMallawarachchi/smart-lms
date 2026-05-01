@@ -120,7 +120,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    shortRequest(question, answer));
+                    shortRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getRelevanceScore())
@@ -158,7 +158,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    shortRequest(question, answer));
+                    shortRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getRelevanceScore())
@@ -194,7 +194,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    shortRequest(question, answer));
+                    shortRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getRelevanceScore())
@@ -235,7 +235,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer));
+                    longRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getRelevanceScore())
@@ -270,7 +270,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer));
+                    longRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getRelevanceScore())
@@ -303,7 +303,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer));
+                    longRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             // No positive language → no upward correction should occur
@@ -348,7 +348,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    shortRequest(question, answer));
+                    shortRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getCompletenessScore())
@@ -383,7 +383,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    shortRequest(question, answer));
+                    shortRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getCompletenessScore())
@@ -418,7 +418,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    shortRequest(question, answer));
+                    shortRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             // A genuine 7/10 completeness from the LLM should NOT be penalised
@@ -463,7 +463,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer));
+                    longRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getRelevanceScore())
@@ -510,7 +510,7 @@ class ScoringConsistencyTest {
             when(huggingFaceService.generateCompletion(anyString())).thenReturn(malformedResponse);
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer));
+                    longRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getRelevanceScore())
@@ -548,7 +548,7 @@ class ScoringConsistencyTest {
             when(huggingFaceService.generateCompletion(anyString())).thenReturn(responseWithInstWrapper);
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer));
+                    longRequest(question, answer)).join().join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getGrammarScore()).as("Grammar parsed correctly despite [INST] wrapper").isEqualTo(8.0);
@@ -574,7 +574,7 @@ class ScoringConsistencyTest {
 
             // HuggingFaceService should NOT be called for gibberish
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    shortRequest(question, answer));
+                    shortRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getGrammarScore()).isEqualTo(0.0);
@@ -600,7 +600,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    shortRequest(question, answer));
+                    shortRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             // Must reach the AI (not rejected as gibberish), so some scores > 0
@@ -640,7 +640,7 @@ class ScoringConsistencyTest {
             when(huggingFaceService.generateCompletion(anyString())).thenReturn(overshotResponse);
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer));
+                    longRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getGrammarScore()).isLessThanOrEqualTo(10.0);
@@ -667,7 +667,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer));
+                    longRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getGrammarScore()).isGreaterThanOrEqualTo(0.0);
