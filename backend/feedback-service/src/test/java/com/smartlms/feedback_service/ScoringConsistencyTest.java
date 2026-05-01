@@ -548,7 +548,7 @@ class ScoringConsistencyTest {
             when(huggingFaceService.generateCompletion(anyString())).thenReturn(responseWithInstWrapper);
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer)).join().join();
+                    longRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getGrammarScore()).as("Grammar parsed correctly despite [INST] wrapper").isEqualTo(8.0);
