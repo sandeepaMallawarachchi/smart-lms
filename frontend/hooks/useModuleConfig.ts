@@ -94,12 +94,22 @@ export function useModuleConfig(userRole: UserRole) {
               ])
               const projects = projRes.ok ? ((await projRes.json())?.data?.projects ?? []) : []
               const tasks    = taskRes.ok ? ((await taskRes.json())?.data?.tasks    ?? []) : []
-              const items: Array<{ deadline?: string }> = [...projects, ...tasks]
-              assignmentCount = items.length
-              dueSoonCount = items.filter(a => {
-                if (!a.deadline) return true
-                return new Date(a.deadline).getTime() > Date.now()
-              }).length
+              const items: Array<{ deadline?: string; deadlineDate?: string; deadlineTime?: string }> = [...projects, ...tasks]
+              const now = Date.now()
+              // P&T items use deadlineDate+deadlineTime; some may use a combined deadline field
+              const getDeadlineMs = (a: { deadline?: string; deadlineDate?: string; deadlineTime?: string }) => {
+                const raw = a.deadline ?? (a.deadlineDate ? `${a.deadlineDate}T${a.deadlineTime ?? '23:59'}` : null)
+                if (!raw) return null
+                const ms = new Date(raw).getTime()
+                return Number.isNaN(ms) ? null : ms
+              }
+              // Active = no deadline set, or deadline is in the future
+              const activeItems = items.filter(a => {
+                const ms = getDeadlineMs(a)
+                return ms === null || ms > now
+              })
+              assignmentCount = activeItems.length
+              dueSoonCount    = activeItems.length
             } catch { /* silent */ }
 
             // Fetch student submissions from own API
