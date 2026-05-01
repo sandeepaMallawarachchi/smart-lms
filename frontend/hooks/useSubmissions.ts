@@ -48,19 +48,33 @@ export function useSubmissions(studentId: string | null) {
     return { ...state, refetch };
 }
 
-// ─── useAllSubmissions (lecturer view) ───────────────────────
+// ─── useAllSubmissions (lecturer view, paginated) ────────────
+
+export interface AllSubmissionsState {
+    data: Submission[] | null;
+    loading: boolean;
+    error: string | null;
+    totalPages: number;
+    totalElements: number;
+}
 
 export function useAllSubmissions(params?: {
     assignmentId?: string;
     status?: string;
+    page?: number;
+    pageSize?: number;
 }) {
     const assignmentId = params?.assignmentId;
     const status = params?.status;
+    const page = params?.page ?? 0;
+    const pageSize = params?.pageSize ?? 15;
 
-    const [state, setState] = useState<AsyncState<Submission[]>>({
+    const [state, setState] = useState<AllSubmissionsState>({
         data: null,
         loading: false,
         error: null,
+        totalPages: 0,
+        totalElements: 0,
     });
     const [trigger, setTrigger] = useState(0);
 
@@ -68,40 +82,53 @@ export function useAllSubmissions(params?: {
         let cancelled = false;
 
         async function load() {
-            setState({ data: null, loading: true, error: null });
+            setState((prev) => ({ ...prev, data: null, loading: true, error: null }));
             try {
                 const raw = await submissionService.getAllSubmissions(
-                    assignmentId || status ? { assignmentId, status } : undefined
+                    assignmentId || status
+                        ? { assignmentId, status }
+                        : { page, size: pageSize }
                 );
+                if (cancelled) return;
+
                 // Handle ApiResponse<List>, paged, and direct array responses
                 let data: Submission[];
+                let totalPages = 0;
+                let totalElements = 0;
+
                 if (Array.isArray(raw)) {
                     data = raw;
                 } else {
                     const obj = raw as unknown as Record<string, unknown>;
-                    // ApiResponse<List> → { data: Submission[] }
                     if (Array.isArray(obj.data)) {
+                        // ApiResponse<List> → { data: Submission[] }
                         data = obj.data as Submission[];
                     } else if (obj.data && typeof obj.data === 'object') {
-                        // Paged inside ApiResponse → { data: { content: Submission[] } }
-                        data = ((obj.data as Record<string, unknown>).content as Submission[]) ?? [];
+                        // Paged inside ApiResponse → { data: { content, totalPages, totalElements } }
+                        const paged = obj.data as Record<string, unknown>;
+                        data         = (paged.content as Submission[]) ?? [];
+                        totalPages   = (paged.totalPages   as number) ?? 0;
+                        totalElements= (paged.totalElements as number) ?? 0;
                     } else {
                         data = (obj.content as Submission[]) ?? [];
                     }
                 }
-                if (!cancelled) setState({ data, loading: false, error: null });
+
+                setState({ data, loading: false, error: null, totalPages, totalElements });
             } catch (err) {
                 if (!cancelled) setState({
                     data: null,
                     loading: false,
                     error: err instanceof Error ? err.message : 'Failed to load submissions',
+                    totalPages: 0,
+                    totalElements: 0,
                 });
             }
         }
 
         load();
         return () => { cancelled = true; };
-    }, [assignmentId, status, trigger]);
+    }, [assignmentId, status, page, pageSize, trigger]);
 
     const refetch = useCallback(() => setTrigger((t) => t + 1), []);
     return { ...state, refetch };

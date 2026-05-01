@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     FileText,
@@ -22,6 +22,8 @@ import {
     X,
     Loader2,
     Download,
+    ChevronLeft,
+    ChevronRight,
 } from 'lucide-react';
 import { useAllSubmissions } from '@/hooks/useSubmissions';
 import { submissionService } from '@/lib/api/submission-services';
@@ -363,6 +365,80 @@ function MetricBadge({ icon, value, sub, warn }: { icon: React.ReactNode; value:
     );
 }
 
+/* ─── Pagination Bar ──────────────────────────────────────── */
+
+const PAGE_SIZE = 15;
+
+function PaginationBar({
+    page,
+    totalPages,
+    totalElements,
+    pageSize,
+    onPage,
+}: {
+    page: number;
+    totalPages: number;
+    totalElements: number;
+    pageSize: number;
+    onPage: (p: number) => void;
+}) {
+    if (totalPages <= 1) return null;
+    const from = page * pageSize + 1;
+    const to   = Math.min((page + 1) * pageSize, totalElements);
+
+    const pages: (number | '…')[] = [];
+    if (totalPages <= 7) {
+        for (let i = 0; i < totalPages; i++) pages.push(i);
+    } else {
+        pages.push(0);
+        if (page > 2)        pages.push('…');
+        for (let i = Math.max(1, page - 1); i <= Math.min(totalPages - 2, page + 1); i++) pages.push(i);
+        if (page < totalPages - 3) pages.push('…');
+        pages.push(totalPages - 1);
+    }
+
+    return (
+        <div className="flex items-center justify-between mt-4 px-1">
+            <span className="text-xs text-gray-500">
+                {from}–{to} of {totalElements} submissions
+            </span>
+            <div className="flex items-center gap-1">
+                <button
+                    onClick={() => onPage(page - 1)}
+                    disabled={page === 0}
+                    className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                >
+                    <ChevronLeft size={14} />
+                </button>
+                {pages.map((p, i) =>
+                    p === '…' ? (
+                        <span key={`ellipsis-${i}`} className="px-1 text-gray-400 text-xs select-none">…</span>
+                    ) : (
+                        <button
+                            key={p}
+                            onClick={() => onPage(p as number)}
+                            className={`min-w-[28px] h-7 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                                p === page
+                                    ? 'bg-blue-600 border-blue-600 text-white'
+                                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                            }`}
+                        >
+                            {(p as number) + 1}
+                        </button>
+                    )
+                )}
+                <button
+                    onClick={() => onPage(page + 1)}
+                    disabled={page >= totalPages - 1}
+                    className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                >
+                    <ChevronRight size={14} />
+                </button>
+            </div>
+        </div>
+    );
+}
+
 /* ─── Page ─────────────────────────────────────────────────── */
 
 export default function LecturerAllSubmissionsPage() {
@@ -371,7 +447,15 @@ export default function LecturerAllSubmissionsPage() {
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
     const [sortBy, setSortBy] = useState<SortKey>('date');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-    const { data: submissions, loading, error, refetch } = useAllSubmissions();
+    const [page, setPage] = useState(0);
+
+    // Reset to page 0 when filters change
+    useEffect(() => { setPage(0); }, [searchQuery, filterStatus, sortBy]);
+
+    const { data: submissions, loading, error, refetch, totalPages, totalElements } = useAllSubmissions({
+        page,
+        pageSize: PAGE_SIZE,
+    });
 
     const toggleSelect = useCallback((id: string) => {
         setSelectedIds((prev) => {
@@ -441,13 +525,14 @@ export default function LecturerAllSubmissionsPage() {
     const stats = useMemo(() => {
         const list = (submissions ?? []).filter((s) => s.status !== 'DRAFT');
         return {
-            total: list.length,
+            // Use server-reported total when paginating; fall back to page-local count
+            total: totalElements > 0 ? totalElements : list.length,
             pending: list.filter((s) => s.status === 'PENDING_REVIEW' || s.status === 'SUBMITTED').length,
             graded: list.filter((s) => s.status === 'GRADED').length,
             flagged: list.filter((s) => s.status === 'FLAGGED').length,
             late: list.filter((s) => s.status === 'LATE').length,
         };
-    }, [submissions]);
+    }, [submissions, totalElements]);
 
     return (
         <div>
@@ -550,9 +635,18 @@ export default function LecturerAllSubmissionsPage() {
                 )}
             </div>
 
-            {!loading && processed.length > 0 && (
+            {!loading && totalPages > 1 && (
+                <PaginationBar
+                    page={page}
+                    totalPages={totalPages}
+                    totalElements={totalElements}
+                    pageSize={PAGE_SIZE}
+                    onPage={(p) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                />
+            )}
+            {!loading && totalPages <= 1 && processed.length > 0 && (
                 <p className="text-xs text-gray-400 text-right mt-2">
-                    Showing {processed.length} of {stats.total}
+                    Showing {processed.length} submission{processed.length !== 1 ? 's' : ''}
                 </p>
             )}
 
