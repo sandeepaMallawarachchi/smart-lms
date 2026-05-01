@@ -159,7 +159,7 @@ export function useModuleConfig(userRole: UserRole) {
 
             // Fetch flagged plagiarism reports (score >= 40)
             try {
-              const res = await fetch(`${PLAGIARISM_API}/api/plagiarism?minScore=40`, { headers })
+              const res = await fetch(`${PLAGIARISM_API}/api/integrity/checks/flagged`, { headers })
               if (res.ok) {
                 const data = await res.json()
                 const items = Array.isArray(data) ? data : (data?.data ?? [])

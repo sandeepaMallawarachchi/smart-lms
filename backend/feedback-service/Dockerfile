@@ -7,7 +7,7 @@ COPY pom.xml .
 RUN --mount=type=cache,target=/root/.m2 mvn dependency:go-offline -B
 
 COPY src ./src
-RUN --mount=type=cache,target=/root/.m2 mvn clean package -DskipTests -B
+RUN --mount=type=cache,target=/root/.m2 mvn clean package -Dmaven.test.skip=true -B
 
 # ── Runtime stage ─────────────────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine

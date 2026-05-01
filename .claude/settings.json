@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose ps)",
+      "Bash(xargs grep -l \"live\\\\|Live\")",
+      "Bash(xargs grep -l \"realtime\\\\|RealtimeCheck\\\\|RealTime\")",
+      "Bash(docker images --format \"table {{.Repository}}\\\\t{{.Tag}}\\\\t{{.Size}}\")",
+      "Bash(docker images --format \"{{.Repository}}:{{.Tag}}\\\\t{{.Size}}\")",
+      "Bash(docker image ls --all --format \"{{.Repository}}:{{.Tag}}\")",
+      "Bash(curl -s --max-time 10 -o /dev/null -w \"%{http_code}\" https://registry-1.docker.io/v2/)",
+      "Bash(curl -s --max-time 10 -o /dev/null -w \"%{http_code}\" https://google.com)",
+      "Bash(curl -s --max-time 10 -o /dev/null -w \"HTTP %{http_code}\" https://hub.docker.com)",
+      "Bash(npx tsc --noEmit --project tsconfig.json)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(\"c:/RP/smart-lms/backend/submission-management-service/src/main/resources/schema-init.sql\":*)",
+      "Bash(\"c:/RP/smart-lms/backend/version_control_service/src/main/resources/schema-init.sql\":*)",
+      "Bash(\"c:/RP/smart-lms/backend/feedback-service/src/main/resources/schema-init.sql\":*)",
+      "Bash(__NEW_LINE_1231aa3cfdf4c4de__ cat)",
+      "Bash(\"c:/RP/smart-lms/backend/integrity-monitoring-service/src/main/resources/schema-init.sql\":*)",
+      "Read(//c/Users/sdilr/.claude/projects/c--RP-smart-lms/685f47f3-93c8-4d57-aaae-a198d6f4191a/tool-results/**)",
+      "Bash(./mvnw test -pl . -Dtest=\"VersionCreationTest\" -q)",
+      "Bash(./mvnw test -Dtest=\"VersionCreationTest\" -q)",
+      "Bash(./mvnw test -Dtest=\"VersionCreationTest\")",
+      "Bash(./mvnw test -Dtest=\"ResubmissionTest\")",
+      "Bash(node backend/version-versioning-test.mjs)",
+      "Bash(find c:RPsmart-lms -type f -name *.java -o -name *.tsx -o -name *.ts -o -name *.properties -o -name *.xml -o -name .env)",
+      "Bash(pandoc --version)",
+      "Bash(python3 -c \"import weasyprint\")",
+      "Bash(npm list:*)",
+      "Bash(npm install:*)",
+      "Bash(node -e \":*)",
+      "Bash(npx md-to-pdf:*)"
+    ]
+  }
+}

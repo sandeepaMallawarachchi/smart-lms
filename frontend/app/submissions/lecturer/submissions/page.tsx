@@ -21,9 +21,11 @@ import {
     Sparkles,
     X,
     Loader2,
+    Download,
 } from 'lucide-react';
 import { useAllSubmissions } from '@/hooks/useSubmissions';
 import { submissionService } from '@/lib/api/submission-services';
+import { csvRow, buildCsv, downloadCsvBlob } from '@/lib/csv';
 import {
     PageHeader,
     StatCard,
@@ -385,6 +387,30 @@ export default function LecturerAllSubmissionsPage() {
         setSelectedIds(new Set(list.map((s) => s.id)));
     }, []);
 
+    const handleExport = useCallback((list: Submission[]) => {
+        const header = csvRow(
+            'Student Name', 'Student ID', 'Assignment', 'Module', 'Status',
+            'Submitted At', 'AI Score (%)', 'Plagiarism (%)', 'Grade',
+            'Word Count', 'Versions', 'Late',
+        );
+        const rows = list.map((s) => csvRow(
+            s.studentName ?? '',
+            s.studentId ?? '',
+            s.assignmentTitle ?? '',
+            s.moduleName ?? s.moduleCode ?? '',
+            s.status,
+            s.submittedAt ? new Date(s.submittedAt).toISOString() : '',
+            s.aiScore != null ? s.aiScore : '',
+            s.plagiarismScore != null ? s.plagiarismScore : '',
+            s.grade != null ? s.grade : '',
+            s.wordCount != null ? s.wordCount : '',
+            s.currentVersionNumber ?? '',
+            s.isLate ? 'Yes' : 'No',
+        ));
+        const filename = `submissions_export_${new Date().toISOString().slice(0, 10)}.csv`;
+        downloadCsvBlob(buildCsv([header, ...rows]), filename);
+    }, []);
+
     const processed = useMemo(() => {
         const list = submissions ?? [];
         const filtered = list.filter((s) => {
@@ -483,6 +509,18 @@ export default function LecturerAllSubmissionsPage() {
                             : <Square size={14} />
                         }
                         {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select all'}
+                    </button>
+                )}
+
+                {/* Export CSV — exports the current filtered+sorted list */}
+                {processed.length > 0 && (
+                    <button
+                        onClick={() => handleExport(processed)}
+                        className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+                        title={`Export ${processed.length} row${processed.length !== 1 ? 's' : ''} to CSV`}
+                    >
+                        <Download size={14} />
+                        Export CSV
                     </button>
                 )}
             </FilterToolbar>

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat c:/RP/smart-lms/frontend/app/api/courses/[courseId]/route.ts)",
+      "Bash(docker info)"
+    ]
+  }
+}

@@ -51,10 +51,13 @@ public final class JwtUtils {
         return id != null ? String.valueOf(id) : null;
     }
 
-    /** Extract the caller's role ("student" or "lecture"). */
+    /** Extract the caller's role ("student" or "lecture").
+     *  Checks both "role" and "userRole" because the Next.js auth service
+     *  signs tokens with the key "userRole". */
     public static String extractRole(Map<String, Object> claims) {
         if (claims == null) return null;
         Object role = claims.get("role");
+        if (role == null) role = claims.get("userRole");
         return role != null ? String.valueOf(role) : null;
     }
 

@@ -80,9 +80,10 @@ public class Answer {
     @Column(name = "last_modified", nullable = false)
     private LocalDateTime lastModified;
 
-    /** Timestamp set once on initial INSERT. */
+    /** Timestamp set once on initial INSERT. Nullable so this column can be
+     *  added to an existing non-empty table via ddl-auto=update. */
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     // ── AI Feedback (persisted after live feedback is received) ──────────────
