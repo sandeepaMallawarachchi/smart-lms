@@ -31,11 +31,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
     submissionService,
     versionService,
-    plagiarismService,
     getAssignmentWithFallback,
 } from '@/lib/api/submission-services';
 import { QuestionCard } from '@/components/submissions/QuestionCard';
-import type { AssignmentWithQuestions, TextAnswer, LiveFeedback, LivePlagiarismResult } from '@/types/submission.types';
+import type { AssignmentWithQuestions, TextAnswer, LiveFeedback, LivePlagiarismResult, TextSnapshotPayload } from '@/types/submission.types';
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -346,82 +345,63 @@ export default function AnswerPage({
             setShowConfirm(false);
             console.debug('[AnswerPage] Submit SUCCESS — submissionId:', submissionId, '| versionNumber:', versionNumber);
 
-            // The backend creates the version snapshot atomically in the same transaction
-            // as submitSubmission — no frontend fallback needed.
-            console.debug('[AnswerPage] Server-side snapshot created — v', versionNumber);
-
-            // ── Persist plagiarism sources to the new version ─────────────
-            // The realtime plagiarism checks stored internetMatches in plagiarismMap,
-            // but those aren't saved to the version snapshot automatically.
-            // If the student left the page and came back, internetMatches are lost — re-run
-            // a quick realtime check for those questions to get fresh sources.
+            // ── Send full text snapshot to version-control-service (fire-and-forget) ──
+            // All answer texts, AI scores, and plagiarism data (including internet
+            // matches) are embedded in the VCS snapshot JSONB in one shot.
+            // Failure is non-fatal and never affects the student's submit response.
             try {
-                const latestVersion = await versionService.getLatestVersion(submissionId);
-                if (latestVersion?.id) {
-                    const savedQuestionIds = new Set<string>();
-                    const savePromises: Promise<void>[] = [];
-
-                    // 1. Save sources already in memory from the current session
-                    for (const [qId, pResult] of Object.entries(plagiarismMap)) {
-                        const matches = pResult?.internetMatches;
-                        if (matches && matches.length > 0) {
-                            savedQuestionIds.add(qId);
-                            console.debug('[AnswerPage] Saving', matches.length, 'plagiarism sources for questionId:', qId);
-                            savePromises.push(
-                                versionService.savePlagiarismSources(submissionId, latestVersion.id, qId, {
-                                    sources: matches.map(m => ({
-                                        sourceUrl: m.url,
-                                        sourceTitle: m.title,
-                                        sourceSnippet: m.snippet,
-                                        matchedText: m.matchedStudentText,
-                                        similarityPercentage: m.similarityScore,
-                                    })),
-                                })
-                            );
-                        }
-                    }
-
-                    // 2. For questions with plagiarism scores but no internetMatches in memory,
-                    //    re-run a quick realtime check to get fresh source details.
-                    for (const [qId, pResult] of Object.entries(plagiarismMap)) {
-                        if (savedQuestionIds.has(qId)) continue;
-                        if (!pResult || pResult.similarityScore <= 0) continue;
-                        const answerText = answerMap[qId];
-                        if (!answerText || answerText.trim().length === 0) continue;
-
-                        savePromises.push(
-                            plagiarismService.checkLiveSimilarity({
-                                sessionId: `submit-refresh-${submissionId}-${qId}`,
-                                studentId,
-                                questionId: qId,
-                                textContent: answerText,
-                                questionText: questions.find(q => q.id === qId)?.text,
-                                submissionId,
-                            }).then(freshResult => {
-                                const fm = freshResult.internetMatches;
-                                if (fm && fm.length > 0) {
-                                    console.debug('[AnswerPage] Re-fetched', fm.length, 'sources for questionId:', qId);
-                                    return versionService.savePlagiarismSources(submissionId, latestVersion.id, qId, {
-                                        sources: fm.map(m => ({
-                                            sourceUrl: m.url,
-                                            sourceTitle: m.title,
-                                            sourceSnippet: m.snippet,
-                                            matchedText: m.matchedStudentText,
-                                            similarityPercentage: m.similarityScore,
-                                        })),
-                                    });
-                                }
-                            }).catch(() => { /* non-fatal */ })
-                        );
-                    }
-
-                    if (savePromises.length > 0) {
-                        await Promise.all(savePromises);
-                        console.debug('[AnswerPage] Plagiarism sources saved for', savePromises.length, 'questions');
-                    }
-                }
-            } catch (srcErr) {
-                console.warn('[AnswerPage] Failed to save plagiarism sources (non-fatal):', srcErr);
+                const snapshotPayload: TextSnapshotPayload = {
+                    submissionId,
+                    studentId,
+                    commitMessage: `${assignment?.title ?? 'Assignment'} — v${versionNumber}`,
+                    totalWordCount: totalWords,
+                    overallGrade:  submittedResult?.grade ?? undefined,
+                    maxGrade:      assignment?.totalMarks ?? undefined,
+                    answers: questions.map(q => {
+                        const text  = answerMap[q.id] ?? '';
+                        const fb    = feedbackMap[q.id];
+                        const plag  = plagiarismMap[q.id];
+                        const wc    = text.trim().split(/\s+/).filter(Boolean).length;
+                        return {
+                            questionId:             q.id,
+                            questionText:           q.text,
+                            answerText:             text,
+                            wordCount:              wc,
+                            grammarScore:           fb?.grammarScore      ?? null,
+                            clarityScore:           fb?.clarityScore      ?? null,
+                            completenessScore:      fb?.completenessScore ?? null,
+                            relevanceScore:         fb?.relevanceScore    ?? null,
+                            strengths:              fb?.strengths         ?? [],
+                            improvements:           fb?.improvements      ?? [],
+                            suggestions:            fb?.suggestions       ?? [],
+                            similarityScore:        plag?.similarityScore        ?? null,
+                            plagiarismSeverity:     plag?.severity               ?? null,
+                            internetSimilarityScore: plag?.internetSimilarityScore ?? null,
+                            peerSimilarityScore:    plag?.peerSimilarityScore    ?? null,
+                            riskScore:              plag?.riskScore              ?? null,
+                            riskLevel:              plag?.riskLevel              ?? null,
+                            internetMatches:        plag?.internetMatches?.map(m => ({
+                                title:             m.title,
+                                url:               m.url,
+                                snippet:           m.snippet,
+                                similarityScore:   m.similarityScore,
+                                sourceDomain:      m.sourceDomain,
+                                sourceCategory:    m.sourceCategory,
+                                confidenceLevel:   m.confidenceLevel,
+                                matchedStudentText: m.matchedStudentText,
+                            })) ?? [],
+                            projectedGrade: null,
+                            maxPoints:      q.maxPoints ?? 10,
+                        };
+                    }),
+                };
+                // Fire-and-forget — don't await, never block the UI
+                versionService.createTextSnapshot(snapshotPayload).catch(e =>
+                    console.warn('[AnswerPage] VCS snapshot failed (non-fatal):', e)
+                );
+                console.debug('[AnswerPage] VCS snapshot dispatched — v', versionNumber);
+            } catch (snapErr) {
+                console.warn('[AnswerPage] VCS snapshot build failed (non-fatal):', snapErr);
             }
 
             // ── Notify the lecturer about the new submission ─────────────

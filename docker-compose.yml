@@ -36,9 +36,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Version Control Service (port 8082) ──────────────────────
+  version-control-service:
+    build:
+      context: ./backend/version_control_service
+      dockerfile: Dockerfile
+      no_cache: false
+    pull_policy: never
+    container_name: version-control-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lms_db?currentSchema=version_schema
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ksdk1357@A
+      SUBMISSION_SERVICE_URL: http://submission-management-service:8081
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   # ── Submission Management Service (port 8081) ─────────────────
-  # Versioning is handled internally by VersionService — no separate
-  # version-control-service (port 8082) is needed or started.
   submission-management-service:
     build:
       context: ./backend/submission-management-service
@@ -53,11 +71,14 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: ksdk1357@A
       FILE_UPLOAD_DIR: /app/uploads
+      VERSION_SERVICE_URL: http://version-control-service:8082
     volumes:
       - uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
+      version-control-service:
+        condition: service_started
     restart: unless-stopped
 
   # ── Feedback Service (port 8083) ──────────────────────────────

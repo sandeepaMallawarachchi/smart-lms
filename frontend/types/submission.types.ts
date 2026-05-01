@@ -153,9 +153,39 @@ export interface VersionAnswer {
 }
 
 /**
+ * Per-question answer snapshot stored inside VCS metadata.answers[].
+ * Matches TextSnapshotRequest.AnswerSnapshot on the version-control-service.
+ */
+export interface VcsAnswerSnapshot {
+    questionId: string;
+    questionText?: string;
+    answerText?: string;
+    wordCount?: number;
+    grammarScore?: number | null;
+    clarityScore?: number | null;
+    completenessScore?: number | null;
+    relevanceScore?: number | null;
+    strengths?: string[];
+    improvements?: string[];
+    suggestions?: string[];
+    similarityScore?: number | null;
+    plagiarismSeverity?: string | null;
+    internetSimilarityScore?: number | null;
+    peerSimilarityScore?: number | null;
+    riskScore?: number | null;
+    riskLevel?: string | null;
+    internetMatches?: Array<Record<string, unknown>>;
+    projectedGrade?: number | null;
+    maxPoints?: number | null;
+}
+
+/**
  * Immutable version header + all answer snapshots.
  * One row is created for every Submit / Resubmit action.
  * Version 1 = first submit, Version 2 = first resubmit, etc.
+ *
+ * Unified type covering both the VCS response (port 8082) and the
+ * internal SMS version (port 8081). VCS-only fields are optional.
  */
 export interface SubmissionVersion {
     id: string;
@@ -163,12 +193,12 @@ export interface SubmissionVersion {
     versionNumber: number;
     studentId?: string;
     submittedAt: string;       // ISO-8601
-    isLate?: boolean;
 
     // Aggregate metrics (frozen at submit time)
     aiScore?: number;
     plagiarismScore?: number;
     totalWordCount?: number;
+    wordCount?: number;        // alias used by VersionTimeline extractMetrics
     /** AI-computed grade at submit time. Never changes. */
     aiGrade?: number;
     maxGrade?: number;
@@ -177,24 +207,97 @@ export interface SubmissionVersion {
     finalGrade?: number;
     /** True if any question has a lecturer override on this version. */
     hasLecturerOverride?: boolean;
+    isLate?: boolean;
 
+    // VCS-specific fields (present when fetched from port 8082)
+    commitHash?: string;
     commitMessage?: string;
+    /** Human-readable summary of what changed in this version. */
+    changesSummary?: string;
+    /** Alias used by VersionTimeline for the commit message / changes note. */
+    changes?: string;
+    triggerType?: 'SUBMISSION' | 'MANUAL' | 'AUTO_SAVE';
+    createdBy?: string;
+    /** True when this version is a full snapshot (not a delta). */
+    isSnapshot?: boolean;
+    /** True when this version represents an official submission. */
+    isSubmitted?: boolean;
+    /** Short AI feedback summary shown inside the timeline card. */
+    aiFeedback?: string;
+
     createdAt: string;
 
-    /** Populated for detail view; null/undefined for list view. */
+    /**
+     * JSONB metadata from VCS — contains the full answer snapshots.
+     * Structure: { type, overallGrade, maxGrade, totalWordCount, answers[] }
+     * VersionTimeline.extractMetrics() reads from here.
+     */
+    metadata?: {
+        type?: string;
+        overallGrade?: number;
+        maxGrade?: number;
+        totalWordCount?: number;
+        answers?: VcsAnswerSnapshot[];
+        [key: string]: unknown;
+    };
+
+    /** Populated for SMS internal detail view; undefined for VCS list view. */
     answers?: VersionAnswer[];
 }
 
-/** Payload for saving detailed plagiarism sources after a submit. */
-export interface SavePlagiarismSourcesPayload {
-    sources: Array<{
-        sourceUrl: string;
-        sourceTitle?: string;
-        sourceSnippet?: string;
-        matchedText?: string;
-        similarityPercentage: number;
-        detectedAt?: string;
-    }>;
+// ─── VCS payload for creating a text snapshot ────────────────
+
+/** Payload for POST /api/versions/text-snapshot (version-control-service). */
+export interface TextSnapshotPayload {
+    submissionId: string;
+    studentId: string;
+    commitMessage?: string;
+    totalWordCount?: number;
+    overallGrade?: number;
+    maxGrade?: number;
+    answers?: VcsAnswerSnapshot[];
+}
+
+// ─── VCS diff types ───────────────────────────────────────────
+
+export interface VcsDiffRequest {
+    sourceVersionId: number;
+    targetVersionId: number;
+    filePath?: string;
+}
+
+export interface VcsDiffLine {
+    type: 'ADDED' | 'DELETED' | 'CONTEXT';
+    lineNumber: number;
+    content: string;
+}
+
+export interface VcsFileDiff {
+    /** For text snapshots this is the questionId; for file snapshots it's the file path. */
+    filePath: string;
+    changeType: 'ADDED' | 'MODIFIED' | 'DELETED';
+    unifiedDiff?: string;
+    diffLines?: VcsDiffLine[];
+    linesAdded: number;
+    linesDeleted: number;
+    linesModified: number;
+}
+
+export interface VcsDiffResponse {
+    sourceVersionId: number;
+    sourceVersionNumber: number;
+    targetVersionId: number;
+    targetVersionNumber: number;
+    fileDiffs: VcsFileDiff[];
+    summary?: {
+        totalFiles: number;
+        filesAdded: number;
+        filesModified: number;
+        filesDeleted: number;
+        totalLinesAdded: number;
+        totalLinesDeleted: number;
+        totalLinesModified: number;
+    };
 }
 
 export interface GradeSubmissionPayload {

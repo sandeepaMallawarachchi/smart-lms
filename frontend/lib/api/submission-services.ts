@@ -1,11 +1,10 @@
 // ============================================================
 // Submission System - API Services
-// Connects to 3 Spring Boot microservices:
-//   8081 submission-management-service (submissions, versions, answers)
+// Connects to 4 Spring Boot microservices:
+//   8081 submission-management-service (submissions, answers, grading)
+//   8082 version-control-service       (version history, diff, download)
 //   8083 feedback-service              (live AI feedback)
 //   8084 integrity-monitoring-service  (plagiarism detection)
-// version_control_service (8082) is not integrated — version
-// snapshots are managed internally by submission-management-service.
 // ============================================================
 
 import type {
@@ -14,8 +13,9 @@ import type {
     UpdateSubmissionPayload,
     GradeSubmissionPayload,
     SubmissionVersion,
-    VersionAnswer,
-    SavePlagiarismSourcesPayload,
+    TextSnapshotPayload,
+    VcsDiffRequest,
+    VcsDiffResponse,
     Feedback,
     GenerateFeedbackPayload,
     PlagiarismReport,
@@ -36,6 +36,8 @@ import type {
 
 const SUBMISSION_API =
     process.env.NEXT_PUBLIC_SUBMISSION_API_URL ?? 'http://localhost:8081';
+const VERSION_API =
+    process.env.NEXT_PUBLIC_VERSION_API_URL ?? 'http://localhost:8082';
 const FEEDBACK_API =
     process.env.NEXT_PUBLIC_FEEDBACK_API_URL ?? 'http://localhost:8083';
 const PLAGIARISM_API =
@@ -601,74 +603,146 @@ async function _probeTaskById(id: string): Promise<AssignmentWithQuestions> {
     return _mapTaskFull(res.data);
 }
 
-// ─── Version Service (new — port 8081, /api/submissions/{id}/versions) ────────
+// ─── VCS response normaliser ──────────────────────────────────
 //
-// All version endpoints now live inside submission-management-service (port 8081).
-// Snapshots are created server-side inside submitSubmission() — no client-side
-// createTextSnapshot() call needed any more.
+// The version-control-service returns VersionResponse (Java) wrapped in
+// ApiResponse<T> → { success, message, data }.  The metadata JSONB field
+// holds the full answer snapshots for text submissions.
+// This function maps the VCS shape to the shared SubmissionVersion type so
+// all existing hooks and components continue working unchanged.
 
-function unwrapData<T>(raw: unknown): T {
-    if (raw && typeof raw === 'object') {
-        const obj = raw as Record<string, unknown>;
-        if ('data' in obj) return obj.data as T;
-    }
-    return raw as T;
+interface VcsRaw {
+    id: number;
+    submissionId: number;
+    versionNumber: number;
+    commitHash?: string;
+    parentVersionId?: number;
+    commitMessage?: string;
+    triggerType?: 'SUBMISSION' | 'MANUAL' | 'AUTO_SAVE';
+    createdBy?: string;
+    metadata?: Record<string, unknown>;
+    changesSummary?: string;
+    totalFiles?: number;
+    totalSizeBytes?: number;
+    createdAt: string;
+    isSnapshot?: boolean;
+    files?: unknown[];
 }
+
+function normalizeVcsVersion(v: VcsRaw): SubmissionVersion {
+    const meta = v.metadata ?? {};
+    const answers = Array.isArray(meta.answers) ? meta.answers : [];
+    const avgSimilarity = answers.length
+        ? (answers as Array<{ similarityScore?: number | null }>)
+              .reduce((s, a) => s + (a.similarityScore ?? 0), 0) / answers.length
+        : undefined;
+
+    return {
+        id:            String(v.id),
+        submissionId:  String(v.submissionId),
+        versionNumber: v.versionNumber,
+        studentId:     v.createdBy,
+        submittedAt:   v.createdAt,
+        createdAt:     v.createdAt,
+        commitHash:    v.commitHash,
+        commitMessage: v.commitMessage,
+        changesSummary: v.changesSummary,
+        changes:       v.commitMessage,
+        triggerType:   v.triggerType,
+        createdBy:     v.createdBy,
+        isSnapshot:    v.isSnapshot,
+        isSubmitted:   v.triggerType === 'SUBMISSION',
+        metadata:      meta as SubmissionVersion['metadata'],
+        totalWordCount: typeof meta.totalWordCount === 'number' ? meta.totalWordCount : undefined,
+        wordCount:      typeof meta.totalWordCount === 'number' ? meta.totalWordCount : undefined,
+        aiGrade:        typeof meta.overallGrade   === 'number' ? meta.overallGrade   : undefined,
+        maxGrade:       typeof meta.maxGrade       === 'number' ? meta.maxGrade       : undefined,
+        plagiarismScore: avgSimilarity != null ? Math.round(avgSimilarity * 10) / 10 : undefined,
+    };
+}
+
+// ─── Version Service (port 8082 — version-control-service) ───
 
 export const versionService = {
     /**
      * List all version headers for a submission (newest first).
-     * Answers are NOT included in the list response — use getVersion() for detail.
-     * GET /api/submissions/{submissionId}/versions
+     * GET /api/versions/submission/{submissionId}
      */
     async getVersions(submissionId: string): Promise<SubmissionVersion[]> {
-        const raw = await apiRequest<unknown>(
-            `${SUBMISSION_API}/api/submissions/${encodeURIComponent(submissionId)}/versions`
+        const raw = await apiRequest<{ success: boolean; data: VcsRaw[] }>(
+            `${VERSION_API}/api/versions/submission/${encodeURIComponent(submissionId)}`
         );
-        const list = unwrapData<SubmissionVersion[]>(raw);
-        return Array.isArray(list) ? list : [];
+        const list = (raw as { data?: VcsRaw[] }).data ?? [];
+        return (Array.isArray(list) ? list : []).map(normalizeVcsVersion);
     },
 
     /**
-     * Get the latest version with full answer+plagiarism detail.
-     * Used as the default report view.
-     * GET /api/submissions/{submissionId}/versions/latest
+     * Get the latest version with full metadata (answer snapshots).
+     * GET /api/versions/submission/{submissionId}/latest
      */
     async getLatestVersion(submissionId: string): Promise<SubmissionVersion> {
-        const raw = await apiRequest<unknown>(
-            `${SUBMISSION_API}/api/submissions/${encodeURIComponent(submissionId)}/versions/latest`
+        const raw = await apiRequest<{ success: boolean; data: VcsRaw }>(
+            `${VERSION_API}/api/versions/submission/${encodeURIComponent(submissionId)}/latest`
         );
-        return unwrapData<SubmissionVersion>(raw);
+        return normalizeVcsVersion((raw as { data: VcsRaw }).data);
     },
 
     /**
-     * Get a specific version with full answer+plagiarism detail.
-     * Used for historical version report pages.
-     * GET /api/submissions/{submissionId}/versions/{versionId}
+     * Get a specific version by its VCS id.
+     * submissionId is accepted for API compatibility but not sent to VCS
+     * (VCS uses a flat /api/versions/{id} endpoint).
+     * GET /api/versions/{versionId}
      */
-    async getVersion(submissionId: string, versionId: string): Promise<SubmissionVersion> {
-        const raw = await apiRequest<unknown>(
-            `${SUBMISSION_API}/api/submissions/${encodeURIComponent(submissionId)}/versions/${encodeURIComponent(versionId)}`
+    async getVersion(_submissionId: string, versionId: string): Promise<SubmissionVersion> {
+        const raw = await apiRequest<{ success: boolean; data: VcsRaw }>(
+            `${VERSION_API}/api/versions/${encodeURIComponent(versionId)}`
         );
-        return unwrapData<SubmissionVersion>(raw);
+        return normalizeVcsVersion((raw as { data: VcsRaw }).data);
     },
 
     /**
-     * Save detailed internet plagiarism sources for one answer in one version.
-     * Called immediately after a submit completes, once the plagiarism check
-     * result is received. Replaces any previously saved sources for the same answer.
-     * POST /api/submissions/{submissionId}/versions/{versionId}/answers/{questionId}/sources
+     * Create an immutable text snapshot in VCS immediately after submit.
+     * All answer content, AI scores, and plagiarism data are embedded in
+     * the version's JSONB metadata field — no separate save calls needed.
+     * POST /api/versions/text-snapshot
      */
-    savePlagiarismSources(
-        submissionId: string,
-        versionId: string,
-        questionId: string,
-        payload: SavePlagiarismSourcesPayload,
-    ): Promise<void> {
-        return apiRequest<void>(
-            `${SUBMISSION_API}/api/submissions/${encodeURIComponent(submissionId)}/versions/${encodeURIComponent(versionId)}/answers/${encodeURIComponent(questionId)}/sources`,
+    async createTextSnapshot(payload: TextSnapshotPayload): Promise<SubmissionVersion> {
+        const raw = await apiRequest<{ success: boolean; data: VcsRaw }>(
+            `${VERSION_API}/api/versions/text-snapshot`,
             { method: 'POST', body: JSON.stringify(payload) }
         );
+        return normalizeVcsVersion((raw as { data: VcsRaw }).data);
+    },
+
+    /**
+     * Download a version as JSON (text snapshots) or ZIP (file snapshots).
+     * Returns a Blob so the caller can trigger a browser download.
+     * GET /api/versions/{versionId}/download
+     */
+    async downloadVersion(versionId: string): Promise<{ blob: Blob; filename: string }> {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+        const res = await fetch(`${VERSION_API}/api/versions/${encodeURIComponent(versionId)}/download`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+        const disposition = res.headers.get('content-disposition') ?? '';
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        const filename = match?.[1] ?? `version-${versionId}.json`;
+        const blob = await res.blob();
+        return { blob, filename };
+    },
+
+    /**
+     * Generate a line-level diff between two versions.
+     * For text snapshots, each "filePath" in the result is a questionId.
+     * POST /api/versions/diff
+     */
+    async diffVersions(request: VcsDiffRequest): Promise<VcsDiffResponse> {
+        const raw = await apiRequest<{ success: boolean; data: VcsDiffResponse }>(
+            `${VERSION_API}/api/versions/diff`,
+            { method: 'POST', body: JSON.stringify(request) }
+        );
+        return (raw as { data: VcsDiffResponse }).data;
     },
 };
 

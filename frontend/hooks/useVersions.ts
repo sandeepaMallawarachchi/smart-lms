@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { versionService } from '@/lib/api/submission-services';
-import type { SubmissionVersion, AsyncState } from '@/types/submission.types';
+import type { SubmissionVersion, VcsDiffRequest, VcsDiffResponse, AsyncState, MutationState } from '@/types/submission.types';
 
 // ─── useVersions — list all version headers (no answer detail) ───────────────
 
@@ -18,7 +18,6 @@ export function useVersions(submissionId: string | null) {
         setState({ data: null, loading: true, error: null });
         try {
             const data = await versionService.getVersions(submissionId);
-            // Already returned newest-first from backend; sort defensively
             const sorted = [...data].sort((a, b) => b.versionNumber - a.versionNumber);
             setState({ data: sorted, loading: false, error: null });
         } catch (err) {
@@ -35,7 +34,7 @@ export function useVersions(submissionId: string | null) {
     return { ...state, refetch: fetch };
 }
 
-// ─── useLatestVersion — full detail (with answers) ───────────────────────────
+// ─── useLatestVersion — full detail (with metadata.answers) ──────────────────
 
 export function useLatestVersion(submissionId: string | null) {
     const [state, setState] = useState<AsyncState<SubmissionVersion>>({
@@ -93,13 +92,57 @@ export function useVersion(submissionId: string | null, versionId: string | null
     return { ...state, refetch: fetch };
 }
 
-// ─── useDownloadVersion — stub (no file downloads in text-only system) ───────
+// ─── useDownloadVersion — triggers a real browser download via VCS ────────────
 
 export function useDownloadVersion() {
-    const downloadVersion = useCallback((_versionId: string) => {
-        // Text-based submissions have no file downloads.
-        // This stub keeps existing call sites from breaking.
-        console.warn('[useDownloadVersion] File downloads are not available for text-based submissions.');
+    const [downloading, setDownloading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const downloadVersion = useCallback(async (versionId: string) => {
+        setDownloading(true);
+        setError(null);
+        try {
+            const { blob, filename } = await versionService.downloadVersion(versionId);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Download failed');
+        } finally {
+            setDownloading(false);
+        }
     }, []);
-    return { downloading: false, error: null as string | null, downloadVersion };
+
+    return { downloading, error, downloadVersion };
+}
+
+// ─── useDiffVersions — line-level diff between two VCS versions ───────────────
+
+export function useDiffVersions() {
+    const [state, setState] = useState<MutationState & { data: VcsDiffResponse | null }>({
+        data: null,
+        loading: false,
+        error: null,
+        success: false,
+    });
+
+    const diff = useCallback(async (request: VcsDiffRequest) => {
+        setState({ data: null, loading: true, error: null, success: false });
+        try {
+            const data = await versionService.diffVersions(request);
+            setState({ data, loading: false, error: null, success: true });
+            return data;
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Diff failed';
+            setState({ data: null, loading: false, error: msg, success: false });
+            return null;
+        }
+    }, []);
+
+    return { ...state, diff };
 }

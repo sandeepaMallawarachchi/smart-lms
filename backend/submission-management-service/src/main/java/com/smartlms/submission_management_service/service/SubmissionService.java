@@ -48,6 +48,7 @@ public class SubmissionService {
     private final SubmissionRepository submissionRepository;
     private final AnswerRepository answerRepository;
     private final VersionService versionService;
+    private final VersionSyncService versionSyncService;
 
     @Value("${submission.min-words-per-answer:10}")
     private int minWordsPerAnswer;
@@ -291,8 +292,13 @@ public class SubmissionService {
                 id, submitted.getStatus(), submitted.getVersionNumber(),
                 submitted.getAiScore(), submitted.getPlagiarismScore());
 
-        // ── Snapshot — same @Transactional context: fails together or succeeds together ──
+        // ── Internal snapshot — same @Transactional: rolls back together ──────────
         versionService.createVersionSnapshot(submitted, answers);
+
+        // ── Async replication to version-control-service (fire-and-forget) ───────
+        // Runs in a background thread AFTER this transaction commits.
+        // Failure never affects the student's submit response.
+        versionSyncService.syncTextSnapshot(submitted, answers);
 
         return convertToResponse(submitted);
     }
