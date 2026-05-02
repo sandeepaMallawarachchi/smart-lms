@@ -163,7 +163,7 @@ export function RichTextEditor({
                 {/* Progress bar (only when expectedWordCount is provided) */}
                 {progressFraction !== null ? (
                     <div className="flex-1">
-                        <div className="h-1.5 w-full rounded-full bg-gray-200 overflow-hidden">
+                        <div className="h-2 w-full rounded-full bg-gray-200 overflow-hidden">
                             <div
                                 className={`h-full rounded-full transition-all duration-300 ${barColour(wordCount, expectedWordCount!)}`}
                                 style={{ width: `${progressFraction * 100}%` }}
@@ -177,7 +177,7 @@ export function RichTextEditor({
 
                 {/* Word count label */}
                 <span
-                    className={`text-xs font-medium tabular-nums whitespace-nowrap ${
+                    className={`text-sm font-medium tabular-nums whitespace-nowrap ${
                         overLimit
                             ? 'text-red-600'
                             : expectedWordCount

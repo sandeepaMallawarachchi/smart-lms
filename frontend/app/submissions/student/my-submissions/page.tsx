@@ -123,20 +123,20 @@ function formatDue(iso: string): { label: string; color: string } {
 
 function CardSkeleton() {
     return (
-        <div className="bg-white rounded-xl border border-gray-200 p-5 animate-pulse">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse">
             <div className="flex gap-4">
-                <div className="h-11 w-11 bg-gray-200 rounded-lg shrink-0" />
-                <div className="flex-1 space-y-2.5 min-w-0">
+                <div className="h-13 w-13 bg-gray-200 rounded-xl shrink-0" />
+                <div className="flex-1 space-y-3 min-w-0">
                     <div className="flex gap-2 flex-wrap">
-                        <div className="h-5 bg-gray-200 rounded w-52" />
-                        <div className="h-5 bg-gray-100 rounded w-16" />
-                        <div className="h-5 bg-gray-100 rounded w-20" />
+                        <div className="h-6 bg-gray-200 rounded w-52" />
+                        <div className="h-6 bg-gray-100 rounded w-16" />
+                        <div className="h-6 bg-gray-100 rounded w-20" />
                     </div>
-                    <div className="h-3.5 bg-gray-100 rounded w-40" />
-                    <div className="h-3.5 bg-gray-100 rounded w-28" />
+                    <div className="h-4 bg-gray-100 rounded w-40" />
+                    <div className="h-4 bg-gray-100 rounded w-28" />
                 </div>
                 <div className="shrink-0 flex flex-col gap-2 items-end">
-                    <div className="h-8 w-32 bg-gray-200 rounded-lg" />
+                    <div className="h-9 w-36 bg-gray-200 rounded-lg" />
                     <div className="h-6 w-40 bg-gray-100 rounded" />
                 </div>
             </div>
@@ -206,54 +206,54 @@ function AssignmentCard({
                                      'border-gray-200  bg-white';
 
     return (
-        <div className={`rounded-xl border p-5 transition-shadow hover:shadow-md ${cardBorder}`}>
+        <div className={`rounded-xl border p-6 transition-shadow hover:shadow-md ${cardBorder}`}>
             <div className="flex flex-wrap gap-4">
 
                 {/* ── Icon ─────────────────────────────────────── */}
-                <div className={`h-11 w-11 shrink-0 rounded-lg flex items-center justify-center ${cfg.bgColor}`}>
-                    <Calendar size={20} className={cfg.textColor} />
+                <div className={`h-13 w-13 shrink-0 rounded-xl flex items-center justify-center ${cfg.bgColor}`}>
+                    <Calendar size={24} className={cfg.textColor} />
                 </div>
 
                 {/* ── Info ─────────────────────────────────────── */}
                 <div className="flex-1 min-w-0">
 
                     {/* Title + type + status badges */}
-                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                        <h3 className="text-sm font-bold text-gray-900 leading-tight">
+                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                        <h3 className="text-base font-bold text-gray-900 leading-tight">
                             {item.title}
                         </h3>
                         {item.assignmentType === 'project' && (
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">
                                 Project
                             </span>
                         )}
                         {item.assignmentType === 'task' && (
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">
+                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-teal-100 text-teal-700">
                                 Task
                             </span>
                         )}
                         {/* Status badge */}
-                        <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.bgColor} ${cfg.textColor}`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${cfg.dotColor}`} />
+                        <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.bgColor} ${cfg.textColor}`}>
+                            <span className={`h-2 w-2 rounded-full ${cfg.dotColor}`} />
                             {cfg.label}
                         </span>
                         {/* Extra "editing" indicator when student opened a draft on top of a submitted one */}
                         {item.hasDraft && item.status === 'submitted' && (
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
                                 Edit draft open
                             </span>
                         )}
                     </div>
 
                     {/* Module */}
-                    <p className="text-xs text-gray-500 mb-1">
+                    <p className="text-sm text-gray-500 mb-1.5">
                         {item.moduleName ?? item.moduleCode}
                     </p>
 
                     {/* Due date */}
                     {due && item.dueDate && (
-                        <div className="flex items-center gap-1.5 text-xs mb-2">
-                            <Clock size={11} className={due.color} />
+                        <div className="flex items-center gap-1.5 text-sm mb-2">
+                            <Clock size={14} className={due.color} />
                             <span className="text-gray-400">
                                 {new Date(item.dueDate).toLocaleDateString('en-US', {
                                     day: 'numeric', month: 'short', year: 'numeric',
@@ -302,7 +302,7 @@ function AssignmentCard({
                     {/* Primary action button */}
                     {item.isOverdue && !sub ? (
                         /* Deadline passed — no terminal submission (draft or nothing) */
-                        <span className="text-xs text-red-500 font-medium px-3 py-1.5 rounded-lg bg-red-100">
+                        <span className="text-sm text-red-500 font-medium px-4 py-2 rounded-lg bg-red-100">
                             Deadline passed
                         </span>
                     ) : item.status === 'not_started' ? (
@@ -615,9 +615,9 @@ export default function MySubmissionsPage() {
                         { label: 'Not Started', value: counts.not_started, cls: 'text-gray-600   bg-gray-50     border-gray-200'   },
                         { label: 'Overdue',     value: counts.overdue,     cls: 'text-red-700    bg-red-50      border-red-200'    },
                     ].filter(s => s.value > 0).map(s => (
-                        <div key={s.label} className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm ${s.cls}`}>
-                            <span className="font-bold text-base">{s.value}</span>
-                            <span className="text-xs opacity-70">{s.label}</span>
+                        <div key={s.label} className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm ${s.cls}`}>
+                            <span className="font-bold text-lg">{s.value}</span>
+                            <span className="text-sm opacity-80">{s.label}</span>
                         </div>
                     ))}
                 </div>
@@ -633,7 +633,7 @@ export default function MySubmissionsPage() {
                         <button
                             key={f.key}
                             onClick={() => setFilter(f.key)}
-                            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer border ${
+                            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer border ${
                                 filter === f.key
                                     ? 'bg-purple-600 text-white border-transparent shadow-sm'
                                     : 'bg-white text-gray-600 border-gray-300 hover:border-purple-300 hover:text-purple-700'

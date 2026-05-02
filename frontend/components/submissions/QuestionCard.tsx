@@ -271,26 +271,26 @@ export function QuestionCard({
 
                 <div className="flex-1 min-w-0">
                     {/* Question text */}
-                    <p className="text-sm font-medium text-gray-900 leading-snug">
+                    <p className="text-base font-medium text-gray-900 leading-snug">
                         {question.text}
                     </p>
 
                     {/* Optional description / hint */}
                     {question.description && (
-                        <p className="mt-1 text-xs text-gray-500">{question.description}</p>
+                        <p className="mt-1.5 text-sm text-gray-500">{question.description}</p>
                     )}
                 </div>
 
                 {/* Expected word count badge */}
                 {question.expectedWordCount != null && (
-                    <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-700">
+                    <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-purple-100 px-3 py-1 text-sm font-medium text-purple-700">
                         Target: {question.expectedWordCount} words
                     </span>
                 )}
 
                 {/* Required badge */}
                 {question.isRequired && (
-                    <span className="flex-shrink-0 inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                    <span className="flex-shrink-0 inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-sm font-medium text-red-700">
                         Required
                     </span>
                 )}
@@ -335,7 +335,7 @@ export function QuestionCard({
                     </div>
 
                     {/* ── Right: AI feedback panel (sticky on desktop) ── */}
-                    <div className="lg:w-72 xl:w-80 flex-shrink-0">
+                    <div className="lg:w-80 xl:w-96 flex-shrink-0">
                         <div className="lg:sticky lg:top-4 flex flex-col gap-3">
                             <LiveFeedbackPanel
                                 feedback={liveFeedback}
@@ -351,17 +351,17 @@ export function QuestionCard({
                                         ? 'bg-amber-50 border-amber-200'
                                         : 'bg-red-50 border-red-200'
                                 }`}>
-                                    <p className="text-xs font-medium text-gray-500 mb-0.5">Projected Grade</p>
-                                    <p className={`text-xl font-bold ${
+                                    <p className="text-sm font-medium text-gray-500 mb-1">Projected Grade</p>
+                                    <p className={`text-2xl font-bold ${
                                         projectedGrade / maxPoints >= 0.75
                                             ? 'text-green-700'
                                             : projectedGrade / maxPoints >= 0.50
                                             ? 'text-amber-700'
                                             : 'text-red-700'
                                     }`}>
-                                        {projectedGrade} <span className="text-sm font-normal text-gray-400">/ {maxPoints}</span>
+                                        {projectedGrade} <span className="text-base font-normal text-gray-400">/ {maxPoints}</span>
                                     </p>
-                                    <p className="text-xs text-gray-400 mt-0.5">Instructor may adjust</p>
+                                    <p className="text-sm text-gray-400 mt-1">Instructor may adjust</p>
                                 </div>
                             )}
                             {feedbackLoading && !liveFeedback && (

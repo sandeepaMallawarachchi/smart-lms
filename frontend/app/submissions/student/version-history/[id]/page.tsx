@@ -145,12 +145,12 @@ function VersionCard({
     };
 
     return (
-        <div className={`bg-white border rounded-lg overflow-hidden ${compareSelected ? 'border-purple-400 ring-2 ring-purple-200' : isLatest ? 'border-purple-300 shadow-md' : 'border-gray-200'}`}>
-            {/* Header row */}
-            <div className="p-5 flex flex-wrap items-center gap-4">
-                {/* Compare checkbox */}
+        <div className={`bg-white border rounded-xl overflow-hidden ${compareSelected ? 'border-purple-400 ring-2 ring-purple-200' : isLatest ? 'border-purple-300 shadow-md' : 'border-gray-200'}`}>
+            <div className="p-6 flex items-start gap-4">
+
+                {/* ── Compare checkbox ────────────────────────── */}
                 <label
-                    className={`flex items-center justify-center w-6 h-6 shrink-0 cursor-pointer ${compareDisabled && !compareSelected ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    className={`flex items-center justify-center w-6 h-6 shrink-0 mt-1 cursor-pointer ${compareDisabled && !compareSelected ? 'opacity-40 cursor-not-allowed' : ''}`}
                     title={compareSelected ? 'Deselect for comparison' : compareDisabled ? '2 versions already selected' : 'Select for comparison'}
                 >
                     <input
@@ -162,54 +162,60 @@ function VersionCard({
                     />
                 </label>
 
-                {/* Version badge */}
+                {/* ── Version circle ───────────────────────────── */}
                 <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 ${isLatest ? 'bg-purple-600' : 'bg-gray-400'}`}>
-                    <span className="text-white font-bold text-sm">v{version.versionNumber}</span>
+                    <span className="text-white font-bold text-base">v{version.versionNumber}</span>
                 </div>
 
-                {/* Meta */}
+                {/* ── Left: title + meta + metrics ─────────────── */}
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-gray-900">{version.commitMessage ?? `Version ${version.versionNumber}`}</span>
+
+                    {/* Title row + status badges */}
+                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                        <h3 className="text-base font-bold text-gray-900 leading-tight">
+                            {version.commitMessage ?? `Version ${version.versionNumber}`}
+                        </h3>
                         {isLatest && (
-                            <span className="text-xs font-semibold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Latest</span>
+                            <span className="text-xs font-semibold bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full">Latest</span>
                         )}
                         {version.isLate && (
-                            <span className="text-xs font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Late</span>
+                            <span className="text-xs font-semibold bg-red-100 text-red-700 px-2.5 py-1 rounded-full">Late</span>
                         )}
                         {version.hasLecturerOverride && (
-                            <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Lecturer Graded</span>
+                            <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full">Lecturer Graded</span>
                         )}
                     </div>
-                    <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
-                        <Clock size={12} />
+
+                    {/* Timestamp */}
+                    <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-2">
+                        <Clock size={14} />
                         <span>Submitted {formatDate(version.submittedAt)}</span>
                     </div>
 
                     {/* Change summary vs previous version */}
                     {diffSummary && (
-                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <div className="flex items-center gap-2 mb-3 flex-wrap">
                             {diffSummary.wordsAdded === 0 && diffSummary.wordsRemoved === 0 && diffSummary.questionsAdded === 0 ? (
-                                <span className="text-xs text-gray-400 italic">No text changes from previous version</span>
+                                <span className="text-sm text-gray-400 italic">No text changes from previous version</span>
                             ) : (
                                 <>
                                     {diffSummary.wordsAdded > 0 && (
-                                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-xs font-medium">
+                                        <span className="inline-flex items-center gap-0.5 px-2 py-1 rounded bg-green-100 text-green-700 text-sm font-medium">
                                             +{diffSummary.wordsAdded} word{diffSummary.wordsAdded !== 1 ? 's' : ''}
                                         </span>
                                     )}
                                     {diffSummary.wordsRemoved > 0 && (
-                                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-xs font-medium">
+                                        <span className="inline-flex items-center gap-0.5 px-2 py-1 rounded bg-red-100 text-red-700 text-sm font-medium">
                                             −{diffSummary.wordsRemoved} word{diffSummary.wordsRemoved !== 1 ? 's' : ''}
                                         </span>
                                     )}
                                     {diffSummary.questionsAdded > 0 && (
-                                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 text-xs font-medium">
+                                        <span className="inline-flex items-center gap-0.5 px-2 py-1 rounded bg-purple-100 text-purple-700 text-sm font-medium">
                                             {diffSummary.questionsAdded} new answer{diffSummary.questionsAdded !== 1 ? 's' : ''}
                                         </span>
                                     )}
                                     {diffSummary.questionsChanged > 0 && (
-                                        <span className="text-xs text-gray-400">
+                                        <span className="text-sm text-gray-400">
                                             across {diffSummary.questionsChanged} question{diffSummary.questionsChanged !== 1 ? 's' : ''}
                                         </span>
                                     )}
@@ -217,93 +223,101 @@ function VersionCard({
                             )}
                         </div>
                     )}
+
+                    {/* ── Metrics row (below title, not competing with buttons) ── */}
+                    <div className="flex flex-wrap gap-4 pt-2 border-t border-gray-100">
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-xs text-gray-400 uppercase tracking-wide font-medium">AI Score</span>
+                            <span className="text-xl font-bold text-purple-600">
+                                {version.aiScore != null ? `${version.aiScore.toFixed(0)}%` : '—'}
+                            </span>
+                        </div>
+                        <div className="w-px bg-gray-200 self-stretch" />
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-xs text-gray-400 uppercase tracking-wide font-medium">Plagiarism</span>
+                            <span className={`text-xl font-bold ${plagColor(version.plagiarismScore)}`}>
+                                {version.plagiarismScore != null ? `${version.plagiarismScore.toFixed(0)}%` : '—'}
+                            </span>
+                        </div>
+                        <div className="w-px bg-gray-200 self-stretch" />
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-xs text-gray-400 uppercase tracking-wide font-medium">Final Grade</span>
+                            <span className="text-xl font-bold text-blue-600">
+                                {version.finalGrade != null
+                                    ? `${version.finalGrade}${version.maxGrade ? ` / ${version.maxGrade}` : ''}`
+                                    : '—'}
+                            </span>
+                        </div>
+                        <div className="w-px bg-gray-200 self-stretch" />
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-xs text-gray-400 uppercase tracking-wide font-medium">Words</span>
+                            <span className="text-xl font-bold text-gray-700">
+                                {version.totalWordCount ?? '—'}
+                            </span>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Metrics */}
-                <div className="flex gap-6 text-center shrink-0">
-                    <div>
-                        <div className="text-xs text-gray-500 mb-0.5">AI Score</div>
-                        <div className="text-lg font-bold text-purple-600">
-                            {version.aiScore != null ? `${version.aiScore.toFixed(0)}%` : '—'}
-                        </div>
-                    </div>
-                    <div>
-                        <div className="text-xs text-gray-500 mb-0.5">Plagiarism</div>
-                        <div className={`text-lg font-bold ${plagColor(version.plagiarismScore)}`}>
-                            {version.plagiarismScore != null ? `${version.plagiarismScore.toFixed(0)}%` : '—'}
-                        </div>
-                    </div>
-                    <div>
-                        <div className="text-xs text-gray-500 mb-0.5">Final Grade</div>
-                        <div className="text-lg font-bold text-blue-600">
-                            {version.finalGrade != null
-                                ? `${version.finalGrade}${version.maxGrade ? ` / ${version.maxGrade}` : ''}`
-                                : '—'}
-                        </div>
-                    </div>
-                    <div>
-                        <div className="text-xs text-gray-500 mb-0.5">Words</div>
-                        <div className="text-lg font-bold text-gray-700">
-                            {version.totalWordCount ?? '—'}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2 shrink-0">
-                    {!isLatest && (
-                        <button
-                            onClick={onRevert}
-                            className="px-3 py-2 bg-amber-50 text-amber-700 text-sm font-medium rounded-lg hover:bg-amber-100 border border-amber-200 transition-colors cursor-pointer flex items-center gap-1.5"
-                            title="Revert to this version as a new draft"
-                        >
-                            <Undo2 size={15} />
-                            Revert
-                        </button>
-                    )}
-                    <button
-                        onClick={() => handleDownload('plagiarism')}
-                        disabled={downloadingReport !== null}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors disabled:opacity-50"
-                    >
-                        {downloadingReport === 'plagiarism' ? (
-                            <span className="animate-spin text-xs">⟳</span>
-                        ) : (
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                        )}
-                        Plagiarism Report
-                    </button>
-                    <button
-                        onClick={() => handleDownload('feedback')}
-                        disabled={downloadingReport !== null}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200 rounded-md hover:bg-purple-100 transition-colors disabled:opacity-50"
-                    >
-                        {downloadingReport === 'feedback' ? (
-                            <span className="animate-spin text-xs">⟳</span>
-                        ) : (
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                        )}
-                        Full Report
-                    </button>
+                {/* ── Right: action buttons column ─────────────── */}
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                    {/* Primary action */}
                     <button
                         onClick={onViewReport}
-                        className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors cursor-pointer"
+                        className="px-5 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors cursor-pointer whitespace-nowrap"
                     >
                         View Report
                     </button>
-                    {answers.length > 0 && (
+
+                    {/* Secondary actions */}
+                    <div className="flex flex-wrap gap-2 justify-end">
+                        {!isLatest && (
+                            <button
+                                onClick={onRevert}
+                                className="px-3 py-1.5 bg-amber-50 text-amber-700 text-sm font-medium rounded-lg hover:bg-amber-100 border border-amber-200 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap"
+                                title="Revert to this version as a new draft"
+                            >
+                                <Undo2 size={14} />
+                                Revert
+                            </button>
+                        )}
                         <button
-                            onClick={() => setExpanded(e => !e)}
-                            className="px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200 transition-colors cursor-pointer flex items-center gap-1"
+                            onClick={() => handleDownload('plagiarism')}
+                            disabled={downloadingReport !== null}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50 whitespace-nowrap"
                         >
-                            {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                            Answers
+                            {downloadingReport === 'plagiarism' ? (
+                                <span className="animate-spin text-sm">⟳</span>
+                            ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                            )}
+                            Plagiarism Report
                         </button>
-                    )}
+                        <button
+                            onClick={() => handleDownload('feedback')}
+                            disabled={downloadingReport !== null}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-gray-50 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 whitespace-nowrap"
+                        >
+                            {downloadingReport === 'feedback' ? (
+                                <span className="animate-spin text-sm">⟳</span>
+                            ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                            )}
+                            Full Report
+                        </button>
+                        {answers.length > 0 && (
+                            <button
+                                onClick={() => setExpanded(e => !e)}
+                                className="px-3 py-1.5 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap"
+                            >
+                                {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                                Answers
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 

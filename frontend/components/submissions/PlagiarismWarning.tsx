@@ -63,9 +63,9 @@ const CONFIDENCE_META: Record<ConfidenceLevel, { label: string; dot: string }> =
 function ScoreBar({ label, value, color }: { label: string; value: number; color: string }) {
     const pct = Math.min(100, Math.max(0, value));
     return (
-        <div className="flex items-center gap-2 text-[11px]">
+        <div className="flex items-center gap-2 text-xs">
             <span className="w-28 shrink-0 text-gray-500">{label}</span>
-            <div className="flex-1 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+            <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden">
                 <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
             </div>
             <span className="w-10 text-right font-mono font-semibold">{pct.toFixed(0)}%</span>
@@ -87,13 +87,13 @@ function SourceCard({ m, index }: { m: InternetMatch; index: number }) {
                 <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                         {/* Category badge */}
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${catMeta.bg} ${catMeta.text}`}>
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${catMeta.bg} ${catMeta.text}`}>
                             {catMeta.label}
                         </span>
                         {/* Confidence badge */}
                         {confMeta && (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-gray-500">
-                                <span className={`w-1.5 h-1.5 rounded-full ${confMeta.dot}`} />
+                            <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                                <span className={`w-2 h-2 rounded-full ${confMeta.dot}`} />
                                 {confMeta.label}
                             </span>
                         )}
@@ -116,7 +116,7 @@ function SourceCard({ m, index }: { m: InternetMatch; index: number }) {
                     )}
 
                     {m.sourceDomain && (
-                        <span className="text-[10px] text-gray-400">{m.sourceDomain}</span>
+                        <span className="text-xs text-gray-400">{m.sourceDomain}</span>
                     )}
                 </div>
 
@@ -132,7 +132,7 @@ function SourceCard({ m, index }: { m: InternetMatch; index: number }) {
             {/* Snippet from source */}
             {m.snippet && (
                 <div className="px-3 pb-2">
-                    <p className="text-[11px] italic text-gray-600 leading-relaxed line-clamp-3 border-l-2 border-current/30 pl-2">
+                    <p className="text-xs italic text-gray-600 leading-relaxed line-clamp-3 border-l-2 border-current/30 pl-2">
                         &ldquo;{m.snippet}&rdquo;
                     </p>
                 </div>
@@ -141,11 +141,11 @@ function SourceCard({ m, index }: { m: InternetMatch; index: number }) {
             {/* Matched text from student answer */}
             {m.matchedStudentText && (
                 <div className="px-3 pb-2.5">
-                    <div className="rounded bg-amber-50 border border-amber-200 px-2.5 py-1.5">
-                        <p className="text-[10px] font-semibold text-amber-700 mb-0.5">
+                    <div className="rounded bg-amber-50 border border-amber-200 px-2.5 py-2">
+                        <p className="text-xs font-semibold text-amber-700 mb-1">
                             Matching text in your answer:
                         </p>
-                        <p className="text-[11px] text-amber-900 leading-relaxed line-clamp-2">
+                        <p className="text-xs text-amber-900 leading-relaxed line-clamp-2">
                             &ldquo;{m.matchedStudentText}&rdquo;
                         </p>
                     </div>
@@ -173,18 +173,18 @@ function GuidancePanel({ severity }: { severity: 'MEDIUM' | 'HIGH' }) {
               ];
 
     return (
-        <div className="mt-2 rounded-md bg-blue-50 border border-blue-200 px-3 py-2.5 text-xs">
+        <div className="mt-3 rounded-md bg-blue-50 border border-blue-200 px-3 py-3 text-sm">
             <div className="flex items-start gap-2">
                 <svg className="h-4 w-4 flex-shrink-0 mt-0.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                         d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <div>
-                    <p className="font-semibold text-blue-800 mb-1">How to improve your answer:</p>
-                    <ul className="space-y-0.5">
+                    <p className="font-semibold text-blue-800 mb-1.5">How to improve your answer:</p>
+                    <ul className="space-y-1">
                         {tips.map((tip, i) => (
-                            <li key={i} className="flex items-start gap-1.5 text-blue-700">
-                                <span className="mt-1 w-1 h-1 rounded-full bg-blue-400 flex-shrink-0" />
+                            <li key={i} className="flex items-start gap-2 text-blue-700">
+                                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
                                 {tip}
                             </li>
                         ))}
@@ -225,8 +225,8 @@ function SourceList({ matches }: { matches: InternetMatch[] }) {
     const sorted = [...matches].sort((a, b) => b.similarityScore - a.similarityScore);
 
     return (
-        <div className="mt-2">
-            <p className="text-[11px] font-semibold mb-1.5 opacity-80">
+        <div className="mt-3">
+            <p className="text-xs font-semibold mb-2 opacity-80">
                 Matching sources found ({sorted.length}):
             </p>
             <ul className="space-y-2">
@@ -256,9 +256,9 @@ export function PlagiarismWarning({ result, loading }: PlagiarismWarningProps) {
     // ── LOW with matches → show sources in an info panel ─────
     if (result.severity === 'LOW' && matches.length > 0) {
         return (
-            <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-800">
-                <div className="flex items-start gap-2">
-                    <svg className="h-4 w-4 flex-shrink-0 mt-0.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
+                <div className="flex items-start gap-2.5">
+                    <svg className="h-5 w-5 flex-shrink-0 mt-0.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                             d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
@@ -280,7 +280,7 @@ export function PlagiarismWarning({ result, loading }: PlagiarismWarningProps) {
     // ── CLEAN / LOW with no matches → green chip ──────────────
     if (result.severity === 'LOW') {
         return (
-            <div className="flex items-center gap-1.5 text-xs text-green-700 bg-green-50 border border-green-200 rounded-full px-3 py-1 w-fit">
+            <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-full px-4 py-1.5 w-fit">
                 <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                 </svg>
@@ -297,9 +297,9 @@ export function PlagiarismWarning({ result, loading }: PlagiarismWarningProps) {
     // ── MEDIUM severity ───────────────────────────────────────
     if (result.severity === 'MEDIUM') {
         return (
-            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
-                <div className="flex items-start gap-2">
-                    <svg className="h-4 w-4 flex-shrink-0 mt-0.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                <div className="flex items-start gap-2.5">
+                    <svg className="h-5 w-5 flex-shrink-0 mt-0.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                             d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                     </svg>
@@ -322,9 +322,9 @@ export function PlagiarismWarning({ result, loading }: PlagiarismWarningProps) {
 
     // ── HIGH severity ─────────────────────────────────────────
     return (
-        <div className="rounded-md bg-red-50 border border-red-300 px-3 py-2 text-xs text-red-800">
-            <div className="flex items-start gap-2">
-                <svg className="h-4 w-4 flex-shrink-0 mt-0.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="rounded-md bg-red-50 border border-red-300 px-4 py-3 text-sm text-red-800">
+            <div className="flex items-start gap-2.5">
+                <svg className="h-5 w-5 flex-shrink-0 mt-0.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                         d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -333,7 +333,7 @@ export function PlagiarismWarning({ result, loading }: PlagiarismWarningProps) {
                         High similarity ({result.similarityScore.toFixed(0)}%) — review required.
                     </span>
                     {result.riskScore != null && (
-                        <span className="ml-2 text-[10px] font-normal opacity-70">
+                        <span className="ml-2 text-xs font-normal opacity-70">
                             Risk score: {result.riskScore.toFixed(0)}/100
                         </span>
                     )}
