@@ -103,9 +103,10 @@ const PLAGIARISM_DEBOUNCE_MS = 2000;
 const AUTO_SAVE_DEBOUNCE_MS = 5000;
 
 /** Minimum character length to trigger AI feedback / plagiarism.
- *  50 characters ≈ 8–10 words — enough for the AI to produce meaningful scores
- *  and for plagiarism to have something worth comparing. */
-const MIN_TEXT_LENGTH = 50;
+ *  10 characters ≈ 2 words — low enough to cover short correct answers
+ *  (e.g. single-word definitions, numeric answers) while excluding stray
+ *  key presses. Backend handles short answers via SHORT_ANSWER prompt. */
+const MIN_TEXT_LENGTH = 10;
 
 // ─── Hook ─────────────────────────────────────────────────────
 

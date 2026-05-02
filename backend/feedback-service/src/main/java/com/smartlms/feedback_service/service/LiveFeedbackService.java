@@ -3,6 +3,8 @@ package com.smartlms.feedback_service.service;
 import com.smartlms.feedback_service.dto.request.LiveFeedbackRequest;
 import com.smartlms.feedback_service.dto.response.ApiResponse;
 import com.smartlms.feedback_service.dto.response.LiveFeedbackResponse;
+import com.smartlms.feedback_service.model.AnswerType;
+import com.smartlms.feedback_service.model.TypeDetectionResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,13 +27,16 @@ import java.util.stream.Collectors;
  *  - Concept correctness (relevance + completeness) outweighs grammar for all answers.
  *  - Answers that merely repeat the question text without adding information are penalised.
  *  - Blank / gibberish text always scores 0.
+ *  - Answer type is automatically detected; type-specific prompts are used when confidence ≥ 0.60.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class LiveFeedbackService {
 
-    private final HuggingFaceService huggingFaceService;
+    private final HuggingFaceService       huggingFaceService;
+    private final AnswerTypeDetector       answerTypeDetector;
+    private final TypeSpecificPromptBuilder typeSpecificPromptBuilder;
 
     // ─── Positive-signal words used to detect LLM inconsistency ─────────────
     private static final List<String> POSITIVE_SIGNAL_WORDS = Arrays.asList(
@@ -56,6 +61,7 @@ public class LiveFeedbackService {
         log.info("Generating live feedback for questionId={} textLength={}",
                 request.getQuestionId(), request.getAnswerText().length());
 
+        // ── Gibberish gate ────────────────────────────────────────────────────
         if (isGibberish(request.getAnswerText())) {
             log.info("Gibberish detected for questionId={} — returning zero scores", request.getQuestionId());
             return CompletableFuture.completedFuture(
@@ -63,16 +69,36 @@ public class LiveFeedbackService {
         }
 
         try {
-            String prompt      = buildPrompt(request);
+            // ── Answer type detection ─────────────────────────────────────────
+            int wordCount = countWords(request.getAnswerText());
+            TypeDetectionResult typeResult = answerTypeDetector.detect(
+                    request.getQuestionPrompt(),
+                    request.getAnswerText(),
+                    request.getMaxPoints(),
+                    wordCount);
+            log.info("[LiveFeedback] Type detection: questionId={} type={} confidence={} reason={}",
+                    request.getQuestionId(), typeResult.getType(),
+                    String.format("%.2f", typeResult.getConfidence()), typeResult.getReasoning());
+
+            // ── Prompt selection ──────────────────────────────────────────────
+            String prompt = typeResult.isConfident()
+                    ? typeSpecificPromptBuilder.buildPrompt(typeResult.getType(), request, wordCount)
+                    : buildPrompt(request);
+
             String rawResponse = huggingFaceService.generateCompletion(prompt);
             log.debug("Raw AI response (first 500 chars): {}",
                     rawResponse.substring(0, Math.min(500, rawResponse.length())));
 
-            LiveFeedbackResponse feedback = parseResponse(rawResponse, request.getQuestionId());
+            // ── Parse + consistency enforcement ───────────────────────────────
+            LiveFeedbackResponse feedback = parseResponse(rawResponse, request.getQuestionId(), typeResult);
             feedback = enforceConsistency(feedback, request);
 
-            log.info("Live feedback done questionId={} grammar={} clarity={} completeness={} relevance={}",
-                    request.getQuestionId(),
+            // ── Stamp type metadata ───────────────────────────────────────────
+            feedback.setDetectedAnswerType(typeResult.getType().name());
+            feedback.setTypeConfidence(typeResult.getConfidence());
+
+            log.info("Live feedback done questionId={} type={} grammar={} clarity={} completeness={} relevance={}",
+                    request.getQuestionId(), typeResult.getType(),
                     feedback.getGrammarScore(), feedback.getClarityScore(),
                     feedback.getCompletenessScore(), feedback.getRelevanceScore());
 
@@ -149,18 +175,18 @@ public class LiveFeedbackService {
                 .build();
     }
 
-    // ─── Prompt construction ─────────────────────────────────────────────────
+    // ─── Generic prompt construction (used when type confidence < 0.60) ──────
 
     /** Short-answer: ≤ 5 marks OR answer is ≤ 40 words. */
     private boolean isShortAnswer(LiveFeedbackRequest request) {
-        int wordCount = request.getAnswerText().trim().split("\\s+").length;
+        int wordCount = countWords(request.getAnswerText());
         boolean byMarks = request.getMaxPoints() != null && request.getMaxPoints() <= 5;
         boolean byWords = wordCount <= 40;
         return byMarks || byWords;
     }
 
     private String buildPrompt(LiveFeedbackRequest request) {
-        int wordCount = request.getAnswerText().trim().split("\\s+").length;
+        int wordCount = countWords(request.getAnswerText());
         boolean shortAnswer = isShortAnswer(request);
 
         String questionContext = (request.getQuestionPrompt() != null && !request.getQuestionPrompt().isBlank())
@@ -260,6 +286,9 @@ public class LiveFeedbackService {
      * Rule C — Short-answer keyword floor:
      *   For short answers, if the answer shares ≥ 30% of meaningful question keywords,
      *   relevance gets a proportional floor (5–7 range) and completeness a smaller floor.
+     *
+     * Type-specific scores (balanceScore, comparisonDepthScore, etc.) are copied
+     * through unchanged — they are not subject to these rules.
      */
     private LiveFeedbackResponse enforceConsistency(
             LiveFeedbackResponse response,
@@ -273,8 +302,7 @@ public class LiveFeedbackService {
         String questionText = request.getQuestionPrompt() != null ? request.getQuestionPrompt() : "";
         String answerText   = request.getAnswerText();
 
-        // ── Gibberish guard: if the answer is borderline suspicious, disable all
-        //    score-boosting rules so the AI's low raw scores are not inflated. ──
+        // ── Gibberish guard: borderline suspicious answers must not be score-boosted ──
         double gibberishRatio = computeGibberishRatio(answerText);
         boolean isSuspicious  = gibberishRatio >= 0.20;
         if (isSuspicious) {
@@ -294,8 +322,6 @@ public class LiveFeedbackService {
         }
 
         // ── Rule A: Positive-strength consistency ─────────────────────────────
-        // Only applies when text is clean (not suspicious). Never boosts scores
-        // for answers that barely passed the gibberish gate.
         boolean hasPositiveStrength = hasPositiveLanguage(response.getStrengths());
         if (hasPositiveStrength && relevance < 5.0) {
             log.info("[LiveFeedback] questionId={} INCONSISTENCY: positive strengths but relevance={} — correcting",
@@ -327,7 +353,7 @@ public class LiveFeedbackService {
             }
         }
 
-        // ── Cap at 10 and round to 1 decimal ─────────────────────────────────
+        // ── Cap at 10 and round to 1 decimal, copy type-specific fields through ──
         return LiveFeedbackResponse.builder()
                 .questionId(response.getQuestionId())
                 .grammarScore(    round1(Math.min(10.0, grammar)))
@@ -338,12 +364,19 @@ public class LiveFeedbackService {
                 .improvements(response.getImprovements())
                 .suggestions(response.getSuggestions())
                 .generatedAt(response.getGeneratedAt())
+                // Type-specific scores preserved unchanged — not subject to consistency rules
+                .balanceScore(              response.getBalanceScore())
+                .comparisonDepthScore(      response.getComparisonDepthScore())
+                .argumentationStrengthScore(response.getArgumentationStrengthScore())
+                .evidenceQualityScore(      response.getEvidenceQualityScore())
+                .procedureAccuracyScore(    response.getProcedureAccuracyScore())
+                .sequenceLogicScore(        response.getSequenceLogicScore())
                 .build();
     }
 
     /**
      * Computes what fraction of the answer's unique meaningful words
-     * are also present in the question.  A high ratio (≥ 0.65) means
+     * are also present in the question. A high ratio (≥ 0.65) means
      * the student is largely parroting the question rather than explaining.
      */
     private double computeRepetitionRatio(String answerText, String questionText) {
@@ -402,13 +435,23 @@ public class LiveFeedbackService {
         return matches;
     }
 
+    private int countWords(String text) {
+        if (text == null || text.isBlank()) return 0;
+        return text.trim().split("\\s+").length;
+    }
+
     private double round1(double v) {
         return Math.round(v * 10.0) / 10.0;
     }
 
     // ─── Response parsing ─────────────────────────────────────────────────────
 
-    private LiveFeedbackResponse parseResponse(String raw, String questionId) {
+    /**
+     * Parses the raw LLM response into a LiveFeedbackResponse.
+     * When typeResult is confident, also extracts type-specific dimension scores
+     * (BALANCE, COMPARISON_DEPTH, ARGUMENTATION_STRENGTH, etc.) from the response.
+     */
+    private LiveFeedbackResponse parseResponse(String raw, String questionId, TypeDetectionResult typeResult) {
         String text = raw.replaceAll("(?s)\\[INST\\].*?\\[/INST\\]", "").trim();
         log.debug("[LiveFeedback] Parsing response for questionId={} cleanedLen={}", questionId, text.length());
 
@@ -437,7 +480,7 @@ public class LiveFeedbackService {
             suggestions = List.of("Review for grammar and clarity.");
         }
 
-        return LiveFeedbackResponse.builder()
+        LiveFeedbackResponse.LiveFeedbackResponseBuilder builder = LiveFeedbackResponse.builder()
                 .questionId(questionId)
                 .grammarScore(grammar)
                 .clarityScore(clarity)
@@ -446,8 +489,41 @@ public class LiveFeedbackService {
                 .strengths(strengths)
                 .improvements(improvements)
                 .suggestions(suggestions)
-                .generatedAt(LocalDateTime.now().toString())
-                .build();
+                .generatedAt(LocalDateTime.now().toString());
+
+        // Extract type-specific dimensions when the type was confident
+        if (typeResult != null && typeResult.isConfident()) {
+            AnswerType type = typeResult.getType();
+
+            if (type == AnswerType.COMPARATIVE_ANALYSIS) {
+                double balance         = extractScore(text, "BALANCE");
+                double comparisonDepth = extractScore(text, "COMPARISON_DEPTH");
+                builder.balanceScore(balance > 0 ? balance : null)
+                       .comparisonDepthScore(comparisonDepth > 0 ? comparisonDepth : null);
+                log.info("[LiveFeedback] Comparative scores questionId={} balance={} comparisonDepth={}",
+                        questionId, balance, comparisonDepth);
+            }
+
+            if (type == AnswerType.ARGUMENTATIVE) {
+                double argStrength    = extractScore(text, "ARGUMENTATION_STRENGTH");
+                double evidenceQuality = extractScore(text, "EVIDENCE_QUALITY");
+                builder.argumentationStrengthScore(argStrength > 0 ? argStrength : null)
+                       .evidenceQualityScore(evidenceQuality > 0 ? evidenceQuality : null);
+                log.info("[LiveFeedback] Argumentative scores questionId={} argStrength={} evidenceQuality={}",
+                        questionId, argStrength, evidenceQuality);
+            }
+
+            if (type == AnswerType.PROCEDURAL) {
+                double procedureAccuracy = extractScore(text, "PROCEDURE_ACCURACY");
+                double sequenceLogic     = extractScore(text, "SEQUENCE_LOGIC");
+                builder.procedureAccuracyScore(procedureAccuracy > 0 ? procedureAccuracy : null)
+                       .sequenceLogicScore(sequenceLogic > 0 ? sequenceLogic : null);
+                log.info("[LiveFeedback] Procedural scores questionId={} procedureAccuracy={} sequenceLogic={}",
+                        questionId, procedureAccuracy, sequenceLogic);
+            }
+        }
+
+        return builder.build();
     }
 
     private double extractScore(String text, String key) {
@@ -474,5 +550,4 @@ public class LiveFeedbackService {
         }
         return results;
     }
-
 }
