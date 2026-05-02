@@ -196,7 +196,7 @@ public class SubmissionService {
         }
 
         // ── Validate answers ──────────────────────────────────────────────────
-        List<Answer> answers = answerRepository.findBySubmissionIdOrderByQuestionId(id);
+        List<Answer> answers = answerRepository.findBySubmissionIdOrderByQuestionId(String.valueOf(id));
         if (answers.isEmpty()) {
             throw new IllegalStateException("Cannot submit without text answers");
         }
@@ -363,7 +363,7 @@ public class SubmissionService {
         allQuestionIds.addAll(feedbacks.keySet());
 
         for (String questionId : allQuestionIds) {
-            answerRepository.findBySubmissionIdAndQuestionId(id, questionId)
+            answerRepository.findBySubmissionIdAndQuestionId(String.valueOf(id), questionId)
                     .ifPresent(answer -> {
                         if (scores.containsKey(questionId))    answer.setLecturerMark(scores.get(questionId));
                         if (feedbacks.containsKey(questionId)) answer.setLecturerFeedbackText(feedbacks.get(questionId));

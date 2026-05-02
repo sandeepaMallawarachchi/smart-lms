@@ -24,13 +24,13 @@ public interface AnswerRepository extends JpaRepository<Answer, Long> {
      * Returns all answers for a given submission, ordered by question ID
      * so the grading view receives them in a consistent order.
      */
-    List<Answer> findBySubmissionIdOrderByQuestionId(Long submissionId);
+    List<Answer> findBySubmissionIdOrderByQuestionId(String submissionId);
 
     /**
      * Used by the upsert logic: check whether an answer already exists
      * before deciding to INSERT vs UPDATE.
      */
-    Optional<Answer> findBySubmissionIdAndQuestionId(Long submissionId, String questionId);
+    Optional<Answer> findBySubmissionIdAndQuestionId(String submissionId, String questionId);
 
     /**
      * Used by the integrity service for peer-comparison plagiarism detection.

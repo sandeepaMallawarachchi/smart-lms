@@ -46,7 +46,7 @@ public class AnswerService {
     public ApiResponse<AnswerResponse> saveAnswer(String submissionIdStr,
                                                    String questionId,
                                                    SaveAnswerRequest request) {
-        Long submissionId = parseSubmissionId(submissionIdStr);
+        String submissionId = submissionIdStr;
         int textLen = request.getAnswerText() != null ? request.getAnswerText().length() : 0;
         log.info("[AnswerService] saveAnswer — submissionId={} questionId={} wordCount={} chars={}",
                 submissionId, questionId, request.getWordCount(), textLen);
@@ -94,7 +94,7 @@ public class AnswerService {
      */
     @Transactional(readOnly = true)
     public ApiResponse<List<AnswerResponse>> getAnswers(String submissionIdStr) {
-        Long submissionId = parseSubmissionId(submissionIdStr);
+        String submissionId = submissionIdStr;
         log.info("[AnswerService] getAnswers — submissionId={}", submissionId);
 
         List<Answer> answers = answerRepository.findBySubmissionIdOrderByQuestionId(submissionId);
@@ -124,7 +124,7 @@ public class AnswerService {
     public ApiResponse<AnswerResponse> saveAnalysis(String submissionIdStr,
                                                      String questionId,
                                                      SaveAnswerAnalysisRequest request) {
-        Long submissionId = parseSubmissionId(submissionIdStr);
+        String submissionId = submissionIdStr;
         log.info("[AnswerService] saveAnalysis — submissionId={} questionId={}", submissionId, questionId);
 
         // If the answer row doesn't exist yet (feedback fired before the 5s auto-save),
@@ -246,7 +246,7 @@ public class AnswerService {
     private AnswerResponse toResponse(Answer a) {
         return AnswerResponse.builder()
                 .id(a.getId())
-                .submissionId(a.getSubmissionId() != null ? String.valueOf(a.getSubmissionId()) : null)
+                .submissionId(a.getSubmissionId())
                 .questionId(a.getQuestionId())
                 .questionText(a.getQuestionText())
                 .answerText(a.getAnswerText())
@@ -275,19 +275,6 @@ public class AnswerService {
                 .lecturerUpdatedAt(a.getLecturerUpdatedAt() != null ? a.getLecturerUpdatedAt().toString() : null)
                 .lecturerUpdatedBy(a.getLecturerUpdatedBy())
                 .build();
-    }
-
-    /**
-     * Parse a submission ID path variable to Long.
-     * Throws IllegalArgumentException (→ 400) on malformed input rather than
-     * silently querying with a mismatched value.
-     */
-    private Long parseSubmissionId(String submissionIdStr) {
-        try {
-            return Long.parseLong(submissionIdStr);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Invalid submissionId: '" + submissionIdStr + "'");
-        }
     }
 
     private List<String> splitPipe(String value) {

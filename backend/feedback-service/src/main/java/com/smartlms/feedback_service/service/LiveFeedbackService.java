@@ -89,24 +89,48 @@ public class LiveFeedbackService {
     // ─── Gibberish detection ─────────────────────────────────────────────────
 
     private boolean isGibberish(String text) {
-        if (text == null || text.isBlank()) return true;
+        return computeGibberishRatio(text) >= 0.35;
+    }
+
+    /**
+     * Returns the fraction of tokens that look like gibberish.
+     * Used both by the main gate (isGibberish) and enforceConsistency
+     * to suppress score-boosting for borderline suspicious answers.
+     */
+    private double computeGibberishRatio(String text) {
+        if (text == null || text.isBlank()) return 1.0;
         String[] words = text.trim().split("\\s+");
-        if (words.length == 0) return true;
+        if (words.length == 0) return 1.0;
 
         int gibberishCount = 0;
         for (String word : words) {
-            String cleaned = word.toLowerCase().replaceAll("[^a-z]", "");
-            if (cleaned.isEmpty()) continue;
-            boolean hasVowel              = cleaned.matches(".*[aeiou].*");
-            boolean hasLongConsonantRun   = cleaned.matches(".*[^aeiou]{5,}.*");
-            if (!hasVowel || hasLongConsonantRun) gibberishCount++;
+            if (isGibberishWord(word)) gibberishCount++;
         }
 
         double ratio = (double) gibberishCount / words.length;
-        boolean flagged = ratio > 0.40;
         log.info("[LiveFeedback] Gibberish check: {}/{} words flagged ({}%) — {}",
-                gibberishCount, words.length, String.format("%.0f", ratio * 100), flagged ? "GIBBERISH" : "OK");
-        return flagged;
+                gibberishCount, words.length, String.format("%.0f", ratio * 100),
+                ratio >= 0.35 ? "GIBBERISH" : "OK");
+        return ratio;
+    }
+
+    private boolean isGibberishWord(String word) {
+        // Mixed letters + digits signals keyboard-mashing (j4h, krlji3ur3, e8wqueh, 0-09e8u)
+        boolean hasLetter = word.matches(".*[a-zA-Z].*");
+        boolean hasDigit  = word.matches(".*[0-9].*");
+        if (hasLetter && hasDigit) return true;
+
+        String cleaned = word.toLowerCase().replaceAll("[^a-z]", "");
+        if (cleaned.isEmpty()) return false; // pure numbers/symbols — may be legit (e.g. "100%")
+
+        // Single-character tokens: only 'a' and 'i' are valid English words
+        if (cleaned.length() == 1) return !cleaned.equals("a") && !cleaned.equals("i");
+
+        // No vowel at all
+        if (!cleaned.matches(".*[aeiou].*")) return true;
+
+        // Consonant run ≥ 4 (reduced from 5 — catches "krlj", "rthrt", etc.)
+        return cleaned.matches(".*[^aeiou]{4,}.*");
     }
 
     private LiveFeedbackResponse buildGibberishResponse(String questionId) {
@@ -249,11 +273,20 @@ public class LiveFeedbackService {
         String questionText = request.getQuestionPrompt() != null ? request.getQuestionPrompt() : "";
         String answerText   = request.getAnswerText();
 
+        // ── Gibberish guard: if the answer is borderline suspicious, disable all
+        //    score-boosting rules so the AI's low raw scores are not inflated. ──
+        double gibberishRatio = computeGibberishRatio(answerText);
+        boolean isSuspicious  = gibberishRatio >= 0.20;
+        if (isSuspicious) {
+            log.info("[LiveFeedback] questionId={} SUSPICIOUS TEXT (gibberishRatio={}) — zeroing all scores",
+                    request.getQuestionId(), String.format("%.2f", gibberishRatio));
+            return buildGibberishResponse(request.getQuestionId());
+        }
+
         // ── Rule B: Question repetition detection ─────────────────────────────
         double repetitionRatio = computeRepetitionRatio(answerText, questionText);
         log.info("[LiveFeedback] questionId={} repetitionRatio={}", request.getQuestionId(), String.format("%.2f", repetitionRatio));
         if (repetitionRatio >= 0.65) {
-            // Answer is mostly question words — no new information
             completeness = Math.min(completeness, 3.0);
             clarity      = Math.min(clarity,      5.0);
             log.info("[LiveFeedback] questionId={} REPETITION DETECTED — capping completeness={} clarity={}",
@@ -261,6 +294,8 @@ public class LiveFeedbackService {
         }
 
         // ── Rule A: Positive-strength consistency ─────────────────────────────
+        // Only applies when text is clean (not suspicious). Never boosts scores
+        // for answers that barely passed the gibberish gate.
         boolean hasPositiveStrength = hasPositiveLanguage(response.getStrengths());
         if (hasPositiveStrength && relevance < 5.0) {
             log.info("[LiveFeedback] questionId={} INCONSISTENCY: positive strengths but relevance={} — correcting",
@@ -278,9 +313,8 @@ public class LiveFeedbackService {
                     request.getQuestionId(), String.format("%.0f", coverage * 100), matches, keywords.size());
 
             if (coverage >= 0.30) {
-                // Concept vocabulary detected — floor relevance and completeness
-                double relevanceFloor    = 5.0 + coverage * 2.0;  // 5.6–7.0 range
-                double completenessFloor = 4.0 + coverage * 1.5;  // 4.45–5.5 range
+                double relevanceFloor    = 5.0 + coverage * 2.0;
+                double completenessFloor = 4.0 + coverage * 1.5;
                 relevance    = Math.max(relevance,    relevanceFloor);
                 completeness = Math.max(completeness, completenessFloor);
                 if (clarity >= 4.0) grammar = Math.max(grammar, 4.0);
@@ -288,7 +322,6 @@ public class LiveFeedbackService {
                         request.getQuestionId(), relevance, completeness);
             }
 
-            // Hard rule: for short answers, NEVER zero relevance unless the answer is blank
             if (relevance < 1.0 && !answerText.isBlank() && !hasNegativeStrength(response.getStrengths())) {
                 relevance = 1.0;
             }
@@ -430,11 +463,14 @@ public class LiveFeedbackService {
 
     private List<String> extractLines(String text, String prefix) {
         List<String> results = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
         Pattern p = Pattern.compile(prefix + "\\d+:\\s*(.+)", Pattern.CASE_INSENSITIVE);
         Matcher m = p.matcher(text);
         while (m.find()) {
             String value = m.group(1).trim();
-            if (!value.isBlank()) results.add(value);
+            // Skip placeholder template tokens the model sometimes echoes back
+            if (value.isBlank() || value.startsWith("<") || value.startsWith("[")) continue;
+            if (seen.add(value.toLowerCase())) results.add(value);
         }
         return results;
     }

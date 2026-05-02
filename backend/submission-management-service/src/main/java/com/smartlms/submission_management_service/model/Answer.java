@@ -41,9 +41,9 @@ public class Answer {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** Foreign key to the parent submission. Matches Submission.id (Long / BIGINT). */
+    /** Foreign key to the parent submission. Stored as VARCHAR to match the existing DB column. */
     @Column(name = "submission_id", nullable = false)
-    private Long submissionId;
+    private String submissionId;
 
     /** Student who wrote this answer. Stored so peer-comparison can exclude
      *  ALL of a student's answers (across all their submission versions) at once. */
