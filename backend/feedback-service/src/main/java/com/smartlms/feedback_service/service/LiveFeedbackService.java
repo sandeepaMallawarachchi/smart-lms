@@ -141,6 +141,9 @@ public class LiveFeedbackService {
     }
 
     private boolean isGibberishWord(String word) {
+        // All-uppercase tokens of 2+ letters are almost always acronyms (SQL, XSS, VPN, HTTP…)
+        if (word.matches("[A-Z]{2,}")) return false;
+
         // Mixed letters + digits signals keyboard-mashing (j4h, krlji3ur3, e8wqueh, 0-09e8u)
         boolean hasLetter = word.matches(".*[a-zA-Z].*");
         boolean hasDigit  = word.matches(".*[0-9].*");
@@ -312,9 +315,10 @@ public class LiveFeedbackService {
         }
 
         // ── Rule B: Question repetition detection ─────────────────────────────
-        double repetitionRatio = computeRepetitionRatio(answerText, questionText);
+        double repetitionRatio  = computeRepetitionRatio(answerText, questionText);
+        boolean repetitionDetected = repetitionRatio >= 0.65;
         log.info("[LiveFeedback] questionId={} repetitionRatio={}", request.getQuestionId(), String.format("%.2f", repetitionRatio));
-        if (repetitionRatio >= 0.65) {
+        if (repetitionDetected) {
             completeness = Math.min(completeness, 3.0);
             clarity      = Math.min(clarity,      5.0);
             log.info("[LiveFeedback] questionId={} REPETITION DETECTED — capping completeness={} clarity={}",
@@ -322,12 +326,17 @@ public class LiveFeedbackService {
         }
 
         // ── Rule A: Positive-strength consistency ─────────────────────────────
+        // The repetition cap takes precedence: if Rule B already determined the answer
+        // is just parroting the question, don't let a superficially positive strength
+        // line override the completeness penalty.
         boolean hasPositiveStrength = hasPositiveLanguage(response.getStrengths());
         if (hasPositiveStrength && relevance < 5.0) {
             log.info("[LiveFeedback] questionId={} INCONSISTENCY: positive strengths but relevance={} — correcting",
                     request.getQuestionId(), relevance);
-            relevance    = Math.max(relevance,    5.0);
-            completeness = Math.max(completeness, 4.0);
+            relevance = Math.max(relevance, 5.0);
+            if (!repetitionDetected) {
+                completeness = Math.max(completeness, 4.0);
+            }
         }
 
         // ── Rule C: Short-answer keyword floor ───────────────────────────────
@@ -341,8 +350,13 @@ public class LiveFeedbackService {
             if (coverage >= 0.30) {
                 double relevanceFloor    = 5.0 + coverage * 2.0;
                 double completenessFloor = 4.0 + coverage * 1.5;
-                relevance    = Math.max(relevance,    relevanceFloor);
-                completeness = Math.max(completeness, completenessFloor);
+                relevance = Math.max(relevance, relevanceFloor);
+                // If Rule B detected that the answer is just parroting the question,
+                // keyword coverage will be high by definition — don't let that
+                // coincidental overlap override the repetition completeness cap.
+                if (!repetitionDetected) {
+                    completeness = Math.max(completeness, completenessFloor);
+                }
                 if (clarity >= 4.0) grammar = Math.max(grammar, 4.0);
                 log.info("[LiveFeedback] questionId={} short-answer floors applied: relevance={} completeness={}",
                         request.getQuestionId(), relevance, completeness);

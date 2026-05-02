@@ -17,6 +17,10 @@ import org.springframework.stereotype.Service;
  *  5. If question gave no signal, attempt detection from answer text alone.
  *  6. Confidence calculation from signals found.
  *  7. Fallback to SHORT_ANSWER / LONG_ESSAY when confidence < 0.45.
+ *
+ * Note on markers: all transition-word markers use a trailing space (e.g. "similarly ")
+ * rather than a trailing comma so that valid academic writing without Oxford commas
+ * (e.g. "similarly both systems") is still recognised.
  */
 @Service
 @Slf4j
@@ -82,9 +86,9 @@ public class AnswerTypeDetector {
         String q = questionPrompt.toLowerCase().trim();
 
         // COMPARATIVE_ANALYSIS — check first, very distinctive keywords
-        if (anyOf(q, "compare", "contrast", "difference between", "similarities between",
+        if (anyOf(q, "compare ", "contrast ", "difference between", "similarities between",
                 "similarities and differences", " vs ", " versus ", "which is better",
-                "what distinguishes", "how does.*differ")) {
+                "what distinguishes", "how does", "differ")) {
             return "COMPARATIVE_ANALYSIS";
         }
 
@@ -154,7 +158,7 @@ public class AnswerTypeDetector {
         // TECHNICAL_EXPLANATION
         if (anyOf(q, "explain how ", "describe the mechanism", "how does it work",
                 "what is the function of", "describe the structure of",
-                "how does.*function", "what is the role of", "describe the working of",
+                "how does", "function", "what is the role of", "describe the working of",
                 "explain the concept of")) {
             return "TECHNICAL_EXPLANATION";
         }
@@ -197,27 +201,27 @@ public class AnswerTypeDetector {
     // ── Answer-only detection (when question gave no signal) ──────────────────────
 
     private String detectTypeFromAnswer(String lower) {
-        // Comparative markers
-        int comparative = countOf(lower, "both ", "similarly,", "likewise,", "in contrast,",
-                "conversely,", "on the other hand", "whereas ", "by comparison",
+        // Comparative markers (space-suffixed, no trailing commas)
+        int comparative = countOf(lower, "both ", "similarly ", "likewise ", "in contrast",
+                "conversely ", "on the other hand", "whereas ", "by comparison",
                 "on one hand", "by contrast");
         if (comparative >= 2) return "COMPARATIVE_ANALYSIS";
 
         // Cause-effect markers
-        int causal = countOf(lower, "because ", "therefore,", "as a result,",
-                "consequently,", "due to ", "leads to ", "caused by ", "resulting in ",
-                "thus,", "hence,", "this is why");
+        int causal = countOf(lower, "because ", "therefore ", "as a result",
+                "consequently ", "due to ", "leads to ", "caused by ", "resulting in ",
+                "thus ", "hence ", "this is why");
         if (causal >= 2) return "CAUSE_EFFECT";
 
         // Argumentative markers
         int argument = countOf(lower, "i believe", "i argue", "in my opinion",
-                "evidence suggests", "firstly,", "furthermore,",
-                "in conclusion,", "it is clear that", "one could argue");
+                "evidence suggests", "firstly ", "furthermore ", "in conclusion",
+                "it is clear that", "one could argue");
         if (argument >= 2) return "ARGUMENTATIVE";
 
         // Procedural markers
-        int procedural = countOf(lower, "step 1", "step 2", "first,", "second,",
-                "third,", "then,", "next,", "finally,", "after that,", "begin by");
+        int procedural = countOf(lower, "step 1", "step 2", "first ", "second ",
+                "third ", "then ", "next ", "finally ", "after that", "begin by");
         if (procedural >= 2) return "PROCEDURAL";
 
         // Reflective markers
@@ -259,49 +263,50 @@ public class AnswerTypeDetector {
     }
 
     private boolean confirmComparativeAnalysis(String lower) {
-        int n = countOf(lower, "both ", "similarly,", "likewise,", "in contrast,",
-                "conversely,", "on the other hand", "whereas ", "however,",
+        // Use space-suffixed markers so "however " matches "however the" as well as "however, the"
+        int n = countOf(lower, "both ", "similarly ", "likewise ", "in contrast",
+                "conversely ", "on the other hand", "whereas ", "however ",
                 "although ", "by comparison", "on one hand", "by contrast");
         return n >= 2;
     }
 
     private boolean confirmProblemSolution(String lower) {
         boolean hasProblem = lower.contains("problem") || lower.contains("challenge") || lower.contains("issue");
-        boolean hasSolution = lower.contains("solution") || lower.contains("solve") || lower.contains("address") || lower.contains("recommend");
+        boolean hasSolution = lower.contains("solution") || lower.contains("solve")
+                || lower.contains("address") || lower.contains("recommend");
         return hasProblem && hasSolution;
     }
 
     private boolean confirmArgumentative(String lower) {
         int n = countOf(lower, "i believe", "i argue", "in my opinion", "evidence",
-                "firstly,", "furthermore,", "therefore,", "in conclusion,",
-                "it is clear", "one could argue", "thus,", "hence,");
+                "firstly ", "furthermore ", "therefore ", "in conclusion",
+                "it is clear", "one could argue", "thus ", "hence ");
         return n >= 2;
     }
 
     private boolean confirmListBased(String lower) {
-        // Raw string used for line-counting — use the original casing-preserved version via containsLine trick
         long bulletLines = lower.lines()
                 .filter(l -> l.trim().matches("^[•\\-\\*]\\s+.{2,}"))
                 .count();
         long numberedLines = lower.lines()
                 .filter(l -> l.trim().matches("^\\d+[.):]\\s+.{2,}"))
                 .count();
-        int markers = countOf(lower, "first,", "second,", "third,", "fourth,",
-                "additionally,", "also,", "another ", "finally,", "lastly,");
+        int markers = countOf(lower, "first ", "second ", "third ", "fourth ",
+                "additionally ", "also ", "another ", "finally ", "lastly ");
         return bulletLines >= 2 || numberedLines >= 2 || markers >= 2;
     }
 
     private boolean confirmProcedural(String lower) {
-        int n = countOf(lower, "step 1", "step 2", "first,", "second,",
-                "then,", "next,", "finally,", "after that,", "lastly,",
+        int n = countOf(lower, "step 1", "step 2", "first ", "second ",
+                "then ", "next ", "finally ", "after that", "lastly ",
                 "begin by", "start by", "once you");
         return n >= 2;
     }
 
     private boolean confirmCauseEffect(String lower) {
-        int n = countOf(lower, "because ", "therefore,", "as a result,",
-                "consequently,", "due to ", "leads to ", "caused by ",
-                "resulting in ", "thus,", "hence,");
+        int n = countOf(lower, "because ", "therefore ", "as a result",
+                "consequently ", "due to ", "leads to ", "caused by ",
+                "resulting in ", "thus ", "hence ");
         return n >= 2;
     }
 
@@ -351,7 +356,7 @@ public class AnswerTypeDetector {
 
         double base = 0.55; // question-only signal baseline
 
-        if (confirmed)      base += 0.25; // answer confirms question signal
+        if (confirmed)       base += 0.25; // answer confirms question signal
         if (wordCount >= 50) base += 0.05; // more text = more evidence
         if (wordCount >= 100) base += 0.05;
 
