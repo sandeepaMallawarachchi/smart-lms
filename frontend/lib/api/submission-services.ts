@@ -102,18 +102,18 @@ async function apiRequest<T>(
 // ─── Letter grade helper ──────────────────────────────────────
 
 export function scoreToLetterGrade(pct: number): string {
-    if (pct >= 97) return 'A+';
-    if (pct >= 93) return 'A';
-    if (pct >= 90) return 'A-';
-    if (pct >= 87) return 'B+';
-    if (pct >= 83) return 'B';
-    if (pct >= 80) return 'B-';
-    if (pct >= 77) return 'C+';
-    if (pct >= 73) return 'C';
-    if (pct >= 70) return 'C-';
-    if (pct >= 67) return 'D+';
-    if (pct >= 60) return 'D';
-    return 'F';
+    if (pct >= 90) return 'A+';
+    if (pct >= 80) return 'A';
+    if (pct >= 75) return 'A-';
+    if (pct >= 70) return 'B+';
+    if (pct >= 65) return 'B';
+    if (pct >= 60) return 'B-';
+    if (pct >= 55) return 'C+';
+    if (pct >= 45) return 'C';
+    if (pct >= 40) return 'C-';
+    if (pct >= 35) return 'D+';
+    if (pct >= 30) return 'D';
+    return 'E';
 }
 
 // ─── Submission Service (port 8081) ───────────────────────────
