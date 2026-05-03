@@ -408,10 +408,16 @@ export default function AnswerPage({
                     ? Math.round((totalEarnedPts / totalMaxPts) * 1000) / 10
                     : undefined;
 
+                const revertKey = `smartlms_revert_source_${assignmentId}`;
+                const revertSourceVersion = sessionStorage.getItem(revertKey);
+                if (revertSourceVersion) sessionStorage.removeItem(revertKey);
+
                 const snapshotPayload: TextSnapshotPayload = {
                     submissionId,
                     studentId,
-                    commitMessage: `${assignment?.title ?? 'Assignment'} — v${versionNumber}`,
+                    commitMessage: revertSourceVersion
+                        ? `Reverted from v${revertSourceVersion}`
+                        : `${assignment?.title ?? 'Assignment'} — v${versionNumber}`,
                     totalWordCount: totalWords,
                     overallGrade:  submittedResult?.grade ?? computedOverallGrade,
                     maxGrade:      assignment?.totalMarks ?? undefined,

@@ -111,6 +111,9 @@ function VersionCard({
     const [downloadingReport, setDownloadingReport] = useState<'plagiarism' | 'feedback' | null>(null);
     const answers: VersionAnswer[] = version.answers ?? [];
 
+    const revertMatch = version.commitMessage?.match(/^Reverted from v(\d+)$/);
+    const revertedFromVersion = revertMatch ? Number(revertMatch[1]) : null;
+
     const handleDownload = async (type: 'plagiarism' | 'feedback') => {
         const submissionId = version.submissionId?.toString() ?? '';
         if (!submissionId) return;
@@ -172,10 +175,18 @@ function VersionCard({
                     {/* Title row + status badges */}
                     <div className="flex flex-wrap items-center gap-2 mb-1.5">
                         <h3 className="text-base font-bold text-gray-900 leading-tight">
-                            {version.commitMessage ?? `Version ${version.versionNumber}`}
+                            {revertedFromVersion != null
+                                ? `Version ${version.versionNumber}`
+                                : (version.commitMessage ?? `Version ${version.versionNumber}`)}
                         </h3>
                         {isLatest && (
                             <span className="text-xs font-semibold bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full">Latest</span>
+                        )}
+                        {revertedFromVersion != null && (
+                            <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full flex items-center gap-1">
+                                <Undo2 size={11} />
+                                Reverted from v{revertedFromVersion}
+                            </span>
                         )}
                         {version.isLate && (
                             <span className="text-xs font-semibold bg-red-100 text-red-700 px-2.5 py-1 rounded-full">Late</span>
@@ -1026,7 +1037,13 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
                 })
             ));
 
-            // 4. Navigate to answer page
+            // 4. Record which version was reverted so the answer page can tag the new snapshot
+            sessionStorage.setItem(
+                `smartlms_revert_source_${submission.assignmentId}`,
+                String(fullVersion.versionNumber),
+            );
+
+            // 5. Navigate to answer page
             router.push(`/submissions/student/answer/${submission.assignmentId}`);
         } catch (err) {
             console.error('[VersionHistory] Revert failed:', err);
