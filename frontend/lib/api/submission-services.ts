@@ -30,6 +30,7 @@ import type {
     SaveAnswerAnalysisPayload,
     LiveFeedback,
     LivePlagiarismResult,
+    VcsAnswerSnapshot,
 } from '@/types/submission.types';
 
 // ─── Base URLs ────────────────────────────────────────────────
@@ -637,6 +638,33 @@ function normalizeVcsVersion(v: VcsRaw): SubmissionVersion {
               .reduce((s, a) => s + (a.similarityScore ?? 0), 0) / answers.length
         : undefined;
 
+    const mappedAnswers = (answers as VcsAnswerSnapshot[]).map((a, idx) => ({
+        id:                  `${v.id}-q${idx}`,
+        versionId:           String(v.id),
+        questionId:          a.questionId,
+        questionText:        a.questionText,
+        answerText:          a.answerText,
+        wordCount:           a.wordCount,
+        grammarScore:        a.grammarScore ?? null,
+        clarityScore:        a.clarityScore ?? null,
+        completenessScore:   a.completenessScore ?? null,
+        relevanceScore:      a.relevanceScore ?? null,
+        strengths:           a.strengths ?? null,
+        improvements:        a.improvements ?? null,
+        suggestions:         a.suggestions ?? null,
+        similarityScore:     a.similarityScore ?? null,
+        plagiarismSeverity:  (a.plagiarismSeverity as 'LOW' | 'MEDIUM' | 'HIGH' | null) ?? null,
+        aiGeneratedMark:     a.projectedGrade ?? null,
+        plagiarismSources:   (a.internetMatches ?? []).map((m, mi) => ({
+            id:                   `${v.id}-q${idx}-m${mi}`,
+            sourceUrl:            (m as Record<string, unknown>).url as string ?? '',
+            sourceTitle:          (m as Record<string, unknown>).title as string ?? (m as Record<string, unknown>).sourceDomain as string ?? 'Unknown source',
+            sourceSnippet:        (m as Record<string, unknown>).snippet as string ?? undefined,
+            matchedText:          (m as Record<string, unknown>).matchedStudentText as string ?? undefined,
+            similarityPercentage: (m as Record<string, unknown>).similarityScore as number ?? 0,
+        })),
+    }));
+
     return {
         id:            String(v.id),
         submissionId:  String(v.submissionId),
@@ -655,9 +683,12 @@ function normalizeVcsVersion(v: VcsRaw): SubmissionVersion {
         metadata:      meta as SubmissionVersion['metadata'],
         totalWordCount: typeof meta.totalWordCount === 'number' ? meta.totalWordCount : undefined,
         wordCount:      typeof meta.totalWordCount === 'number' ? meta.totalWordCount : undefined,
+        aiScore:        typeof meta.overallGrade   === 'number' ? meta.overallGrade   : undefined,
         aiGrade:        typeof meta.overallGrade   === 'number' ? meta.overallGrade   : undefined,
+        finalGrade:     typeof meta.overallGrade   === 'number' ? meta.overallGrade   : undefined,
         maxGrade:       typeof meta.maxGrade       === 'number' ? meta.maxGrade       : undefined,
         plagiarismScore: avgSimilarity != null ? Math.round(avgSimilarity * 10) / 10 : undefined,
+        answers:        mappedAnswers.length > 0 ? mappedAnswers : undefined,
     };
 }
 

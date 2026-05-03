@@ -413,13 +413,17 @@ export function useAnswerEditor({
                 '| textLen:', initialText.length, '| reason: no saved feedback');
             requestFeedback(initialText);
         }
+        const plagiarismNeedsHydration =
+            !initialPlagiarism ||
+            !initialPlagiarism.internetMatches?.length;   // saved result has no source details
         if (
             initialText &&
             initialText.length >= MIN_TEXT_LENGTH &&
-            !initialPlagiarism
+            plagiarismNeedsHydration
         ) {
             console.debug('[useAnswerEditor] Firing initial plagiarism on mount — questionId:', questionId,
-                '| textLen:', initialText.length, '| reason: no saved plagiarism result');
+                '| textLen:', initialText.length,
+                '| reason:', !initialPlagiarism ? 'no saved result' : 'saved result has no internet matches');
             requestPlagiarismCheck(initialText);
         }
         // Run only once on mount; requestFeedback/requestPlagiarismCheck are stable callbacks
