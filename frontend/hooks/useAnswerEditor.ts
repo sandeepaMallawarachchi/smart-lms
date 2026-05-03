@@ -135,6 +135,12 @@ export function useAnswerEditor({
     const [plagiarismResult, setPlagiarismResult] = useState<LivePlagiarismResult | null>(initialPlagiarism);
     const [plagiarismLoading, setPlagiarismLoading] = useState<boolean>(false);
 
+    // Refs that let async callbacks read the latest state without stale-closure issues.
+    // Updated in sync via useEffect so requestFeedback / requestPlagiarismCheck always
+    // see the freshest values without needing them in their dependency arrays.
+    const liveFeedbackRef     = useRef<LiveFeedback | null>(initialFeedback);
+    const plagiarismResultRef = useRef<LivePlagiarismResult | null>(initialPlagiarism);
+
     // ── Auto-save state ────────────────────────────────────────
     const [autoSaving, setAutoSaving]         = useState<boolean>(false);
     const [lastSaved, setLastSaved]           = useState<Date | null>(null);
@@ -169,6 +175,10 @@ export function useAnswerEditor({
             : `session-${Date.now()}-${Math.random()}`
     );
 
+    // Keep refs in sync so async callbacks always see the current state.
+    useEffect(() => { liveFeedbackRef.current    = liveFeedback;    }, [liveFeedback]);
+    useEffect(() => { plagiarismResultRef.current = plagiarismResult; }, [plagiarismResult]);
+
     // ── Inner async helpers ────────────────────────────────────
 
     /** Fire AI feedback request for the given text, then persist the result. */
@@ -186,6 +196,8 @@ export function useAnswerEditor({
                 questionPrompt: questionText,
                 expectedWordCount,
                 maxPoints,
+                // Pass current plagiarism score so the backend can include penalty in projectedGrade.
+                similarityScore: plagiarismResultRef.current?.similarityScore,
             });
             console.debug('[useAnswerEditor] AI feedback received — questionId:', questionId,
                 '| grammar:', feedback.grammarScore,
@@ -241,6 +253,31 @@ export function useAnswerEditor({
             setPlagiarismResult(result);
             // Track latest result so auto-save can flush it if the row didn't exist yet
             pendingPlagiarismRef.current = result;
+
+            // Re-compute projected grade on the backend now that we have the real
+            // similarity score.  Only fires when live feedback already exists and
+            // maxPoints is known — silent failure is acceptable.
+            const fb = liveFeedbackRef.current;
+            if (fb && maxPoints) {
+                const wc = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+                feedbackService.calculateGrade({
+                    grammarScore:      fb.grammarScore,
+                    clarityScore:      fb.clarityScore,
+                    completenessScore: fb.completenessScore,
+                    relevanceScore:    fb.relevanceScore,
+                    maxPoints,
+                    wordCount: wc,
+                    expectedWordCount,
+                    similarityScore: result.similarityScore,
+                }).then(grade => {
+                    setLiveFeedback(prev => prev ? { ...prev, ...grade } : null);
+                    console.debug('[useAnswerEditor] Grade updated after plagiarism — questionId:', questionId,
+                        '| projectedGrade:', grade.projectedGrade, '| letterGrade:', grade.letterGrade);
+                }).catch(() => {
+                    // Silent — grade display keeps old value until next feedback request
+                });
+            }
+
             // Persist silently — server guards wordCount >= 1
             submissionService.saveAnswerAnalysis(submissionId, questionId, {
                 similarityScore:    result.similarityScore,

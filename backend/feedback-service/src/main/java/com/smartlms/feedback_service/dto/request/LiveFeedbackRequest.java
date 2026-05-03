@@ -38,4 +38,11 @@ public class LiveFeedbackRequest {
 
     /** Maximum marks available for this question (used to calibrate scoring strictness). */
     private Integer maxPoints;
+
+    /**
+     * Current plagiarism similarity score (0–100), if known.
+     * When provided, the backend applies plagiarism-tier penalties to the projected grade.
+     * Null is treated as zero (no penalty).
+     */
+    private Double similarityScore;
 }

@@ -1,9 +1,11 @@
 package com.smartlms.feedback_service.controller;
 
 import com.smartlms.feedback_service.dto.request.FeedbackRequest;
+import com.smartlms.feedback_service.dto.request.GradeCalculationRequest;
 import com.smartlms.feedback_service.dto.request.LiveFeedbackRequest;
 import com.smartlms.feedback_service.dto.response.ApiResponse;
 import com.smartlms.feedback_service.dto.response.FeedbackResponse;
+import com.smartlms.feedback_service.dto.response.GradeCalculationResponse;
 import com.smartlms.feedback_service.dto.response.LiveFeedbackResponse;
 import com.smartlms.feedback_service.service.FeedbackService;
 import com.smartlms.feedback_service.service.LiveFeedbackService;
@@ -59,6 +61,49 @@ public class FeedbackController {
                     return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                             .body(ApiResponse.error("AI feedback service temporarily unavailable: " + ex.getMessage()));
                 });
+    }
+
+    /**
+     * Re-compute the projected grade from existing AI scores + an updated plagiarism score.
+     *
+     * Called by the frontend when the plagiarism check completes after live feedback
+     * has already been received (the two debounced operations fire independently).
+     * This avoids keeping grade formula logic in the frontend.
+     *
+     * POST /api/feedback/grade
+     */
+    @PostMapping("/grade")
+    public ResponseEntity<ApiResponse<GradeCalculationResponse>> calculateGrade(
+            @RequestBody GradeCalculationRequest request) {
+        log.info("POST /api/feedback/grade — maxPts={} wordCount={} simScore={}",
+                request.getMaxPoints(), request.getWordCount(), request.getSimilarityScore());
+
+        if (request.getMaxPoints() == null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("maxPoints is required for grade calculation"));
+        }
+
+        LiveFeedbackResponse stub = LiveFeedbackResponse.builder()
+                .grammarScore(request.getGrammarScore())
+                .clarityScore(request.getClarityScore())
+                .completenessScore(request.getCompletenessScore())
+                .relevanceScore(request.getRelevanceScore())
+                .build();
+
+        liveFeedbackService.attachProjectedGradeFromWordCount(
+                stub,
+                request.getMaxPoints(),
+                request.getWordCount() != null ? request.getWordCount() : 0,
+                request.getExpectedWordCount(),
+                request.getSimilarityScore());
+
+        GradeCalculationResponse grade = GradeCalculationResponse.builder()
+                .projectedGrade(stub.getProjectedGrade())
+                .projectedGradePercent(stub.getProjectedGradePercent())
+                .letterGrade(stub.getLetterGrade())
+                .build();
+
+        return ResponseEntity.ok(ApiResponse.success("Grade calculated", grade));
     }
 
     /**

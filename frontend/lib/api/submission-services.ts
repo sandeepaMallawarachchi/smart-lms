@@ -672,6 +672,7 @@ function normalizeVcsVersion(v: VcsRaw): SubmissionVersion {
         similarityScore:     a.similarityScore ?? null,
         plagiarismSeverity:  (a.plagiarismSeverity as 'LOW' | 'MEDIUM' | 'HIGH' | null) ?? null,
         aiGeneratedMark:     a.projectedGrade ?? null,
+        maxPoints:           a.maxPoints ?? null,
         plagiarismSources:   (a.internetMatches ?? []).map((m, mi) => ({
             id:                   `${v.id}-q${idx}-m${mi}`,
             sourceUrl:            (m as Record<string, unknown>).url as string ?? '',
@@ -896,6 +897,8 @@ export const feedbackService = {
     /**
      * Generate real-time lightweight feedback while the student types.
      * Called ~3 seconds after typing stops. Not persisted to DB.
+     * The backend also returns projectedGrade/projectedGradePercent/letterGrade
+     * when maxPoints is supplied (grade formula runs server-side).
      * POST /api/feedback/live
      */
     async generateLiveFeedback(payload: {
@@ -904,16 +907,39 @@ export const feedbackService = {
         questionPrompt?: string;
         expectedWordCount?: number;
         maxPoints?: number;
+        /** Current plagiarism similarity score (0–100) — used by backend for grade penalty. */
+        similarityScore?: number;
     }): Promise<LiveFeedback> {
-        console.debug('[feedbackService] generateLiveFeedback — questionId:', payload.questionId, '| textLen:', payload.answerText.length, '| expectedWords:', payload.expectedWordCount ?? '(none)');
-        // Backend wraps in ApiResponse<LiveFeedbackResponse> → unwrap .data
+        console.debug('[feedbackService] generateLiveFeedback — questionId:', payload.questionId, '| textLen:', payload.answerText.length, '| expectedWords:', payload.expectedWordCount ?? '(none)', '| simScore:', payload.similarityScore ?? 'n/a');
         const res = await apiRequest<{ data: LiveFeedback }>(`${FEEDBACK_API}/api/feedback/live`, {
             method: 'POST',
             body: JSON.stringify(payload),
         });
         const fb = res.data;
-        console.debug('[feedbackService] generateLiveFeedback — received scores: grammar=', fb?.grammarScore, '| clarity=', fb?.clarityScore, '| completeness=', fb?.completenessScore, '| relevance=', fb?.relevanceScore);
+        console.debug('[feedbackService] generateLiveFeedback — scores: grammar=', fb?.grammarScore, '| clarity=', fb?.clarityScore, '| completeness=', fb?.completenessScore, '| relevance=', fb?.relevanceScore, '| projectedGrade=', fb?.projectedGrade);
         return fb;
+    },
+
+    /**
+     * Re-compute projected grade from existing AI scores + updated plagiarism score.
+     * Called when the plagiarism result arrives after live feedback has already been shown.
+     * POST /api/feedback/grade
+     */
+    async calculateGrade(payload: {
+        grammarScore: number;
+        clarityScore: number;
+        completenessScore: number;
+        relevanceScore: number;
+        maxPoints: number;
+        wordCount: number;
+        expectedWordCount?: number;
+        similarityScore?: number;
+    }): Promise<{ projectedGrade: number; projectedGradePercent: number; letterGrade: string }> {
+        const res = await apiRequest<{ data: { projectedGrade: number; projectedGradePercent: number; letterGrade: string } }>(
+            `${FEEDBACK_API}/api/feedback/grade`,
+            { method: 'POST', body: JSON.stringify(payload) },
+        );
+        return res.data;
     },
 };
 

@@ -358,14 +358,18 @@ function VersionCard({
 
                             {/* Marks row */}
                             <div className="flex items-center gap-4 mt-2 text-xs">
-                                {a.aiGeneratedMark != null && (
-                                    <span className="text-purple-600 font-semibold">
-                                        AI Mark: {a.aiGeneratedMark.toFixed(1)} / 10
-                                    </span>
-                                )}
+                                {a.aiGeneratedMark != null && (() => {
+                                    const mp = a.maxPoints ?? 10;
+                                    const earned = Math.round((a.aiGeneratedMark / 10) * mp * 10) / 10;
+                                    return (
+                                        <span className="text-purple-600 font-semibold">
+                                            AI Mark: {earned.toFixed(1)} / {mp}
+                                        </span>
+                                    );
+                                })()}
                                 {a.lecturerMark != null && (
                                     <span className="text-blue-600 font-semibold">
-                                        Lecturer Mark: {a.lecturerMark.toFixed(1)} / 10
+                                        Lecturer Mark: {a.lecturerMark.toFixed(1)} / {a.maxPoints ?? 10}
                                     </span>
                                 )}
                             </div>
@@ -494,7 +498,7 @@ function ComparisonView({
                                 {/* Metric deltas for this question */}
                                 <div className="flex flex-wrap gap-4 mb-3 text-xs text-gray-600">
                                     <span>Words: {la?.wordCount ?? 0} → {ra?.wordCount ?? 0} {metricDelta(la?.wordCount, ra?.wordCount)}</span>
-                                    <span>AI Mark: {la?.aiGeneratedMark?.toFixed(1) ?? '—'} → {ra?.aiGeneratedMark?.toFixed(1) ?? '—'} {metricDelta(la?.aiGeneratedMark, ra?.aiGeneratedMark)}</span>
+                                    <span>AI Mark: {la?.aiGeneratedMark != null ? `${Math.round((la.aiGeneratedMark / 10) * (la.maxPoints ?? 10) * 10) / 10}/${la.maxPoints ?? 10}` : '—'} → {ra?.aiGeneratedMark != null ? `${Math.round((ra.aiGeneratedMark / 10) * (ra.maxPoints ?? 10) * 10) / 10}/${ra.maxPoints ?? 10}` : '—'} {metricDelta(la?.aiGeneratedMark, ra?.aiGeneratedMark)}</span>
                                     <span>Plagiarism: {la?.plagiarismSeverity ?? 'N/A'} → {ra?.plagiarismSeverity ?? 'N/A'}</span>
                                 </div>
 

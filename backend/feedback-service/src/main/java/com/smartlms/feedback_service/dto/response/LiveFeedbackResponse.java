@@ -109,4 +109,27 @@ public class LiveFeedbackResponse {
      * Populated only for PROCEDURAL answers.
      */
     private Double sequenceLogicScore;
+
+    // ── Projected grade (computed server-side from AI scores + plagiarism) ────────
+
+    /**
+     * Projected earned mark in the range [0, maxPoints].
+     * Null when maxPoints was not provided in the request.
+     * Accounts for plagiarism penalty and (for long answers) word-count penalty.
+     */
+    private Double projectedGrade;
+
+    /**
+     * Projected grade expressed as a percentage (0–100).
+     * Null when maxPoints was not provided.
+     */
+    private Double projectedGradePercent;
+
+    /**
+     * Letter grade derived from projectedGradePercent.
+     * A+ ≥97, A ≥93, A- ≥90, B+ ≥87, B ≥83, B- ≥80,
+     * C+ ≥77, C ≥73, C- ≥70, D+ ≥67, D ≥60, F <60.
+     * Null when projectedGradePercent is not available.
+     */
+    private String letterGrade;
 }

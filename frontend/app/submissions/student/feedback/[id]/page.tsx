@@ -57,7 +57,14 @@ function ScoreBar({ label, value }: { label: string; value?: number | null }) {
 
 // ─── QuestionAnswerBlock ──────────────────────────────────────
 
-function QuestionAnswerBlock({ answer, index, submissionId, versionId }: { answer: VersionAnswer; index: number; submissionId: string; versionId: string }) {
+function QuestionAnswerBlock({ answer, index, submissionId, versionId }: { answer: VersionAnswer; index: number; submissionId: string; versionId: string; }) {
+    // Recover actual earned marks from the 0-10 AI score + the stored maxPoints.
+    // aiGeneratedMark = (earnedMark / maxPoints) × 10, so:
+    // earnedMark = aiGeneratedMark / 10 × maxPoints
+    const maxPts = answer.maxPoints ?? 10;
+    const aiEarnedMark = answer.aiGeneratedMark != null
+        ? Math.round((answer.aiGeneratedMark / 10) * maxPts * 10) / 10
+        : null;
     const [showAnswer, setShowAnswer] = useState(false);
     const [showSources, setShowSources] = useState(false);
 
@@ -113,8 +120,8 @@ function QuestionAnswerBlock({ answer, index, submissionId, versionId }: { answe
                 <div>
                     <p className="text-xs text-gray-500">AI Mark</p>
                     <p className="text-xl font-bold text-purple-600">
-                        {answer.aiGeneratedMark != null ? (
-                            <>{answer.aiGeneratedMark.toFixed(1)}<span className="text-sm font-normal text-gray-400"> / 10</span></>
+                        {aiEarnedMark != null ? (
+                            <>{aiEarnedMark.toFixed(1)}<span className="text-sm font-normal text-gray-400"> / {maxPts}</span></>
                         ) : '—'}
                     </p>
                 </div>
@@ -122,7 +129,7 @@ function QuestionAnswerBlock({ answer, index, submissionId, versionId }: { answe
                     <div>
                         <p className="text-xs text-blue-600 font-semibold">Lecturer Mark</p>
                         <p className="text-xl font-bold text-blue-600">
-                            {answer.lecturerMark.toFixed(1)}<span className="text-sm font-normal text-blue-300"> / 10</span>
+                            {answer.lecturerMark.toFixed(1)}<span className="text-sm font-normal text-blue-300"> / {maxPts}</span>
                         </p>
                     </div>
                 )}

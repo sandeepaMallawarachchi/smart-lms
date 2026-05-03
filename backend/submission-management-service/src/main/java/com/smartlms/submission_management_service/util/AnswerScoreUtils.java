@@ -33,6 +33,25 @@ public final class AnswerScoreUtils {
     }
 
     /**
+     * Maps a percentage score (0–100) to an academic letter grade.
+     * Thresholds mirror those used in feedback-service's LiveFeedbackService.
+     */
+    public static String toLetterGrade(double pct) {
+        if (pct >= 97) return "A+";
+        if (pct >= 93) return "A";
+        if (pct >= 90) return "A-";
+        if (pct >= 87) return "B+";
+        if (pct >= 83) return "B";
+        if (pct >= 80) return "B-";
+        if (pct >= 77) return "C+";
+        if (pct >= 73) return "C";
+        if (pct >= 70) return "C-";
+        if (pct >= 67) return "D+";
+        if (pct >= 60) return "D";
+        return "F";
+    }
+
+    /**
      * Computes the weighted AI mark for an answer (0–10, rounded to 2 d.p.).
      * Returns {@code null} if none of the four score dimensions are set.
      */

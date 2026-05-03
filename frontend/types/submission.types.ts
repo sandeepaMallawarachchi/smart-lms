@@ -135,6 +135,8 @@ export interface VersionAnswer {
     suggestions?: string[] | null;
     /** AI-suggested mark 0-10. Null if AI had no scores at submit time. */
     aiGeneratedMark?: number | null;
+    /** Maximum marks available for this question (e.g. 20, 30). Used to convert aiGeneratedMark to actual earned marks. */
+    maxPoints?: number | null;
 
     // Plagiarism summary (frozen at submit time)
     similarityScore?: number | null;
@@ -523,6 +525,10 @@ export interface SaveAnswerPayload {
 /**
  * Real-time AI feedback returned by POST /api/feedback/live.
  * Lightweight — scores 0-10, not persisted to DB.
+ *
+ * The projected grade fields are computed server-side using the grade formula
+ * (previously in QuestionCard.calcProjectedGrade) and returned alongside the
+ * AI quality scores. They are populated only when maxPoints was sent in the request.
  */
 export interface LiveFeedback {
     questionId: string;
@@ -534,6 +540,11 @@ export interface LiveFeedback {
     strengths: string[];
     improvements: string[];
     generatedAt: string;        // ISO-8601
+
+    // Server-computed projected grade (populated when maxPoints was sent)
+    projectedGrade?: number;         // 0–maxPoints
+    projectedGradePercent?: number;  // 0–100
+    letterGrade?: string;            // A+, A, A-… F
 }
 
 /**

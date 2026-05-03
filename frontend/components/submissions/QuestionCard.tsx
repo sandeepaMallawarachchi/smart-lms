@@ -37,86 +37,6 @@ import { LiveFeedbackPanel } from './LiveFeedbackPanel';
 import { PlagiarismWarning } from './PlagiarismWarning';
 import type { Question, LiveFeedback, LivePlagiarismResult } from '@/types/submission.types';
 
-// ─── Grade Calculation ────────────────────────────────────────
-
-/**
- * Compute a projected grade (0 – maxPoints) from live AI scores + plagiarism.
- *
- * SHORT ANSWERS (≤ 5 marks):
- *   Additive weighted scoring — relevance(50%) + completeness(25%) + clarity(15%) + grammar(10%).
- *   Minimum floor: if relevance ≥ 5/10 the student earns at least 20% of maxPoints.
- *   Word-count penalty is not applied (short answers are intentionally brief).
- *
- * LONG ANSWERS (> 5 marks):
- *   Relevance acts as a soft multiplier (clamped to 0.5–1.0 to avoid harsh gates).
- *   Content quality = grammar(20%) + clarity(30%) + completeness(50%).
- *   Word-count and plagiarism penalties apply in full.
- */
-function calcProjectedGrade(
-    feedback: LiveFeedback | null,
-    plagiarism: LivePlagiarismResult | null,
-    wordCount: number,
-    expectedWordCount: number | undefined,
-    maxPoints: number,
-): number | null {
-    if (!feedback) return null;
-
-    const isShort = maxPoints <= 5;
-
-    // ── Plagiarism penalty (shared) ────────────────────────────────────────
-    const simPct = plagiarism?.similarityScore ?? 0;
-    let plagPenalty = 0;
-    if      (simPct >= 70) plagPenalty = 0.60;
-    else if (simPct >= 50) plagPenalty = 0.50;
-    else if (simPct >= 30) plagPenalty = 0.30;
-    else if (simPct >= 15) plagPenalty = 0.10;
-
-    if (isShort) {
-        // ── Short-answer scoring ─────────────────────────────────────────
-        // Weighting: concept/relevance 50%, completeness 25%, clarity 15%, grammar 10%
-        const qualityScore =
-            (feedback.relevanceScore    * 0.50 +
-             feedback.completenessScore * 0.25 +
-             feedback.clarityScore      * 0.15 +
-             feedback.grammarScore      * 0.10) / 10;   // → 0.0 – 1.0
-
-        // Minimum floor: correct concept (relevance ≥ 5) → at least 20% of marks
-        const floored = feedback.relevanceScore >= 5
-            ? Math.max(qualityScore, 0.20)
-            : qualityScore;
-
-        const adjusted = Math.max(0, floored - plagPenalty);
-        return Math.round(adjusted * maxPoints * 10) / 10;
-
-    } else {
-        // ── Long-answer scoring ─────────────────────────────────────────
-        // Content quality: grammar(20%) + clarity(30%) + completeness(50%)
-        const contentScore =
-            (feedback.grammarScore      * 0.20 +
-             feedback.clarityScore      * 0.30 +
-             feedback.completenessScore * 0.50) / 10;   // → 0.0 – 1.0
-
-        // Soft relevance gate: clamp to 0.5–1.0 so even partially relevant
-        // answers earn some credit (avoids complete zeroing for borderline cases)
-        const relevanceFactor = Math.max(0.5, feedback.relevanceScore / 10);
-        // Still zero out completely irrelevant answers (relevance < 2/10)
-        const effectiveFactor = feedback.relevanceScore < 2 ? feedback.relevanceScore / 10 : relevanceFactor;
-
-        const base = contentScore * effectiveFactor;
-
-        // Word count penalty (long answers only)
-        let wcPenalty = 0;
-        if (expectedWordCount && expectedWordCount > 0) {
-            const ratio = wordCount / expectedWordCount;
-            if      (ratio < 0.50) wcPenalty = 0.25;
-            else if (ratio < 0.75) wcPenalty = 0.10;
-        }
-
-        const adjusted = Math.max(0, base - plagPenalty - wcPenalty);
-        return Math.round(adjusted * maxPoints * 10) / 10;
-    }
-}
-
 // ─── Props ────────────────────────────────────────────────────
 
 export interface QuestionCardProps {
@@ -197,16 +117,10 @@ export function QuestionCard({
         initialPlagiarism,
     });
 
-    // Projected grade — recalculate whenever feedback/plagiarism/text changes.
+    // Projected grade — computed server-side and returned with live feedback.
+    // Reads liveFeedback.projectedGrade (set by backend, accounts for plagiarism penalty).
     const maxPoints = question.maxPoints ?? 10;
-    const wordCount = answerText.trim() === '' ? 0 : answerText.trim().split(/\s+/).length;
-    const projectedGrade = calcProjectedGrade(
-        liveFeedback,
-        plagiarismResult,
-        wordCount,
-        question.expectedWordCount,
-        maxPoints,
-    );
+    const projectedGrade = liveFeedback?.projectedGrade ?? null;
 
     // Notify parent whenever projected grade changes.
     useEffect(() => {

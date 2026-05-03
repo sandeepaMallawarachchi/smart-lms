@@ -93,6 +93,9 @@ public class LiveFeedbackService {
             LiveFeedbackResponse feedback = parseResponse(rawResponse, request.getQuestionId(), typeResult);
             feedback = enforceConsistency(feedback, request);
 
+            // ── Compute projected grade (business logic moved from frontend) ──
+            attachProjectedGrade(feedback, request);
+
             // ── Stamp type metadata ───────────────────────────────────────────
             feedback.setDetectedAnswerType(typeResult.getType().name());
             feedback.setTypeConfidence(typeResult.getConfidence());
@@ -423,6 +426,119 @@ public class LiveFeedbackService {
             if (s != null && s.toLowerCase().contains("none detected")) return true;
         }
         return false;
+    }
+
+    // ─── Projected grade computation (moved from frontend QuestionCard.tsx) ──────
+    //
+    // Formula mirrors the one previously in calcProjectedGrade():
+    //   SHORT (≤5 marks OR ≤40 words):
+    //     quality = (relevance×0.50 + completeness×0.25 + clarity×0.15 + grammar×0.10) / 10
+    //     floor applied when relevance ≥ 5 (student earns at least 20% of maxPoints)
+    //   LONG (>5 marks AND >40 words):
+    //     contentScore = (grammar×0.20 + clarity×0.30 + completeness×0.50) / 10
+    //     relevanceFactor clamped to 0.5–1.0 (soft gate; relevance<2 → full zeroing)
+    //     wordCountPenalty applied when actual words < 50% or 75% of expected
+    //   Both paths apply plagiarism penalty tiers:
+    //     ≥70% → 0.60, ≥50% → 0.50, ≥30% → 0.30, ≥15% → 0.10
+
+    /**
+     * Computes and attaches projectedGrade / projectedGradePercent / letterGrade
+     * to the response using the AI scores already set on it.
+     * No-op when maxPoints is not in the request.
+     */
+    void attachProjectedGrade(LiveFeedbackResponse response, LiveFeedbackRequest request) {
+        if (request.getMaxPoints() == null) return;
+        int wordCount = countWords(request.getAnswerText());
+        computeAndSetGrade(response,
+                request.getMaxPoints(), wordCount,
+                request.getExpectedWordCount(), request.getSimilarityScore());
+    }
+
+    /**
+     * Computes and attaches grade fields to a response stub when the caller
+     * already knows the word count (e.g. the /grade endpoint).
+     */
+    public void attachProjectedGradeFromWordCount(
+            LiveFeedbackResponse response,
+            int maxPoints, int wordCount,
+            Integer expectedWordCount, Double similarityScore) {
+        computeAndSetGrade(response, maxPoints, wordCount, expectedWordCount, similarityScore);
+    }
+
+    private void computeAndSetGrade(
+            LiveFeedbackResponse response,
+            int maxPts, int wordCount,
+            Integer expectedWordCount, Double similarityScore) {
+
+        boolean isShort = maxPts <= 5 || wordCount <= 40;
+
+        // Plagiarism penalty tier
+        double plagPenalty = 0.0;
+        if (similarityScore != null) {
+            if      (similarityScore >= 70) plagPenalty = 0.60;
+            else if (similarityScore >= 50) plagPenalty = 0.50;
+            else if (similarityScore >= 30) plagPenalty = 0.30;
+            else if (similarityScore >= 15) plagPenalty = 0.10;
+        }
+
+        double projectedRatio;
+        if (isShort) {
+            double qualityScore = (response.getRelevanceScore()    * 0.50
+                                 + response.getCompletenessScore() * 0.25
+                                 + response.getClarityScore()      * 0.15
+                                 + response.getGrammarScore()      * 0.10) / 10.0;
+            double floored = response.getRelevanceScore() >= 5.0
+                    ? Math.max(qualityScore, 0.20) : qualityScore;
+            projectedRatio = Math.max(0.0, floored - plagPenalty);
+        } else {
+            double contentScore = (response.getGrammarScore()      * 0.20
+                                 + response.getClarityScore()      * 0.30
+                                 + response.getCompletenessScore() * 0.50) / 10.0;
+            // Soft relevance gate: clamp to 0.5–1.0; completely off-topic (< 2) → full zero
+            double relevanceFactor = response.getRelevanceScore() < 2.0
+                    ? response.getRelevanceScore() / 10.0
+                    : Math.max(0.5, response.getRelevanceScore() / 10.0);
+            double base = contentScore * relevanceFactor;
+
+            double wcPenalty = 0.0;
+            if (expectedWordCount != null && expectedWordCount > 0) {
+                double ratio = (double) wordCount / expectedWordCount;
+                if      (ratio < 0.50) wcPenalty = 0.25;
+                else if (ratio < 0.75) wcPenalty = 0.10;
+            }
+            projectedRatio = Math.max(0.0, base - plagPenalty - wcPenalty);
+        }
+
+        double projectedGrade        = Math.round(projectedRatio * maxPts * 10.0) / 10.0;
+        double projectedGradePercent = maxPts > 0
+                ? Math.round((projectedGrade / maxPts) * 1000.0) / 10.0 : 0.0;
+
+        response.setProjectedGrade(projectedGrade);
+        response.setProjectedGradePercent(projectedGradePercent);
+        response.setLetterGrade(toLetterGrade(projectedGradePercent));
+
+        log.info("[LiveFeedback] Grade: maxPts={} isShort={} plagPenalty={} projectedGrade={} ({}% {})",
+                maxPts, isShort, plagPenalty, projectedGrade, projectedGradePercent,
+                response.getLetterGrade());
+    }
+
+    /**
+     * Maps a percentage (0–100) to an academic letter grade.
+     * Same thresholds used across feedback-service and submission-management-service.
+     */
+    public static String toLetterGrade(double pct) {
+        if (pct >= 97) return "A+";
+        if (pct >= 93) return "A";
+        if (pct >= 90) return "A-";
+        if (pct >= 87) return "B+";
+        if (pct >= 83) return "B";
+        if (pct >= 80) return "B-";
+        if (pct >= 77) return "C+";
+        if (pct >= 73) return "C";
+        if (pct >= 70) return "C-";
+        if (pct >= 67) return "D+";
+        if (pct >= 60) return "D";
+        return "F";
     }
 
     // ─── Word / keyword utilities ─────────────────────────────────────────────
