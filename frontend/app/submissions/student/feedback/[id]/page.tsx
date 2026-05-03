@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useSubmission } from '@/hooks/useSubmissions';
 import { useLatestVersion, useVersion, useVersions } from '@/hooks/useVersions';
-import { plagiarismService } from '@/lib/api/submission-services';
+import { plagiarismService, scoreToLetterGrade } from '@/lib/api/submission-services';
 import type { SubmissionVersion, VersionAnswer, VersionPlagiarismSource } from '@/types/submission.types';
 import LecturerAnnotatedText from '@/components/submissions/LecturerAnnotatedText';
 
@@ -499,12 +499,16 @@ export default function FeedbackPage({ params }: { params: Promise<{ id: string 
                                     {version.hasLecturerOverride ? 'Final Grade' : 'AI Grade'}
                                 </span>
                             </div>
-                            <p className="text-2xl font-bold text-green-600">
-                                {version.finalGrade != null ? version.finalGrade : version.aiGrade != null ? version.aiGrade : '—'}
-                                {version.maxGrade != null && (
-                                    <span className="text-base font-normal text-gray-400"> / {version.maxGrade}</span>
-                                )}
+                            <p className="text-3xl font-bold text-green-600">
+                                {(() => {
+                                    const score = version.aiScore;
+                                    if (score == null) return '—';
+                                    return scoreToLetterGrade(score);
+                                })()}
                             </p>
+                            {version.aiScore != null && (
+                                <p className="text-xs text-gray-400 mt-0.5">{version.aiScore.toFixed(1)}%</p>
+                            )}
                         </div>
 
                         <div className="bg-red-50 border border-red-200 rounded-lg p-5">

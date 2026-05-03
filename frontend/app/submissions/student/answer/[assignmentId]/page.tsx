@@ -351,50 +351,71 @@ export default function AnswerPage({
             // matches) are embedded in the VCS snapshot JSONB in one shot.
             // Failure is non-fatal and never affects the student's submit response.
             try {
+                // Build per-question answer snapshots.
+                // projectedGrade is derived from gradeMap (the live earned mark shown
+                // in the dialog) rather than feedbackMap, so the stored value always
+                // matches exactly what the student saw before clicking Submit.
+                // gradeMap[q.id] is in 0-maxPoints scale; we convert to 0-10 for storage.
+                const answerSnapshots = questions.map(q => {
+                    const text     = answerMap[q.id] ?? '';
+                    const fb       = feedbackMap[q.id];
+                    const plag     = plagiarismMap[q.id];
+                    const wc       = text.trim().split(/\s+/).filter(Boolean).length;
+                    const mp       = q.maxPoints ?? 10;
+                    const earnedMark = gradeMap[q.id];  // 0-maxPoints, null if no feedback
+                    const projectedGrade = earnedMark != null
+                        ? Math.round((earnedMark / mp) * 100) / 10  // → 0-10
+                        : null;
+
+                    return {
+                        questionId:             q.id,
+                        questionText:           q.text,
+                        answerText:             text,
+                        wordCount:              wc,
+                        grammarScore:           fb?.grammarScore      ?? null,
+                        clarityScore:           fb?.clarityScore      ?? null,
+                        completenessScore:      fb?.completenessScore ?? null,
+                        relevanceScore:         fb?.relevanceScore    ?? null,
+                        strengths:              fb?.strengths         ?? [],
+                        improvements:           fb?.improvements      ?? [],
+                        suggestions:            fb?.suggestions       ?? [],
+                        similarityScore:        plag?.similarityScore        ?? null,
+                        plagiarismSeverity:     plag?.severity               ?? null,
+                        internetSimilarityScore: plag?.internetSimilarityScore ?? null,
+                        peerSimilarityScore:    plag?.peerSimilarityScore    ?? null,
+                        riskScore:              plag?.riskScore              ?? null,
+                        riskLevel:              plag?.riskLevel              ?? null,
+                        internetMatches:        plag?.internetMatches?.map(m => ({
+                            title:             m.title,
+                            url:               m.url,
+                            snippet:           m.snippet,
+                            similarityScore:   m.similarityScore,
+                            sourceDomain:      m.sourceDomain,
+                            sourceCategory:    m.sourceCategory,
+                            confidenceLevel:   m.confidenceLevel,
+                            matchedStudentText: m.matchedStudentText,
+                        })) ?? [],
+                        projectedGrade,
+                        maxPoints: mp,
+                    };
+                });
+
+                // Overall AI score = sum(gradeMap earned marks) / sum(maxPoints) * 100.
+                // This mirrors the dialog total exactly, including 0 for ungraded questions.
+                const totalMaxPts = questions.reduce((s, q) => s + (q.maxPoints ?? 10), 0);
+                const totalEarnedPts = questions.reduce((s, q) => s + (gradeMap[q.id] ?? 0), 0);
+                const computedOverallGrade = totalMaxPts > 0
+                    ? Math.round((totalEarnedPts / totalMaxPts) * 1000) / 10
+                    : undefined;
+
                 const snapshotPayload: TextSnapshotPayload = {
                     submissionId,
                     studentId,
                     commitMessage: `${assignment?.title ?? 'Assignment'} — v${versionNumber}`,
                     totalWordCount: totalWords,
-                    overallGrade:  submittedResult?.grade ?? undefined,
+                    overallGrade:  submittedResult?.grade ?? computedOverallGrade,
                     maxGrade:      assignment?.totalMarks ?? undefined,
-                    answers: questions.map(q => {
-                        const text  = answerMap[q.id] ?? '';
-                        const fb    = feedbackMap[q.id];
-                        const plag  = plagiarismMap[q.id];
-                        const wc    = text.trim().split(/\s+/).filter(Boolean).length;
-                        return {
-                            questionId:             q.id,
-                            questionText:           q.text,
-                            answerText:             text,
-                            wordCount:              wc,
-                            grammarScore:           fb?.grammarScore      ?? null,
-                            clarityScore:           fb?.clarityScore      ?? null,
-                            completenessScore:      fb?.completenessScore ?? null,
-                            relevanceScore:         fb?.relevanceScore    ?? null,
-                            strengths:              fb?.strengths         ?? [],
-                            improvements:           fb?.improvements      ?? [],
-                            suggestions:            fb?.suggestions       ?? [],
-                            similarityScore:        plag?.similarityScore        ?? null,
-                            plagiarismSeverity:     plag?.severity               ?? null,
-                            internetSimilarityScore: plag?.internetSimilarityScore ?? null,
-                            peerSimilarityScore:    plag?.peerSimilarityScore    ?? null,
-                            riskScore:              plag?.riskScore              ?? null,
-                            riskLevel:              plag?.riskLevel              ?? null,
-                            internetMatches:        plag?.internetMatches?.map(m => ({
-                                title:             m.title,
-                                url:               m.url,
-                                snippet:           m.snippet,
-                                similarityScore:   m.similarityScore,
-                                sourceDomain:      m.sourceDomain,
-                                sourceCategory:    m.sourceCategory,
-                                confidenceLevel:   m.confidenceLevel,
-                                matchedStudentText: m.matchedStudentText,
-                            })) ?? [],
-                            projectedGrade: null,
-                            maxPoints:      q.maxPoints ?? 10,
-                        };
-                    }),
+                    answers:       answerSnapshots,
                 };
                 // Fire-and-forget — don't await, never block the UI
                 versionService.createTextSnapshot(snapshotPayload).catch(e =>

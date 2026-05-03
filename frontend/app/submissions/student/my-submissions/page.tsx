@@ -7,7 +7,7 @@ import {
     RefreshCw, Clock, ChevronRight, ChevronLeft, X, Download,
 } from 'lucide-react';
 import { useAssignments, useSubmissions } from '@/hooks/useSubmissions';
-import { useVersions } from '@/hooks/useVersions';
+import { useVersions, useLatestVersion } from '@/hooks/useVersions';
 import { useSelectedCourse } from '@/hooks/useSelectedCourse';
 import { versionService } from '@/lib/api/submission-services';
 import { downloadSubmissionPdf } from '@/lib/generate-submission-pdf';
@@ -172,6 +172,10 @@ function AssignmentCard({
     const sub  = item.submission;
     const due  = item.dueDate ? formatDue(item.dueDate) : null;
 
+    // Fetch latest version to get the authoritative AI score (backend sub.aiScore is stale)
+    const { data: latestVersion } = useLatestVersion(sub?.id ?? null);
+    const displayAiScore = latestVersion?.aiScore ?? sub?.aiScore;
+
     async function handleDownloadPdf() {
         if (!sub?.id || downloading) return;
         setDownloading(true);
@@ -194,7 +198,7 @@ function AssignmentCard({
     // Score chips — shown when there is a submitted/graded submission
     const hasScores = sub && (
         sub.grade != null || sub.plagiarismScore != null ||
-        sub.aiScore != null || (sub.wordCount != null && sub.wordCount > 0)
+        displayAiScore != null || (sub.wordCount != null && sub.wordCount > 0)
     );
 
     // Card border colour depends on status
@@ -281,9 +285,9 @@ function AssignmentCard({
                                     Plagiarism {sub!.plagiarismScore}%
                                 </span>
                             )}
-                            {sub!.aiScore != null && (
+                            {displayAiScore != null && (
                                 <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">
-                                    AI Score {sub!.aiScore}
+                                    AI Score {displayAiScore.toFixed(1)}%
                                 </span>
                             )}
                             {sub!.wordCount != null && sub!.wordCount > 0 && (

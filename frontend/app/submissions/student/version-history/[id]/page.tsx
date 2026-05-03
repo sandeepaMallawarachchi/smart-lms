@@ -9,8 +9,7 @@ import {
 } from 'lucide-react';
 import { useVersions } from '@/hooks/useVersions';
 import { useSubmission } from '@/hooks/useSubmissions';
-import { versionService } from '@/lib/api/submission-services';
-import { submissionService } from '@/lib/api/submission-services';
+import { versionService, submissionService, scoreToLetterGrade } from '@/lib/api/submission-services';
 import { diffWords, mergeDiffTokens } from '@/lib/textDiff';
 import type { SubmissionVersion, VersionAnswer } from '@/types/submission.types';
 import AnnotatedText from '@/components/submissions/AnnotatedText';
@@ -241,11 +240,9 @@ function VersionCard({
                         </div>
                         <div className="w-px bg-gray-200 self-stretch" />
                         <div className="flex flex-col gap-0.5">
-                            <span className="text-xs text-gray-400 uppercase tracking-wide font-medium">Final Grade</span>
+                            <span className="text-xs text-gray-400 uppercase tracking-wide font-medium">AI Grade</span>
                             <span className="text-xl font-bold text-blue-600">
-                                {version.finalGrade != null
-                                    ? `${version.finalGrade}${version.maxGrade ? ` / ${version.maxGrade}` : ''}`
-                                    : '—'}
+                                {version.aiScore != null ? scoreToLetterGrade(version.aiScore) : '—'}
                             </span>
                         </div>
                         <div className="w-px bg-gray-200 self-stretch" />
@@ -464,9 +461,13 @@ function ComparisonView({
                         {' '}{metricDelta(left.plagiarismScore, right.plagiarismScore)}
                     </div>
                     <div>
-                        <span className="text-gray-500 block mb-0.5">Final Grade</span>
-                        <span className="font-semibold">{left.finalGrade ?? '—'} → {right.finalGrade ?? '—'}</span>
-                        {' '}{metricDelta(left.finalGrade, right.finalGrade)}
+                        <span className="text-gray-500 block mb-0.5">AI Grade</span>
+                        <span className="font-semibold">
+                            {left.aiScore != null ? scoreToLetterGrade(left.aiScore) : '—'}
+                            {' → '}
+                            {right.aiScore != null ? scoreToLetterGrade(right.aiScore) : '—'}
+                        </span>
+                        {' '}{metricDelta(left.aiScore, right.aiScore)}
                     </div>
                     <div>
                         <span className="text-gray-500 block mb-0.5">Word Count</span>
@@ -1104,24 +1105,19 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
 
                     <div className="bg-green-50 border-2 border-green-200 rounded-lg p-5">
                         <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-medium text-gray-600">Final Grade</span>
+                            <span className="text-xs font-medium text-gray-600">AI Grade</span>
                             <Star size={20} className="text-green-600" />
                         </div>
                         {(() => {
                             const latest = versions?.[0];
-                            if (!latest) return <p className="text-2xl font-bold text-green-600">—</p>;
-                            const g = latest.finalGrade;
-                            const max = latest.maxGrade;
+                            const score = latest?.aiScore;
                             return (
                                 <>
-                                    <p className="text-2xl font-bold text-green-600">
-                                        {g != null ? g : '—'}
-                                        {max != null ? ` / ${max}` : ''}
+                                    <p className="text-3xl font-bold text-green-600">
+                                        {score != null ? scoreToLetterGrade(score) : '—'}
                                     </p>
-                                    {g != null && max != null && max > 0 && (
-                                        <p className="text-xs font-semibold text-green-700 mt-1">
-                                            {Math.round((g / max) * 100)}%
-                                        </p>
+                                    {score != null && (
+                                        <p className="text-xs text-gray-400 mt-1">{score.toFixed(1)}%</p>
                                     )}
                                 </>
                             );
@@ -1284,14 +1280,12 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
                             </div>
                         </div>
 
-                        {/* Final grade bars */}
+                        {/* AI grade bars */}
                         <div>
-                            <p className="text-sm font-medium text-gray-700 mb-3">Final Grade</p>
+                            <p className="text-sm font-medium text-gray-700 mb-3">AI Grade</p>
                             <div className="flex items-end gap-2">
                                 {sortedAsc.map(v => {
-                                    const pct = v.finalGrade != null && v.maxGrade
-                                        ? Math.round((v.finalGrade / v.maxGrade) * 100)
-                                        : 0;
+                                    const pct = v.aiScore ?? 0;
                                     return (
                                         <div key={v.id} className="flex-1">
                                             <div className="h-20 bg-gray-100 rounded-lg relative overflow-hidden">
@@ -1301,7 +1295,7 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
                                                 />
                                                 <div className="absolute inset-0 flex items-end justify-center pb-1">
                                                     <span className="text-xs font-bold text-white drop-shadow">
-                                                        {v.finalGrade != null ? v.finalGrade : '—'}
+                                                        {v.aiScore != null ? scoreToLetterGrade(v.aiScore) : '—'}
                                                     </span>
                                                 </div>
                                             </div>

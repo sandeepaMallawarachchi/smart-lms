@@ -99,6 +99,23 @@ async function apiRequest<T>(
     return response.json() as Promise<T>;
 }
 
+// ─── Letter grade helper ──────────────────────────────────────
+
+export function scoreToLetterGrade(pct: number): string {
+    if (pct >= 97) return 'A+';
+    if (pct >= 93) return 'A';
+    if (pct >= 90) return 'A-';
+    if (pct >= 87) return 'B+';
+    if (pct >= 83) return 'B';
+    if (pct >= 80) return 'B-';
+    if (pct >= 77) return 'C+';
+    if (pct >= 73) return 'C';
+    if (pct >= 70) return 'C-';
+    if (pct >= 67) return 'D+';
+    if (pct >= 60) return 'D';
+    return 'F';
+}
+
 // ─── Submission Service (port 8081) ───────────────────────────
 
 export const submissionService = {
@@ -683,10 +700,45 @@ function normalizeVcsVersion(v: VcsRaw): SubmissionVersion {
         metadata:      meta as SubmissionVersion['metadata'],
         totalWordCount: typeof meta.totalWordCount === 'number' ? meta.totalWordCount : undefined,
         wordCount:      typeof meta.totalWordCount === 'number' ? meta.totalWordCount : undefined,
-        aiScore:        typeof meta.overallGrade   === 'number' ? meta.overallGrade   : undefined,
-        aiGrade:        typeof meta.overallGrade   === 'number' ? meta.overallGrade   : undefined,
-        finalGrade:     typeof meta.overallGrade   === 'number' ? meta.overallGrade   : undefined,
-        maxGrade:       typeof meta.maxGrade       === 'number' ? meta.maxGrade       : undefined,
+        // overallGrade is 0-100. Fallback: compute from per-question AI scores
+        // so old snapshots (where overallGrade was not stored) still show a value.
+        ...(() => {
+            const stored = typeof meta.overallGrade === 'number' ? meta.overallGrade : null;
+            const overallPct = stored ?? (() => {
+                // Use per-question projectedGrade + maxPoints when available (new snapshots).
+                const rawAnswers = answers as VcsAnswerSnapshot[];
+                const hasProjected = mappedAnswers.some(a => a.aiGeneratedMark != null);
+                if (hasProjected) {
+                    const totalMax = rawAnswers.reduce((s, a) => s + (a.maxPoints ?? 10), 0);
+                    if (!totalMax) return null;
+                    const totalEarned = mappedAnswers.reduce((s, a, i) => {
+                        if (a.aiGeneratedMark == null) return s;
+                        const mp = rawAnswers[i]?.maxPoints ?? 10;
+                        return s + (a.aiGeneratedMark / 10) * mp;
+                    }, 0);
+                    return Math.round((totalEarned / totalMax) * 1000) / 10;
+                }
+                // Fallback for very old snapshots: avg AI quality scores over ALL
+                // questions (unanswered questions implicitly contribute 0).
+                if (!mappedAnswers.length) return null;
+                const sumScores = mappedAnswers.reduce((sum, a) => {
+                    const s = [a.grammarScore, a.clarityScore, a.completenessScore, a.relevanceScore]
+                        .filter((x): x is number => x != null);
+                    return sum + (s.length ? s.reduce((a, b) => a + b, 0) / s.length : 0);
+                }, 0);
+                return Math.round((sumScores / mappedAnswers.length) * 10);
+            })();
+            const maxGrade = typeof meta.maxGrade === 'number' ? meta.maxGrade : null;
+            const scaledGrade = overallPct != null && maxGrade != null
+                ? Math.round((overallPct / 100) * maxGrade * 10) / 10
+                : overallPct;
+            return {
+                aiScore:    overallPct  ?? undefined,
+                aiGrade:    scaledGrade ?? undefined,
+                finalGrade: scaledGrade ?? undefined,
+                maxGrade:   maxGrade    ?? undefined,
+            };
+        })(),
         plagiarismScore: avgSimilarity != null ? Math.round(avgSimilarity * 10) / 10 : undefined,
         answers:        mappedAnswers.length > 0 ? mappedAnswers : undefined,
     };
