@@ -360,79 +360,60 @@ export default function FeedbackPage({ params }: { params: Promise<{ id: string 
     const loading = versionIdParam ? specificLoading : latestLoading;
     const error   = versionIdParam ? specificError   : latestError;
 
-    // ── Enrich answers with plagiarism sources from integrity service ─────
-    // When version answers have plagiarism scores but no saved sources,
-    // fetch ALL PlagiarismCheck records for this submission (one per question)
-    // and aggregate their internet + peer matches.
+    // ── Enrich answers with plagiarism sources ────────────────────────────────
+    // The realtime plagiarism check (checkLiveSimilarity) returns internetMatches
+    // but they are never persisted — only the score is saved.  When the feedback
+    // page loads and finds answers with a score but no saved sources, re-run the
+    // check on each answer's stored text so sources can be displayed.
     const [enrichedSources, setEnrichedSources] = useState<Record<string, VersionPlagiarismSource[]>>({});
 
     useEffect(() => {
         if (!version?.answers || !id) return;
         const needsEnrichment = version.answers.filter(
-            a => (a.similarityScore ?? 0) > 0 && (!a.plagiarismSources || a.plagiarismSources.length === 0)
+            a => (a.similarityScore ?? 0) > 0 &&
+                 a.answerText &&
+                 a.answerText.length >= 10 &&
+                 (!a.plagiarismSources || a.plagiarismSources.length === 0)
         );
         if (needsEnrichment.length === 0) return;
 
-        type RawInternet = { url?: string; title?: string; snippet?: string; matchedText?: string; similarityScore?: number; sourceDomain?: string };
-        type RawPeer    = { matchedSubmissionId?: number; matchedStudentId?: string; similarityScore?: number; details?: string };
-        type RawCheck   = { questionId?: number | string; internetMatches?: RawInternet[]; similarityMatches?: RawPeer[] };
-
         let cancelled = false;
         (async () => {
-            try {
-                const PLAG_URL = process.env.NEXT_PUBLIC_PLAGIARISM_API_URL ?? 'http://localhost:8084';
-                const res = await fetch(`${PLAG_URL}/api/integrity/checks/submission/${encodeURIComponent(id)}`);
-                if (!res.ok || cancelled) return;
-                const json = await res.json();
-                const checks: RawCheck[] = json.data ?? [];
-                if (!checks.length) return;
-
-                // Aggregate all internet matches and all peer matches across every check
-                const allInternet: (RawInternet & { _pct: number })[] = [];
-                const allPeer:     (RawPeer    & { _pct: number })[] = [];
-
-                for (const check of checks) {
-                    for (const m of check.internetMatches ?? []) {
-                        if ((m.similarityScore ?? 0) > 0) allInternet.push({ ...m, _pct: m.similarityScore! });
+            const result: Record<string, VersionPlagiarismSource[]> = {};
+            for (const a of needsEnrichment) {
+                if (cancelled) break;
+                try {
+                    const plagResult = await plagiarismService.checkLiveSimilarity({
+                        sessionId:    `fb-${id}-${a.questionId}`,
+                        studentId:    version.studentId ?? '',
+                        questionId:   a.questionId,
+                        textContent:  a.answerText!,
+                        questionText: a.questionText ?? undefined,
+                        submissionId: id,
+                    });
+                    const matches = plagResult.internetMatches ?? [];
+                    if (matches.length > 0) {
+                        result[a.questionId] = matches.map((m, i) => {
+                            const raw = m as unknown as Record<string, unknown>;
+                            const rawScore = raw.similarityScore as number | undefined;
+                            return {
+                                id:                   `live-${i}`,
+                                sourceUrl:            (raw.url as string)  ?? '',
+                                sourceTitle:          (raw.title as string) ?? (raw.sourceDomain as string) ?? 'Internet source',
+                                sourceSnippet:        (raw.snippet as string) ?? undefined,
+                                matchedText:          (raw.matchedStudentText as string) ?? undefined,
+                                similarityPercentage: rawScore != null
+                                    ? Math.round((rawScore <= 1 ? rawScore * 100 : rawScore) * 10) / 10
+                                    : 0,
+                            };
+                        });
                     }
-                    for (const m of check.similarityMatches ?? []) {
-                        if ((m.similarityScore ?? 0) > 0) allPeer.push({ ...m, _pct: m.similarityScore! });
-                    }
+                } catch {
+                    // Silent — keep going for other answers
                 }
-
-                // Build final source list: internet sources first, then peer matches
-                const sources: VersionPlagiarismSource[] = [
-                    ...allInternet
-                        .sort((a, b) => b._pct - a._pct)
-                        .slice(0, 8)
-                        .map((m, i) => ({
-                            id: `int-${i}`,
-                            sourceUrl: m.url ?? '',
-                            sourceTitle: m.title ?? m.sourceDomain ?? 'Internet source',
-                            sourceSnippet: m.snippet ?? undefined,
-                            matchedText: m.matchedText ?? undefined,
-                            similarityPercentage: Math.round(m._pct * 100 * 10) / 10,
-                        })),
-                    ...allPeer
-                        .sort((a, b) => b._pct - a._pct)
-                        .slice(0, 5)
-                        .map((m, i) => ({
-                            id: `peer-${i}`,
-                            sourceUrl: '',
-                            sourceTitle: `Student submission #${m.matchedSubmissionId ?? 'unknown'}`,
-                            sourceSnippet: m.details ?? undefined,
-                            matchedText: undefined,
-                            similarityPercentage: Math.round(m._pct * 100 * 10) / 10,
-                        })),
-                ];
-
-                if (!cancelled && sources.length > 0) {
-                    const result: Record<string, VersionPlagiarismSource[]> = {};
-                    for (const a of needsEnrichment) result[a.questionId] = sources;
-                    setEnrichedSources(result);
-                }
-            } catch {
-                // Integrity service unavailable — silently ignore
+            }
+            if (!cancelled && Object.keys(result).length > 0) {
+                setEnrichedSources(result);
             }
         })();
         return () => { cancelled = true; };
