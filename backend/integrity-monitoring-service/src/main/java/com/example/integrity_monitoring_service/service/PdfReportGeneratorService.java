@@ -134,7 +134,7 @@ public class PdfReportGeneratorService {
 
             // Course
             drawText(cs, regular, 12, TEXT_MID, MARGIN, nameY - 70,
-                    "\u25A0  " + d.getCourseName());
+                    "\u00B7  " + d.getCourseName());
 
             // Divider
             drawRect(cs, MARGIN, nameY - 95, CONTENT_W, 1, GREY_LINE);

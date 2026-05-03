@@ -15,6 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -257,17 +259,30 @@ public class PlagiarismReportDataService {
 
     private SubmissionMeta fetchSubmissionMeta(Long submissionId) {
         try {
-            // Fetch submission
-            String url = submissionServiceUrl + "/api/submissions/" + submissionId;
+            // Fetch submission via internal (no-auth) endpoint
+            String url = submissionServiceUrl + "/api/internal/submissions/" + submissionId;
             String body = restTemplate.getForObject(url, String.class);
             JsonNode root = objectMapper.readTree(body);
             JsonNode data = root.path("data");
 
-            String studentId    = data.path("studentId").asText("");
-            String assignId     = data.path("assignmentId").asText("");
-            String submittedAt  = data.path("submittedAt").asText("");
-            LocalDateTime submitted = submittedAt.isBlank() ? LocalDateTime.now()
-                    : LocalDateTime.parse(submittedAt.replace("Z", ""));
+            String studentId      = data.path("studentId").asText("");
+            String studentName    = data.path("studentName").asText("");
+            String assignmentTitle = data.path("assignmentTitle").asText("");
+            String submittedAt    = data.path("submittedAt").asText("");
+
+            LocalDateTime submitted;
+            try {
+                if (submittedAt.isBlank()) {
+                    submitted = LocalDateTime.now();
+                } else if (submittedAt.contains("+") || (submittedAt.endsWith("Z") && submittedAt.length() > 19)) {
+                    submitted = OffsetDateTime.parse(submittedAt).toLocalDateTime();
+                } else {
+                    submitted = LocalDateTime.parse(submittedAt.replace("Z", ""));
+                }
+            } catch (DateTimeParseException ex) {
+                log.warn("[ReportDataService] Could not parse submittedAt '{}': {}", submittedAt, ex.getMessage());
+                submitted = LocalDateTime.now();
+            }
 
             // Fetch answers (working copy)
             String answersUrl = submissionServiceUrl + "/api/submissions/" + submissionId + "/answers";
@@ -283,9 +298,13 @@ public class PlagiarismReportDataService {
                 }
             }
 
+            String displayName = studentName.isBlank()
+                    ? (studentId.isBlank() ? "Student" : "Student " + studentId.substring(0, Math.min(8, studentId.length())))
+                    : studentName;
+            String displayTitle = assignmentTitle.isBlank() ? "Assignment" : assignmentTitle;
+
             return new SubmissionMeta(
-                    "Student " + studentId.substring(0, Math.min(8, studentId.length())),
-                    studentId, assignId, "Smart LMS", submitted, combined.toString().trim());
+                    displayName, studentId, displayTitle, "Smart LMS", submitted, combined.toString().trim());
 
         } catch (Exception e) {
             log.warn("[ReportDataService] Failed to fetch submission meta for {}: {}", submissionId, e.getMessage());
@@ -295,7 +314,7 @@ public class PlagiarismReportDataService {
 
     private AiFeedbackSection fetchAiFeedback(Long submissionId) {
         try {
-            String url = submissionServiceUrl + "/api/submissions/" + submissionId + "/versions/latest";
+            String url = submissionServiceUrl + "/api/internal/submissions/" + submissionId + "/versions/latest";
             String body = restTemplate.getForObject(url, String.class);
             JsonNode root = objectMapper.readTree(body);
             JsonNode data = root.path("data");
@@ -317,10 +336,11 @@ public class PlagiarismReportDataService {
                 totalRelevance    += ans.path("relevanceScore").asDouble(0);
                 count++;
 
-                String s = ans.path("strengths").asText("");
-                if (!s.isBlank()) allStrengths.addAll(Arrays.asList(s.split("\\|\\|")));
-                String i = ans.path("improvements").asText("");
-                if (!i.isBlank()) allImprovements.addAll(Arrays.asList(i.split("\\|\\|")));
+                // strengths/improvements are JSON arrays in VersionAnswerResponse
+                JsonNode sArr = ans.path("strengths");
+                if (sArr.isArray()) sArr.forEach(n -> { if (!n.asText("").isBlank()) allStrengths.add(n.asText()); });
+                JsonNode iArr = ans.path("improvements");
+                if (iArr.isArray()) iArr.forEach(n -> { if (!n.asText("").isBlank()) allImprovements.add(n.asText()); });
             }
 
             if (count == 0) return null;
