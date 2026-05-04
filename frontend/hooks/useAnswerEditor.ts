@@ -162,6 +162,11 @@ export function useAnswerEditor({
     const pendingFeedbackRef   = useRef<LiveFeedback | null>(null);
     const pendingPlagiarismRef = useRef<LivePlagiarismResult | null>(null);
 
+    // Cache key = the exact text that produced the last successful feedback / plagiarism result.
+    // When the debounce fires with the identical text, we skip the API call and reuse the result.
+    const lastFeedbackTextRef   = useRef<string>('');
+    const lastPlagiarismTextRef = useRef<string>('');
+
     // Tracks whether the one-time initialText seed has been applied.
     // Prevents re-seeding on subsequent renders and guards the race-condition
     // where initialText arrives after the student has already started typing.
@@ -187,6 +192,11 @@ export function useAnswerEditor({
             console.debug('[useAnswerEditor] Skipping AI feedback — text too short:', text.length, 'chars (min:', MIN_TEXT_LENGTH, ')');
             return;
         }
+        // Skip API call if text hasn't changed since the last successful response.
+        if (text === lastFeedbackTextRef.current && liveFeedbackRef.current) {
+            console.debug('[useAnswerEditor] AI feedback cache HIT — skipping API call for questionId:', questionId);
+            return;
+        }
         console.debug('[useAnswerEditor] AI feedback timer FIRED — questionId:', questionId, '| textLen:', text.length, '| expectedWords:', expectedWordCount ?? '(none)');
         setFeedbackLoading(true);
         try {
@@ -205,6 +215,7 @@ export function useAnswerEditor({
                 '| completeness:', feedback.completenessScore,
                 '| relevance:', feedback.relevanceScore);
             setLiveFeedback(feedback);
+            lastFeedbackTextRef.current = text;
             // Track latest feedback so auto-save can flush it if the row didn't exist yet
             pendingFeedbackRef.current = feedback;
 
@@ -267,6 +278,11 @@ export function useAnswerEditor({
             console.debug('[useAnswerEditor] Skipping plagiarism check — text too short:', text.length, 'chars (min:', MIN_TEXT_LENGTH, ')');
             return;
         }
+        // Skip API call if text hasn't changed since the last successful response.
+        if (text === lastPlagiarismTextRef.current && plagiarismResultRef.current) {
+            console.debug('[useAnswerEditor] Plagiarism cache HIT — skipping API call for questionId:', questionId);
+            return;
+        }
         console.debug('[useAnswerEditor] Plagiarism timer FIRED — questionId:', questionId, '| textLen:', text.length, '| sessionId:', sessionId.current);
         setPlagiarismLoading(true);
         try {
@@ -283,6 +299,7 @@ export function useAnswerEditor({
                 '| score:', result.similarityScore, '%',
                 '| flagged:', result.flagged);
             setPlagiarismResult(result);
+            lastPlagiarismTextRef.current = text;
             // Keep ref in sync immediately (don't wait for useEffect) so requestFeedback
             // can read the latest similarity score if it completes after this.
             plagiarismResultRef.current = result;
