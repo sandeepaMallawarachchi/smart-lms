@@ -112,3 +112,42 @@ curl http://127.0.0.1:5000/api/health
 ## Notes
 - This module currently accepts partial inputs and fills missing fields with defaults.
 - If `GROQ_API_KEY` is missing or unavailable, fallback recommendation content is returned.
+
+## GitHub Actions Pipelines
+
+Backend CI workflows now exist per deployed service under `.github/workflows/`.
+
+- `backend-submission-management.yml`
+- `backend-version-control.yml`
+- `backend-feedback.yml`
+- `backend-integrity-monitoring.yml`
+- `backend-learning-analytics.yml`
+- `backend-heatmap.yml`
+- `backend-chatbot.yml`
+
+They all call the shared reusable workflow `backend-service-ci.yml`, which:
+
+- validates Java services with Maven package builds
+- validates Python services by installing dependencies and compiling sources
+- builds each service Docker image in CI
+
+The coding evaluation module is intentionally not included yet.
+
+### Optional EC2 auto-deploy
+
+Each service workflow is also prepared to auto-deploy on pushes to `main`.
+
+Add these GitHub repository secrets before enabling that flow:
+
+- `EC2_HOST`
+- `EC2_USER`
+- `EC2_SSH_KEY`
+
+Deployment behavior:
+
+- CI runs first
+- if CI passes on `main`, GitHub Actions SSHs into the EC2 host
+- runs `git pull --ff-only origin main`
+- rebuilds only the matching Compose service with `docker compose up -d --build <service>`
+
+This expects the EC2 server to have the repository checked out at `~/smart-lms`.

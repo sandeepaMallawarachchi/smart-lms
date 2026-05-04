@@ -1,0 +1,30 @@
+name: Submission Management Service CI
+
+on:
+  push:
+    paths:
+      - "backend/submission-management-service/**"
+      - ".github/workflows/backend-submission-management.yml"
+      - ".github/workflows/backend-service-ci.yml"
+  pull_request:
+    paths:
+      - "backend/submission-management-service/**"
+      - ".github/workflows/backend-submission-management.yml"
+      - ".github/workflows/backend-service-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  ci:
+    uses: ./.github/workflows/backend-service-ci.yml
+    with:
+      service_name: Submission Management Service
+      service_path: backend/submission-management-service
+      runtime: java
+      dockerfile_path: backend/submission-management-service/Dockerfile
+      java_version: "21"
+      compose_service: submission-management-service
+      deploy_on_main: true
+    secrets:
+      ec2_host: ${{ secrets.EC2_HOST }}
+      ec2_user: ${{ secrets.EC2_USER }}
+      ec2_ssh_key: ${{ secrets.EC2_SSH_KEY }}
