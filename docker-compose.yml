@@ -3,10 +3,8 @@
 # If you get a "unknown flag: --mount" error, run: export DOCKER_BUILDKIT=1
 services:
 
-  # ── PostgreSQL (shared DB, all services use their own schema) ─
   postgres:
     image: postgres:16-alpine
-    pull_policy: never
     container_name: lms-postgres
     environment:
       POSTGRES_DB: lms_db
@@ -23,10 +21,8 @@ services:
       retries: 10
       start_period: 30s
 
-  # ── Redis (used by feedback-service) ─────────────────────────
   redis:
     image: redis:7-alpine
-    pull_policy: never
     container_name: lms-redis
     ports:
       - "6379:6379"
@@ -36,14 +32,14 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Submission Management Service (port 8081) ─────────────────
   submission-management-service:
     build:
       context: ./backend/submission-management-service
       dockerfile: Dockerfile
       no_cache: false
-    pull_policy: never
     container_name: submission-management-service
+    env_file:
+      - .env.backend
     ports:
       - "8081:8081"
     environment:
@@ -59,14 +55,14 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ── Version Control Service (port 8082) ───────────────────────
   version-control-service:
     build:
       context: ./backend/version_control_service
       dockerfile: Dockerfile
       no_cache: false
-    pull_policy: never
     container_name: version-control-service
+    env_file:
+      - .env.backend
     ports:
       - "8082:8082"
     environment:
@@ -84,14 +80,14 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  # ── Feedback Service (port 8083) ──────────────────────────────
   feedback-service:
     build:
       context: ./backend/feedback-service
       dockerfile: Dockerfile
       no_cache: false
-    pull_policy: never
     container_name: feedback-service
+    env_file:
+      - .env.backend
     ports:
       - "8083:8083"
     environment:
@@ -107,14 +103,14 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ── Integrity Monitoring Service (port 8084) ──────────────────
   integrity-monitoring-service:
     build:
       context: ./backend/integrity-monitoring-service
       dockerfile: Dockerfile
       no_cache: false
-    pull_policy: never
     container_name: integrity-monitoring-service
+    env_file:
+      - .env.backend
     ports:
       - "8084:8084"
     environment:
@@ -129,7 +125,50 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  learning-analytics-module:
+    build:
+      context: ./backend/learning-analytics-module
+      dockerfile: Dockerfile
+    container_name: learning-analytics-module
+    env_file:
+      - .env.backend
+    environment:
+      PORT: 5000
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+
+  heatmap:
+    build:
+      context: ./backend/heatmap
+      dockerfile: Dockerfile
+    container_name: heatmap
+    env_file:
+      - .env.backend
+    environment:
+      PORT: 5002
+    ports:
+      - "5002:5002"
+    restart: unless-stopped
+
+  chatbot:
+    build:
+      context: ./backend/chatbot
+      dockerfile: Dockerfile
+    container_name: chatbot
+    env_file:
+      - .env.backend
+    environment:
+      PORT: 5001
+    ports:
+      - "5001:5001"
+    depends_on:
+      - learning-analytics-module
+      - heatmap
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   uploads:
   version_storage:
+
