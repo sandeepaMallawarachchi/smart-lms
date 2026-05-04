@@ -138,3 +138,4 @@ jobs:
             cd ${{ inputs.ec2_project_dir }}
             git pull --ff-only origin ${{ inputs.deploy_branch }}
             docker compose up -d --build ${{ inputs.compose_service }}
+
