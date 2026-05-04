@@ -207,6 +207,36 @@ export function useAnswerEditor({
             setLiveFeedback(feedback);
             // Track latest feedback so auto-save can flush it if the row didn't exist yet
             pendingFeedbackRef.current = feedback;
+
+            // Race-condition guard: if plagiarism already completed before this feedback
+            // response arrived, the backend computed projectedGrade without the similarity
+            // penalty.  Re-run grade calculation now with the known similarity score so the
+            // displayed grade reflects the penalty immediately.
+            const currentPlag = plagiarismResultRef.current;
+            if (currentPlag?.similarityScore != null && maxPoints) {
+                const wc = countWords(text);
+                feedbackService.calculateGrade({
+                    grammarScore:      feedback.grammarScore,
+                    clarityScore:      feedback.clarityScore,
+                    completenessScore: feedback.completenessScore,
+                    relevanceScore:    feedback.relevanceScore,
+                    maxPoints,
+                    wordCount: wc,
+                    expectedWordCount,
+                    similarityScore: currentPlag.similarityScore,
+                }).then(grade => {
+                    setLiveFeedback(prev => prev ? { ...prev, ...grade } : null);
+                    if (grade.projectedGrade != null) {
+                        submissionService.saveAnswerAnalysis(submissionId, questionId, {
+                            aiGeneratedMark: grade.projectedGrade,
+                        }).catch(() => {});
+                    }
+                    console.debug('[useAnswerEditor] Grade corrected for penalty after race-condition check — questionId:', questionId,
+                        '| similarity:', currentPlag.similarityScore, '%',
+                        '| projectedGrade:', grade.projectedGrade);
+                }).catch(() => {});
+            }
+
             // Persist silently — server guards wordCount >= 1
             submissionService.saveAnswerAnalysis(submissionId, questionId, {
                 grammarScore:       feedback.grammarScore,
@@ -253,6 +283,9 @@ export function useAnswerEditor({
                 '| score:', result.similarityScore, '%',
                 '| flagged:', result.flagged);
             setPlagiarismResult(result);
+            // Keep ref in sync immediately (don't wait for useEffect) so requestFeedback
+            // can read the latest similarity score if it completes after this.
+            plagiarismResultRef.current = result;
             // Track latest result so auto-save can flush it if the row didn't exist yet
             pendingPlagiarismRef.current = result;
 
