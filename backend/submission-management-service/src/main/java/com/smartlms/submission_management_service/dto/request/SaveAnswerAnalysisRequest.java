@@ -30,6 +30,13 @@ public class SaveAnswerAnalysisRequest {
     private Double similarityScore;
     private String plagiarismSeverity;
     private Boolean plagiarismFlagged;
+    /** JSON-serialised InternetMatch[] — title, url, snippet, similarityScore, sourceDomain, sourceCategory. */
+    private String plagiarismSources;
+
+    // ── AI-computed earned mark (actual mark in 0-maxPoints scale) ───────────
+    /** Actual earned mark in the question's own scale (e.g. 15.5 out of 20).
+     *  Populated from LiveFeedback.projectedGrade on every auto-save cycle. */
+    private Double aiGeneratedMark;
 
     // ── Lecturer per-question grading ────────────────────────────
     private Double lecturerMark;

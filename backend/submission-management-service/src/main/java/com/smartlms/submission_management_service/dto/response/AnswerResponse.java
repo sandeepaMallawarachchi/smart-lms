@@ -62,12 +62,18 @@ public class AnswerResponse {
     private Boolean plagiarismFlagged;
     /** ISO-8601 timestamp of when plagiarism was last checked. */
     private String plagiarismCheckedAt;
+    /** JSON-serialised InternetMatch[] — title, url, snippet, similarityScore (0-100), sourceDomain, sourceCategory. */
+    private String plagiarismSources;
 
     // ── Lecturer per-question grading ─────────────────────────────────────────
 
+    /** Maximum marks allocated to this question. Null if not set. */
+    private Double maxPoints;
+
     /**
-     * AI-suggested mark on the 0–10 scale. Computed at submit time; immutable.
-     * Null if AI scores were not available when the submission was made.
+     * Actual AI-suggested earned mark in the question's own scale (e.g. 15.5 for a 20-mark question).
+     * Updated on every auto-save cycle from LiveFeedback.projectedGrade. Use directly — no conversion needed.
+     * Null if AI feedback has not yet been received for this answer.
      */
     private Double aiGeneratedMark;
 

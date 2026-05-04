@@ -78,6 +78,7 @@ public class AnswerService {
         answer.setWordCount(countWords(answerText));
         answer.setCharacterCount(answerText != null ? answerText.length() : 0);
         if (request.getStudentId() != null) answer.setStudentId(request.getStudentId());
+        if (request.getMaxPoints() != null) answer.setMaxPoints(request.getMaxPoints());
 
         Answer saved = answerRepository.save(answer);
         log.info("[AnswerService] saveAnswer DONE — answerId={} submissionId={} questionId={} wordCount={}",
@@ -172,9 +173,16 @@ public class AnswerService {
             if (request.getSimilarityScore()   != null) answer.setSimilarityScore(request.getSimilarityScore());
             if (request.getPlagiarismSeverity() != null) answer.setPlagiarismSeverity(request.getPlagiarismSeverity());
             if (request.getPlagiarismFlagged()  != null) answer.setPlagiarismFlagged(request.getPlagiarismFlagged());
+            if (request.getPlagiarismSources()  != null) answer.setPlagiarismSources(request.getPlagiarismSources());
             answer.setPlagiarismCheckedAt(LocalDateTime.now());
             log.info("[AnswerService] saveAnalysis — plagiarism saved for questionId={} score={} severity={} flagged={}",
                     questionId, request.getSimilarityScore(), request.getPlagiarismSeverity(), request.getPlagiarismFlagged());
+        }
+
+        // ── AI earned mark ────────────────────────────────────────────────────
+        if (request.getAiGeneratedMark() != null) {
+            answer.setAiGeneratedMark(request.getAiGeneratedMark());
+            log.info("[AnswerService] saveAnalysis — aiGeneratedMark={} saved for questionId={}", request.getAiGeneratedMark(), questionId);
         }
 
         // ── Lecturer per-question marks ───────────────────────────────────────
@@ -268,7 +276,9 @@ public class AnswerService {
                 .plagiarismSeverity(a.getPlagiarismSeverity())
                 .plagiarismFlagged(a.getPlagiarismFlagged())
                 .plagiarismCheckedAt(a.getPlagiarismCheckedAt() != null ? a.getPlagiarismCheckedAt().toString() : null)
+                .plagiarismSources(a.getPlagiarismSources())
                 // Lecturer per-question grading (post-deadline overrides)
+                .maxPoints(a.getMaxPoints())
                 .aiGeneratedMark(a.getAiGeneratedMark())
                 .lecturerMark(a.getLecturerMark())
                 .lecturerFeedbackText(a.getLecturerFeedbackText())

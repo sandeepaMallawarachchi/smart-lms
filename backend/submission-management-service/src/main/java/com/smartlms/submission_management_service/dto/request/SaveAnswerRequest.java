@@ -41,4 +41,7 @@ public class SaveAnswerRequest {
     /** Character count computed by the frontend. */
     @Min(value = 0, message = "Character count must not be negative")
     private Integer characterCount;
+
+    /** Maximum marks allocated to this question (e.g. 20, 30). Null when not provided. */
+    private Double maxPoints;
 }

@@ -108,27 +108,23 @@ function VersionCard({
     diffSummary?: VersionDiffSummary;
 }) {
     const [expanded, setExpanded] = useState(false);
-    const [downloadingReport, setDownloadingReport] = useState<'plagiarism' | 'feedback' | null>(null);
+    const [downloadingReport, setDownloadingReport] = useState(false);
     const answers: VersionAnswer[] = version.answers ?? [];
 
     const revertMatch = version.commitMessage?.match(/^Reverted from v(\d+)$/);
     const revertedFromVersion = revertMatch ? Number(revertMatch[1]) : null;
 
-    const handleDownload = async (type: 'plagiarism' | 'feedback') => {
+    const handleDownload = async () => {
         const submissionId = version.submissionId?.toString() ?? '';
         if (!submissionId) return;
-        setDownloadingReport(type);
+        setDownloadingReport(true);
         try {
             const { plagiarismService } = await import('@/lib/api/submission-services');
-            const blob = type === 'plagiarism'
-                ? await plagiarismService.downloadPlagiarismReport(submissionId)
-                : await plagiarismService.downloadFeedbackReport(submissionId);
+            const blob = await plagiarismService.downloadReport(submissionId);
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = type === 'plagiarism'
-                ? `Plagiarism_Report_V${version.versionNumber ?? 1}.pdf`
-                : `Complete_Report_V${version.versionNumber ?? 1}.pdf`;
+            a.download = `Integrity_Feedback_Report_V${version.versionNumber ?? 1}.pdf`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -136,7 +132,7 @@ function VersionCard({
         } catch (err) {
             console.error('Download failed:', err);
         } finally {
-            setDownloadingReport(null);
+            setDownloadingReport(false);
         }
     };
 
@@ -289,32 +285,18 @@ function VersionCard({
                             </button>
                         )}
                         <button
-                            onClick={() => handleDownload('plagiarism')}
-                            disabled={downloadingReport !== null}
+                            onClick={handleDownload}
+                            disabled={downloadingReport}
                             className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50 whitespace-nowrap"
                         >
-                            {downloadingReport === 'plagiarism' ? (
+                            {downloadingReport ? (
                                 <span className="animate-spin text-sm">⟳</span>
                             ) : (
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
                             )}
-                            Plagiarism Report
-                        </button>
-                        <button
-                            onClick={() => handleDownload('feedback')}
-                            disabled={downloadingReport !== null}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-gray-50 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 whitespace-nowrap"
-                        >
-                            {downloadingReport === 'feedback' ? (
-                                <span className="animate-spin text-sm">⟳</span>
-                            ) : (
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                            )}
-                            Full Report
+                            Download Report
                         </button>
                         {answers.length > 0 && (
                             <button
@@ -369,15 +351,11 @@ function VersionCard({
 
                             {/* Marks row */}
                             <div className="flex items-center gap-4 mt-2 text-xs">
-                                {a.aiGeneratedMark != null && (() => {
-                                    const mp = a.maxPoints ?? 10;
-                                    const earned = Math.round((a.aiGeneratedMark / 10) * mp * 10) / 10;
-                                    return (
-                                        <span className="text-purple-600 font-semibold">
-                                            AI Mark: {earned.toFixed(1)} / {mp}
-                                        </span>
-                                    );
-                                })()}
+                                {a.aiGeneratedMark != null && (
+                                    <span className="text-purple-600 font-semibold">
+                                        AI Mark: {a.aiGeneratedMark.toFixed(1)}{a.maxPoints != null ? ` / ${a.maxPoints}` : ''}
+                                    </span>
+                                )}
                                 {a.lecturerMark != null && (
                                     <span className="text-blue-600 font-semibold">
                                         Lecturer Mark: {a.lecturerMark.toFixed(1)} / {a.maxPoints ?? 10}
@@ -509,7 +487,7 @@ function ComparisonView({
                                 {/* Metric deltas for this question */}
                                 <div className="flex flex-wrap gap-4 mb-3 text-xs text-gray-600">
                                     <span>Words: {la?.wordCount ?? 0} → {ra?.wordCount ?? 0} {metricDelta(la?.wordCount, ra?.wordCount)}</span>
-                                    <span>AI Mark: {la?.aiGeneratedMark != null ? `${Math.round((la.aiGeneratedMark / 10) * (la.maxPoints ?? 10) * 10) / 10}/${la.maxPoints ?? 10}` : '—'} → {ra?.aiGeneratedMark != null ? `${Math.round((ra.aiGeneratedMark / 10) * (ra.maxPoints ?? 10) * 10) / 10}/${ra.maxPoints ?? 10}` : '—'} {metricDelta(la?.aiGeneratedMark, ra?.aiGeneratedMark)}</span>
+                                    <span>AI Mark: {la?.aiGeneratedMark != null ? `${la.aiGeneratedMark.toFixed(1)}${la.maxPoints != null ? `/${la.maxPoints}` : ''}` : '—'} → {ra?.aiGeneratedMark != null ? `${ra.aiGeneratedMark.toFixed(1)}${ra.maxPoints != null ? `/${ra.maxPoints}` : ''}` : '—'} {metricDelta(la?.aiGeneratedMark, ra?.aiGeneratedMark)}</span>
                                     <span>Plagiarism: {la?.plagiarismSeverity ?? 'N/A'} → {ra?.plagiarismSeverity ?? 'N/A'}</span>
                                 </div>
 

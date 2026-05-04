@@ -27,6 +27,27 @@ public class ReportController {
     private final PdfReportGeneratorService pdfGenerator;
 
     /**
+     * Download the combined Integrity & Feedback PDF report for a submission.
+     * GET /api/integrity/reports/{submissionId}
+     */
+    @GetMapping("/{submissionId}")
+    public CompletableFuture<ResponseEntity<byte[]>> downloadReport(@PathVariable Long submissionId) {
+        log.info("[ReportController] Generating report for submission {}", submissionId);
+
+        PlagiarismReportData data = reportDataService.buildReportData(submissionId);
+        String filename = "Integrity_Feedback_Report_Submission_" + submissionId + ".pdf";
+
+        return pdfGenerator.generateReport(data)
+                .thenApply(pdf -> pdfResponse(pdf, filename))
+                .exceptionally(ex -> {
+                    log.error("[ReportController] Report failed for submission {}: {}",
+                            submissionId, ex.getMessage());
+                    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                            .<byte[]>build();
+                });
+    }
+
+    /**
      * Download a plagiarism-only PDF report for a submission.
      * GET /api/integrity/reports/{submissionId}/plagiarism
      */

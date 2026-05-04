@@ -674,8 +674,18 @@ public class LiveFeedbackService {
         Matcher m = p.matcher(text);
         while (m.find()) {
             String value = m.group(1).trim();
-            // Skip placeholder template tokens the model sometimes echoes back
+            // Strip surrounding quotes the model sometimes wraps values in
+            if (value.length() >= 2 &&
+                ((value.startsWith("\"") && value.endsWith("\"")) ||
+                 (value.startsWith("'")  && value.endsWith("'")))) {
+                value = value.substring(1, value.length() - 1).trim();
+            }
+            // Skip placeholder tokens echoed from the prompt template
             if (value.isBlank() || value.startsWith("<") || value.startsWith("[")) continue;
+            // Skip pure numbers — score values occasionally leak into bullet positions
+            if (value.matches("[0-9]+(?:\\.[0-9]+)?\\s*/\\s*10") || value.matches("[0-9]+(?:\\.[0-9]+)?")) continue;
+            // Skip fragments too short to be meaningful feedback (e.g. "OK", "N/A")
+            if (value.length() < 8) continue;
             if (seen.add(value.toLowerCase())) results.add(value);
         }
         return results;

@@ -216,6 +216,8 @@ export function useAnswerEditor({
                 strengths:          feedback.strengths,
                 improvements:       feedback.improvements,
                 suggestions:        feedback.suggestions,
+                // Store actual earned mark (0-maxPoints scale) directly — no 0-10 normalization
+                ...(feedback.projectedGrade != null && { aiGeneratedMark: feedback.projectedGrade }),
             }).then(() => {
                 // Saved successfully — no need for deferred flush
                 pendingFeedbackRef.current = null;
@@ -283,6 +285,10 @@ export function useAnswerEditor({
                 similarityScore:    result.similarityScore,
                 plagiarismSeverity: result.severity,
                 plagiarismFlagged:  result.flagged,
+                // Serialise source URLs so the PDF report can render them without re-running the check
+                ...(result.internetMatches?.length && {
+                    plagiarismSources: JSON.stringify(result.internetMatches),
+                }),
             }).then(() => {
                 // Saved successfully — no need for deferred flush
                 pendingPlagiarismRef.current = null;
@@ -312,6 +318,7 @@ export function useAnswerEditor({
                 characterCount: text.length,
                 questionText,
                 studentId: studentId || undefined,
+                maxPoints,
             });
             const savedAt = new Date();
             setLastSaved(savedAt);
@@ -336,11 +343,15 @@ export function useAnswerEditor({
                         strengths:          fb.strengths,
                         improvements:       fb.improvements,
                         suggestions:        fb.suggestions,
+                        ...(fb.projectedGrade != null && { aiGeneratedMark: fb.projectedGrade }),
                     }),
                     ...(pl && {
                         similarityScore:    pl.similarityScore,
                         plagiarismSeverity: pl.severity,
                         plagiarismFlagged:  pl.flagged,
+                        ...(pl.internetMatches?.length && {
+                            plagiarismSources: JSON.stringify(pl.internetMatches),
+                        }),
                     }),
                 }).then(() => {
                     pendingFeedbackRef.current   = null;

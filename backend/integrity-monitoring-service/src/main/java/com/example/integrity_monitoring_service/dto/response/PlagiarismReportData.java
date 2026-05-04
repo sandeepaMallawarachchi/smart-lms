@@ -52,6 +52,10 @@ public class PlagiarismReportData {
     // ── AI feedback (optional) ───────────────────────────────────────────────
     AiFeedbackSection aiFeedback;
 
+    // ── Per-question breakdown ───────────────────────────────────────────────
+    @Builder.Default
+    List<QuestionSection> questionSections = new ArrayList<>();
+
     // ── Nested types ─────────────────────────────────────────────────────────
 
     @Data
@@ -75,6 +79,35 @@ public class PlagiarismReportData {
         int endIndex;
         int sourceRank;   // which top source this belongs to (1-based)
         String status;    // "NOT_CITED", "MISSING_QUOTATIONS", "MISSING_CITATION", "CITED_AND_QUOTED"
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class QuestionSection {
+        int questionNumber;
+        String questionText;
+        String answerText;
+        int wordCount;
+        /** Maximum marks allocated to this question (e.g. 20, 30). 0 = unknown. */
+        double maxPoints;
+        /** Actual AI-suggested earned mark in 0-maxPoints scale (e.g. 15.5 for a 20-mark question). Use directly. */
+        double aiGeneratedMark;
+        /** Similarity score 0-100 stored in Answer entity. */
+        double similarityScore;
+        /** LOW / MEDIUM / HIGH, or empty if no check run. */
+        String similaritySeverity;
+        boolean flagged;
+        double relevanceScore;     // 0-10
+        double completenessScore;  // 0-10
+        double clarityScore;       // 0-10
+        double grammarScore;       // 0-10
+        List<String> strengths;
+        List<String> improvements;
+        /** Internet sources that matched this specific question's answer (from SMS plagiarismSources). */
+        @Builder.Default
+        List<TopSource> sources = new ArrayList<>();
     }
 
     @Data

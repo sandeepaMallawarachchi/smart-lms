@@ -138,12 +138,30 @@ public class Answer {
     @Column(name = "plagiarism_checked_at")
     private LocalDateTime plagiarismCheckedAt;
 
+    /**
+     * JSON-serialised array of internet match objects from the live plagiarism check.
+     * Each element contains title, url, snippet, similarityScore (0-100), sourceDomain, sourceCategory.
+     * Stored so the IMS report generator can render real source URLs in the PDF without
+     * re-running the plagiarism check.
+     */
+    @Column(name = "plagiarism_sources", columnDefinition = "TEXT")
+    private String plagiarismSources;
+
     // ── Lecturer per-question grading ─────────────────────────────────────────
 
     /**
-     * AI-suggested mark for this question (0–maxPoints scale, where maxPoints defaults to 10).
-     * Computed at submit time as: avg(grammarScore, clarityScore, completenessScore, relevanceScore).
-     * Immutable after submit — not overwritten by later operations.
+     * Maximum marks allocated to this question by the lecturer (e.g. 20, 30).
+     * Sent by the frontend at auto-save time and stored here so any downstream
+     * reader (report generator, grading view) knows the correct scale without
+     * re-fetching the assignment from the P&T service.
+     */
+    @Column(name = "max_points")
+    private Double maxPoints;
+
+    /**
+     * Actual AI-suggested earned mark in the question's own scale (e.g. 15.5 for a 20-mark question).
+     * Equals LiveFeedback.projectedGrade — updated on every auto-save cycle while the student types.
+     * Use directly as the earned mark; no conversion needed.
      */
     @Column(name = "ai_generated_mark")
     private Double aiGeneratedMark;

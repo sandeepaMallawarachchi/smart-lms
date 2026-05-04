@@ -706,16 +706,16 @@ function normalizeVcsVersion(v: VcsRaw): SubmissionVersion {
         ...(() => {
             const stored = typeof meta.overallGrade === 'number' ? meta.overallGrade : null;
             const overallPct = stored ?? (() => {
-                // Use per-question projectedGrade + maxPoints when available (new snapshots).
+                // Use per-question aiGeneratedMark (actual earned marks) + maxPoints when available (new snapshots).
                 const rawAnswers = answers as VcsAnswerSnapshot[];
                 const hasProjected = mappedAnswers.some(a => a.aiGeneratedMark != null);
                 if (hasProjected) {
                     const totalMax = rawAnswers.reduce((s, a) => s + (a.maxPoints ?? 10), 0);
                     if (!totalMax) return null;
-                    const totalEarned = mappedAnswers.reduce((s, a, i) => {
+                    // aiGeneratedMark is already actual earned marks (e.g. 15.5 out of 20) — sum directly
+                    const totalEarned = mappedAnswers.reduce((s, a) => {
                         if (a.aiGeneratedMark == null) return s;
-                        const mp = rawAnswers[i]?.maxPoints ?? 10;
-                        return s + (a.aiGeneratedMark / 10) * mp;
+                        return s + a.aiGeneratedMark;
                     }, 0);
                     return Math.round((totalEarned / totalMax) * 1000) / 10;
                 }
@@ -1126,18 +1126,21 @@ export const plagiarismService = {
         return result;
     },
 
-    async downloadPlagiarismReport(submissionId: string): Promise<Blob> {
-        const url = `${PLAGIARISM_API}/api/integrity/reports/${submissionId}/plagiarism`;
+    async downloadReport(submissionId: string): Promise<Blob> {
+        const url = `${PLAGIARISM_API}/api/integrity/reports/${submissionId}`;
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Failed to generate report: ${response.statusText}`);
         return response.blob();
     },
 
+    /** @deprecated use downloadReport */
+    async downloadPlagiarismReport(submissionId: string): Promise<Blob> {
+        return this.downloadReport(submissionId);
+    },
+
+    /** @deprecated use downloadReport */
     async downloadFeedbackReport(submissionId: string): Promise<Blob> {
-        const url = `${PLAGIARISM_API}/api/integrity/reports/${submissionId}/feedback`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Failed to generate report: ${response.statusText}`);
-        return response.blob();
+        return this.downloadReport(submissionId);
     },
 };
 

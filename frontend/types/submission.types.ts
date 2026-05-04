@@ -503,10 +503,15 @@ export interface SaveAnswerAnalysisPayload {
     strengths?: string[];
     improvements?: string[];
     suggestions?: string[];
+    /** Actual earned mark in the question's own scale (e.g. 15.5 out of 20).
+     *  Set from LiveFeedback.projectedGrade — no 0-10 normalization. */
+    aiGeneratedMark?: number;
     // Plagiarism (all optional)
     similarityScore?: number;
     plagiarismSeverity?: string;
     plagiarismFlagged?: boolean;
+    /** JSON-serialised InternetMatch[] — persisted so the PDF report can render real source URLs. */
+    plagiarismSources?: string;
     // Lecturer per-question grading (all optional)
     lecturerMark?: number;
     lecturerFeedbackText?: string;
@@ -520,6 +525,8 @@ export interface SaveAnswerPayload {
     characterCount: number;
     /** Student ID — stored on the Answer row so peer comparison can exclude all of a student's versions. */
     studentId?: string;
+    /** Maximum marks available for this question — persisted so any downstream reads know the scale. */
+    maxPoints?: number;
 }
 
 /**

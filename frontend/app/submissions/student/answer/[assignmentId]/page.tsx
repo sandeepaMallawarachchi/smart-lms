@@ -355,17 +355,14 @@ export default function AnswerPage({
                 // projectedGrade is derived from gradeMap (the live earned mark shown
                 // in the dialog) rather than feedbackMap, so the stored value always
                 // matches exactly what the student saw before clicking Submit.
-                // gradeMap[q.id] is in 0-maxPoints scale; we convert to 0-10 for storage.
+                // gradeMap[q.id] is already in 0-maxPoints scale (actual earned marks).
                 const answerSnapshots = questions.map(q => {
                     const text     = answerMap[q.id] ?? '';
                     const fb       = feedbackMap[q.id];
                     const plag     = plagiarismMap[q.id];
                     const wc       = text.trim().split(/\s+/).filter(Boolean).length;
-                    const mp       = q.maxPoints ?? 10;
                     const earnedMark = gradeMap[q.id];  // 0-maxPoints, null if no feedback
-                    const projectedGrade = earnedMark != null
-                        ? Math.round((earnedMark / mp) * 100) / 10  // → 0-10
-                        : null;
+                    const projectedGrade = earnedMark ?? null;  // actual earned mark, no conversion
 
                     return {
                         questionId:             q.id,
@@ -396,7 +393,7 @@ export default function AnswerPage({
                             matchedStudentText: m.matchedStudentText,
                         })) ?? [],
                         projectedGrade,
-                        maxPoints: mp,
+                        maxPoints: q.maxPoints,
                     };
                 });
 
