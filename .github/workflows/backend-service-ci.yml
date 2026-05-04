@@ -114,12 +114,19 @@ jobs:
         inputs.deploy_on_main &&
         inputs.compose_service != '' &&
         github.event_name == 'push' &&
-        github.ref == format('refs/heads/{0}', inputs.deploy_branch) &&
-        secrets.ec2_host != '' &&
-        secrets.ec2_user != '' &&
-        secrets.ec2_ssh_key != ''
+        github.ref == format('refs/heads/{0}', inputs.deploy_branch)
       }}
     steps:
+      - name: Verify deploy secrets
+        env:
+          EC2_HOST: ${{ secrets.ec2_host }}
+          EC2_USER: ${{ secrets.ec2_user }}
+          EC2_SSH_KEY: ${{ secrets.ec2_ssh_key }}
+        run: |
+          test -n "$EC2_HOST"
+          test -n "$EC2_USER"
+          test -n "$EC2_SSH_KEY"
+
       - name: Deploy service on EC2
         uses: appleboy/ssh-action@v1.2.0
         with:
