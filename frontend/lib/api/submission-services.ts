@@ -628,8 +628,8 @@ function normalizeVcsVersion(v: VcsRaw): SubmissionVersion {
     const meta = v.metadata ?? {};
     const answers = Array.isArray(meta.answers) ? meta.answers : [];
     const avgSimilarity = answers.length
-        ? (answers as Array<{ similarityScore?: number | null }>)
-              .reduce((s, a) => s + (a.similarityScore ?? 0), 0) / answers.length
+        ? Math.max(...(answers as Array<{ similarityScore?: number | null }>)
+              .map(a => a.similarityScore ?? 0))
         : undefined;
 
     const mappedAnswers = (answers as VcsAnswerSnapshot[]).map((a, idx) => ({

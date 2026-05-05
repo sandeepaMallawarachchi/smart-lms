@@ -44,7 +44,7 @@ function AiDetectionBadge({ result, loading }: { result: AiDetectionResult | nul
 
     const pct = Math.round(result.aiScore * 100);
 
-    if (!result.isAiGenerated && pct < 40) {
+    if (!result.isAiGenerated && pct < 20) {
         return (
             <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-full px-4 py-1.5 w-fit">
                 <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -55,7 +55,7 @@ function AiDetectionBadge({ result, loading }: { result: AiDetectionResult | nul
         );
     }
 
-    const severity = pct >= 90 ? 'high' : pct >= 75 ? 'medium' : 'low';
+    const severity = pct >= 90 ? 'high' : pct >= 60 ? 'medium' : 'low';
     const colours = {
         high:   { wrap: 'bg-red-50 border-red-300 text-red-800',   bar: 'bg-red-500',   icon: 'text-red-500' },
         medium: { wrap: 'bg-amber-50 border-amber-200 text-amber-800', bar: 'bg-amber-500', icon: 'text-amber-500' },
