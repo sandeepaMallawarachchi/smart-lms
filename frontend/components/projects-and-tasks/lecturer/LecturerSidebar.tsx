@@ -43,7 +43,6 @@ export default function LecturerSidebar() {
       subsections: [
         { id: 'all-projects', label: 'All Projects' ,href: '/lecturer/projects',},
         { id: 'create-project', label: 'Create Project' , href: '/lecturer/projects',},
-        { id: 'templates', label: 'Templates',href: '/lecturer/projects', },
       ],
     },
     {

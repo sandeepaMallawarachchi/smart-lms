@@ -291,7 +291,6 @@ export const projectsTasksConfig: Record<'student' | 'lecture', ModuleConfig> = 
           subsections: [
             { id: 'all-projects-and-tasks', label: 'All Projects and Tasks', href: '/projects-and-tasks/lecturer/all-projects-and-tasks' },
             { id: 'create-project-and-task', label: 'Create Project and task ', href: '/projects-and-tasks/lecturer/create-projects-and-tasks' },
-            { id: 'templates', label: 'Templates', href: '/projects-and-tasks/lecturer/templates' },
           ],
         },
         {
