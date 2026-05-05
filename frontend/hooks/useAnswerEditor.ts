@@ -208,6 +208,7 @@ export function useAnswerEditor({
             return;
         }
         setFeedbackLoading(true);
+        const t0 = performance.now();
         try {
             const feedback = await feedbackService.generateLiveFeedback({
                 questionId,
@@ -219,6 +220,8 @@ export function useAnswerEditor({
                 similarityScore: plagiarismResultRef.current?.similarityScore,
                 aiDetectionScore: aiDetectionResultRef.current?.aiScore ?? undefined,
             });
+            const latencyMs = Math.round(performance.now() - t0);
+            console.log(`[Feedback latency] questionId=${questionId} | ${latencyMs}ms`);
             setLiveFeedback(feedback);
             lastFeedbackTextRef.current = text;
             // Track latest feedback so auto-save can flush it if the row didn't exist yet
