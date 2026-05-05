@@ -43,7 +43,8 @@ interface AssignmentItem {
     hasDraft: boolean;
     status:   ItemStatus;
     isOverdue: boolean;
-    dueMs:    number; // epoch ms for sorting
+    dueMs:      number; // epoch ms for due-date display
+    createdAtMs: number; // epoch ms for creation-date sort (newest first)
 }
 
 // ─── Status visual config ────────────────────────────────────────────────────
@@ -67,15 +68,6 @@ const FILTERS: { key: FilterKey; label: string }[] = [
     { key: 'graded',      label: 'Graded'       },
     { key: 'overdue',     label: 'Overdue'      },
 ];
-
-// Sort priority: actively-working first, then pending, then completed, overdue last
-const STATUS_ORDER: Record<ItemStatus, number> = {
-    draft:       0,
-    not_started: 1,
-    submitted:   2,
-    graded:      3,
-    overdue:     4,
-};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -226,16 +218,6 @@ function AssignmentCard({
                         <h3 className="text-base font-bold text-gray-900 leading-tight">
                             {item.title}
                         </h3>
-                        {item.assignmentType === 'project' && (
-                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">
-                                Project
-                            </span>
-                        )}
-                        {item.assignmentType === 'task' && (
-                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-teal-100 text-teal-700">
-                                Task
-                            </span>
-                        )}
                         {/* Status badge */}
                         <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.bgColor} ${cfg.textColor}`}>
                             <span className={`h-2 w-2 rounded-full ${cfg.dotColor}`} />
@@ -486,8 +468,9 @@ export default function MySubmissionsPage() {
         const seen   = new Set<string>();
         const result: AssignmentItem[] = [];
 
-        // From assignment list
+        // From assignment list — tasks only (projects are not handled by the submission system)
         for (const asg of Array.isArray(assignments) ? assignments as Assignment[] : []) {
+            if (asg.assignmentType === 'project') continue;
             seen.add(asg.id);
             const dueMs    = asg.dueDate ? new Date(asg.dueDate).getTime() : Infinity;
             const isOverdue = dueMs < NOW;
@@ -505,6 +488,7 @@ export default function MySubmissionsPage() {
                 status:         deriveStatus(sub, hasDraft, isOverdue),
                 isOverdue,
                 dueMs,
+                createdAtMs:    asg.createdAt ? new Date(asg.createdAt).getTime() : 0,
             });
         }
 
@@ -528,6 +512,7 @@ export default function MySubmissionsPage() {
                     status:         deriveStatus(sub, hasDraft, isOverdue),
                     isOverdue,
                     dueMs,
+                    createdAtMs:    s.createdAt ? new Date(s.createdAt).getTime() : 0,
                 });
             }
         }
@@ -535,13 +520,9 @@ export default function MySubmissionsPage() {
         return result;
     }, [assignments, submissions, terminalSubMap, draftSubMap]);
 
-    // ── Sort ─────────────────────────────────────────────────
+    // ── Sort — newest created first ───────────────────────────
     const sorted = useMemo(() =>
-        [...allItems].sort((a, b) => {
-            const od = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
-            if (od !== 0) return od;
-            return a.dueMs - b.dueMs; // soonest deadline first within same group
-        }),
+        [...allItems].sort((a, b) => b.createdAtMs - a.createdAtMs),
     [allItems]);
 
     // ── Course filter ─────────────────────────────────────────

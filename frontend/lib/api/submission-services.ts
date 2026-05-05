@@ -501,6 +501,7 @@ function _mapTask(t: _RawTask): Assignment {
         status:         _deriveStatus(t.deadlineDate, t.deadlineTime),
         assignmentType: 'task',
         createdBy:      typeof t.lecturerId === 'string' ? t.lecturerId : undefined,
+        createdAt:      t.createdAt,
     };
 }
 
