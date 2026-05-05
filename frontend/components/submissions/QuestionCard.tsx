@@ -35,7 +35,66 @@ import { useAnswerEditor } from '@/hooks/useAnswerEditor';
 import { RichTextEditor } from './RichTextEditor';
 import { LiveFeedbackPanel } from './LiveFeedbackPanel';
 import { PlagiarismWarning } from './PlagiarismWarning';
-import type { Question, LiveFeedback, LivePlagiarismResult } from '@/types/submission.types';
+import type { Question, LiveFeedback, LivePlagiarismResult, AiDetectionResult } from '@/types/submission.types';
+
+// ─── AI Detection Badge ───────────────────────────────────────
+
+function AiDetectionBadge({ result, loading }: { result: AiDetectionResult | null; loading: boolean }) {
+    if (loading || !result || result.aiScore < 0) return null;
+
+    const pct = Math.round(result.aiScore * 100);
+
+    if (!result.isAiGenerated && pct < 40) {
+        return (
+            <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-full px-4 py-1.5 w-fit">
+                <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>No AI content detected ({pct}%)</span>
+            </div>
+        );
+    }
+
+    const severity = pct >= 90 ? 'high' : pct >= 75 ? 'medium' : 'low';
+    const colours = {
+        high:   { wrap: 'bg-red-50 border-red-300 text-red-800',   bar: 'bg-red-500',   icon: 'text-red-500' },
+        medium: { wrap: 'bg-amber-50 border-amber-200 text-amber-800', bar: 'bg-amber-500', icon: 'text-amber-500' },
+        low:    { wrap: 'bg-blue-50 border-blue-200 text-blue-800', bar: 'bg-blue-400',  icon: 'text-blue-500' },
+    }[severity];
+
+    const label = {
+        high:   `Very likely AI-generated (${pct}%) — marks reduced`,
+        medium: `Likely AI-generated (${pct}%) — marks reduced`,
+        low:    `Possibly AI-generated (${pct}%) — minor penalty applied`,
+    }[severity];
+
+    return (
+        <div className={`rounded-md border px-4 py-3 text-sm ${colours.wrap}`}>
+            <div className="flex items-start gap-2.5">
+                <svg className={`h-5 w-5 flex-shrink-0 mt-0.5 ${colours.icon}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                    <span className="font-semibold">AI Authorship Detected</span>
+                    {' — '}{label}
+                    <div className="mt-2 flex items-center gap-2 text-xs">
+                        <span className="w-28 shrink-0 text-current opacity-70">AI probability</span>
+                        <div className="flex-1 h-2 rounded-full bg-white/60 overflow-hidden">
+                            <div className={`h-full rounded-full ${colours.bar} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="w-10 text-right font-mono font-semibold">{pct}%</span>
+                    </div>
+                    {pct >= 75 && (
+                        <p className="mt-2 text-xs opacity-80">
+                            Write your answer in your own words. AI-generated responses receive a significant mark reduction.
+                        </p>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
 
 // ─── Props ────────────────────────────────────────────────────
 
@@ -85,8 +144,6 @@ export function QuestionCard({
     questionIndex,
 }: QuestionCardProps) {
 
-    console.debug('[QuestionCard] render — questionId:', question.id, '| index:', questionIndex, '| submissionId:', submissionId, '| initialAnswer.length:', (initialAnswer ?? '').length, '| hasSavedFeedback:', !!initialFeedback, '| hasSavedPlagiarism:', !!initialPlagiarism);
-
     // ── Hook: all debounced behaviour ─────────────────────────
     // Build the prompt sent to the AI: include assignment description (if any) so the
     // model has full context when scoring relevance.
@@ -100,6 +157,8 @@ export function QuestionCard({
         feedbackLoading,
         plagiarismResult,
         plagiarismLoading,
+        aiDetectionResult,
+        aiDetectionLoading,
         autoSaving,
         lastSaved,
         saveError,
@@ -144,7 +203,6 @@ export function QuestionCard({
     const handleTextChange = (newText: string) => {
         handleChange(newText);
         onAnswerChange(question.id, newText);
-        console.debug('[QuestionCard] handleTextChange — questionId:', question.id, '| chars:', newText.length);
     };
 
     // ── Auto-save status indicator ────────────────────────────
@@ -228,6 +286,9 @@ export function QuestionCard({
 
                         {/* Plagiarism warning — invisible unless severity ≥ LOW with a result */}
                         <PlagiarismWarning result={plagiarismResult} loading={plagiarismLoading} />
+
+                        {/* AI-generated content detection badge */}
+                        <AiDetectionBadge result={aiDetectionResult} loading={aiDetectionLoading} />
 
                         {/* Auto-save failure warning */}
                         {!disabled && saveError && (

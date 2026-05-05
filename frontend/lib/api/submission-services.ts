@@ -31,6 +31,7 @@ import type {
     LiveFeedback,
     LivePlagiarismResult,
     VcsAnswerSnapshot,
+    AiDetectionResult,
 } from '@/types/submission.types';
 
 // ─── Base URLs ────────────────────────────────────────────────
@@ -75,11 +76,7 @@ async function apiRequest<T>(
         headers['Content-Type'] = 'application/json';
     }
 
-    console.debug(`[apiRequest] ${method} ${url}`);
-
     const response = await fetch(url, { ...options, headers });
-
-    console.debug(`[apiRequest] ${method} ${url} → HTTP ${response.status}`);
 
     if (!response.ok) {
         let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
@@ -269,13 +266,10 @@ export const submissionService = {
         moduleCode?: string,
         moduleName?: string,
     ): Promise<Submission> {
-        console.debug('[submissionService] getOrCreateDraftSubmission — assignmentId:', assignmentId, '| studentId:', studentId);
-
         // Backend returns ApiResponse<Page<Submission>> → { data: { content: Submission[] } }
         const existing = await apiRequest<unknown>(
             `${SUBMISSION_API}/api/submissions?studentId=${encodeURIComponent(studentId)}&assignmentId=${encodeURIComponent(assignmentId)}`
         );
-        console.debug('[submissionService] getOrCreateDraftSubmission — raw response type:', typeof existing, '| isArray:', Array.isArray(existing));
 
         let list: Submission[] = [];
         if (Array.isArray(existing)) {
@@ -291,19 +285,13 @@ export const submissionService = {
             }
         }
 
-        console.debug('[submissionService] getOrCreateDraftSubmission — found', list.length, 'submissions; statuses:', list.map(s => s.status));
-
         // ONE submission row per student+assignment pair.
         // Return any existing submission as-is — regardless of status.
         // The working copy (Answer rows) is always editable; immutable snapshots are
         // created only when the student clicks Submit. Never reset to DRAFT.
         if (list.length > 0) {
-            const sub = list[0];
-            console.debug('[submissionService] getOrCreateDraftSubmission — reusing existing submission id:', sub.id, '| status:', sub.status);
-            return sub;
+            return list[0];
         }
-
-        console.debug('[submissionService] getOrCreateDraftSubmission — no submission found, creating new one');
 
         // Create new draft — backend returns ApiResponse<Submission> → { data: Submission }
         const created = await apiRequest<unknown>(`${SUBMISSION_API}/api/submissions`, {
@@ -320,19 +308,13 @@ export const submissionService = {
             }),
         });
 
-        console.debug('[submissionService] getOrCreateDraftSubmission — created raw type:', typeof created, '| keys:', created && typeof created === 'object' ? Object.keys(created as object) : '(none)');
-
         if (created && typeof created === 'object') {
             const obj = created as Record<string, unknown>;
             if (obj.data && typeof obj.data === 'object') {
-                const submission = obj.data as Submission;
-                console.debug('[submissionService] getOrCreateDraftSubmission — new submissionId (from .data):', submission.id);
-                return submission;
+                return obj.data as Submission;
             }
         }
-        const submission = created as Submission;
-        console.debug('[submissionService] getOrCreateDraftSubmission — new submissionId (direct):', submission?.id);
-        return submission;
+        return created as Submission;
     },
 
     /**
@@ -344,7 +326,6 @@ export const submissionService = {
         questionId: string,
         payload: SaveAnswerPayload,
     ): Promise<void> {
-        console.debug('[submissionService] saveAnswer — submissionId:', submissionId, '| questionId:', questionId, '| wordCount:', payload.wordCount, '| chars:', payload.characterCount);
         return apiRequest<void>(
             `${SUBMISSION_API}/api/submissions/${submissionId}/answers/${questionId}`,
             { method: 'PUT', body: JSON.stringify(payload) }
@@ -362,7 +343,6 @@ export const submissionService = {
         payload: SaveAnswerAnalysisPayload,
     ): Promise<void> {
         if (!submissionId) return Promise.resolve();
-        console.debug('[submissionService] saveAnswerAnalysis — submissionId:', submissionId, '| questionId:', questionId);
         return apiRequest<void>(
             `${SUBMISSION_API}/api/submissions/${submissionId}/answers/${questionId}/analysis`,
             { method: 'PATCH', body: JSON.stringify(payload) }
@@ -374,11 +354,9 @@ export const submissionService = {
      * GET /api/submissions/{submissionId}/answers
      */
     async getAnswers(submissionId: string): Promise<TextAnswer[]> {
-        console.debug('[submissionService] getAnswers — submissionId:', submissionId);
         const res = await apiRequest<unknown>(
             `${SUBMISSION_API}/api/submissions/${submissionId}/answers`
         );
-        console.debug('[submissionService] getAnswers — raw response type:', typeof res, '| isArray:', Array.isArray(res));
         let answers: TextAnswer[] = [];
         if (Array.isArray(res)) {
             answers = res as TextAnswer[];
@@ -386,7 +364,6 @@ export const submissionService = {
             const obj = res as Record<string, unknown>;
             if (Array.isArray(obj.data)) answers = obj.data as TextAnswer[];
         }
-        console.debug('[submissionService] getAnswers — returning', answers.length, 'answers; questionIds:', answers.map(a => a.questionId));
         return answers;
     },
 };
@@ -909,15 +886,14 @@ export const feedbackService = {
         maxPoints?: number;
         /** Current plagiarism similarity score (0–100) — used by backend for grade penalty. */
         similarityScore?: number;
+        /** AI-generated content probability (0.0–1.0) — used by backend for AI penalty. */
+        aiDetectionScore?: number;
     }): Promise<LiveFeedback> {
-        console.debug('[feedbackService] generateLiveFeedback — questionId:', payload.questionId, '| textLen:', payload.answerText.length, '| expectedWords:', payload.expectedWordCount ?? '(none)', '| simScore:', payload.similarityScore ?? 'n/a');
         const res = await apiRequest<{ data: LiveFeedback }>(`${FEEDBACK_API}/api/feedback/live`, {
             method: 'POST',
             body: JSON.stringify(payload),
         });
-        const fb = res.data;
-        console.debug('[feedbackService] generateLiveFeedback — scores: grammar=', fb?.grammarScore, '| clarity=', fb?.clarityScore, '| completeness=', fb?.completenessScore, '| relevance=', fb?.relevanceScore, '| projectedGrade=', fb?.projectedGrade);
-        return fb;
+        return res.data;
     },
 
     /**
@@ -934,11 +910,29 @@ export const feedbackService = {
         wordCount: number;
         expectedWordCount?: number;
         similarityScore?: number;
+        aiDetectionScore?: number;
     }): Promise<{ projectedGrade: number; projectedGradePercent: number; letterGrade: string }> {
         const res = await apiRequest<{ data: { projectedGrade: number; projectedGradePercent: number; letterGrade: string } }>(
             `${FEEDBACK_API}/api/feedback/grade`,
             { method: 'POST', body: JSON.stringify(payload) },
         );
+        return res.data;
+    },
+
+    /**
+     * Classify answer text as AI-generated or human-written.
+     * POST /api/feedback/ai-detect
+     * Returns aiScore 0.0–1.0 (probability of AI authorship), or -1.0 if unavailable.
+     */
+    async detectAiContent(answerText: string): Promise<AiDetectionResult> {
+        console.log('[AI-Detection] POST /api/feedback/ai-detect — textLen:', answerText.length);
+        const res = await apiRequest<{ data: AiDetectionResult }>(
+            `${FEEDBACK_API}/api/feedback/ai-detect`,
+            { method: 'POST', body: JSON.stringify({ answerText }) },
+        );
+        console.log('[AI-Detection] Response — aiScore:', res.data?.aiScore,
+            '| label:', res.data?.label,
+            '| isAiGenerated:', res.data?.isAiGenerated);
         return res.data;
     },
 };
@@ -1050,7 +1044,6 @@ export const plagiarismService = {
         /** Actual integer submission ID — sent so the backend can exclude the student's own answer from peer comparison. */
         submissionId?: string;
     }): Promise<LivePlagiarismResult> {
-        console.debug('[plagiarismService] checkLiveSimilarity — questionId:', payload.questionId, '| textLen:', payload.textContent.length, '| sessionId:', payload.sessionId, '| submissionId:', payload.submissionId);
         // The backend questionId field is a Long — parse string to number
         const backendPayload = {
             sessionId: payload.sessionId,
@@ -1122,7 +1115,6 @@ export const plagiarismService = {
             })),
         };
 
-        console.debug('[plagiarismService] checkLiveSimilarity — rawScore:', rawScore, '| normalised:', result.similarityScore, '%', '| severity:', severity, '| flagged:', result.flagged);
         return result;
     },
 

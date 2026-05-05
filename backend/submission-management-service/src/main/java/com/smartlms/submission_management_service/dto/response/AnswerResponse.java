@@ -65,6 +65,13 @@ public class AnswerResponse {
     /** JSON-serialised InternetMatch[] — title, url, snippet, similarityScore (0-100), sourceDomain, sourceCategory. */
     private String plagiarismSources;
 
+    // ── AI-generated content detection ─────────────────────────
+
+    /** Probability 0.0–1.0 that the answer was AI-generated. Null if not yet run. */
+    private Double aiDetectionScore;
+    /** VERY_LIKELY_AI | LIKELY_AI | POSSIBLY_AI | HUMAN_WRITTEN | UNAVAILABLE */
+    private String aiDetectionLabel;
+
     // ── Lecturer per-question grading ─────────────────────────────────────────
 
     /** Maximum marks allocated to this question. Null if not set. */

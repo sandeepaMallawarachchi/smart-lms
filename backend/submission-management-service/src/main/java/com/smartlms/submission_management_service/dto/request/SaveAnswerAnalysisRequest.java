@@ -33,6 +33,12 @@ public class SaveAnswerAnalysisRequest {
     /** JSON-serialised InternetMatch[] — title, url, snippet, similarityScore, sourceDomain, sourceCategory. */
     private String plagiarismSources;
 
+    // ── AI-generated content detection ──────────────────────────
+    /** Probability 0.0–1.0 that this answer was AI-generated. -1.0 = unavailable. */
+    private Double aiDetectionScore;
+    /** VERY_LIKELY_AI | LIKELY_AI | POSSIBLY_AI | HUMAN_WRITTEN | UNAVAILABLE */
+    private String aiDetectionLabel;
+
     // ── AI-computed earned mark (actual mark in 0-maxPoints scale) ───────────
     /** Actual earned mark in the question's own scale (e.g. 15.5 out of 20).
      *  Populated from LiveFeedback.projectedGrade on every auto-save cycle. */

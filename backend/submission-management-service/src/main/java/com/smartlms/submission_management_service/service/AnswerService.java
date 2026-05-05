@@ -179,6 +179,14 @@ public class AnswerService {
                     questionId, request.getSimilarityScore(), request.getPlagiarismSeverity(), request.getPlagiarismFlagged());
         }
 
+        // ── AI-generated content detection ───────────────────────────────────
+        if (request.getAiDetectionScore() != null) {
+            answer.setAiDetectionScore(request.getAiDetectionScore());
+            if (request.getAiDetectionLabel() != null) answer.setAiDetectionLabel(request.getAiDetectionLabel());
+            log.info("[AnswerService] saveAnalysis — aiDetectionScore={} label={} for questionId={}",
+                    request.getAiDetectionScore(), request.getAiDetectionLabel(), questionId);
+        }
+
         // ── AI earned mark ────────────────────────────────────────────────────
         if (request.getAiGeneratedMark() != null) {
             answer.setAiGeneratedMark(request.getAiGeneratedMark());
@@ -277,6 +285,9 @@ public class AnswerService {
                 .plagiarismFlagged(a.getPlagiarismFlagged())
                 .plagiarismCheckedAt(a.getPlagiarismCheckedAt() != null ? a.getPlagiarismCheckedAt().toString() : null)
                 .plagiarismSources(a.getPlagiarismSources())
+                // AI-generated content detection
+                .aiDetectionScore(a.getAiDetectionScore())
+                .aiDetectionLabel(a.getAiDetectionLabel())
                 // Lecturer per-question grading (post-deadline overrides)
                 .maxPoints(a.getMaxPoints())
                 .aiGeneratedMark(a.getAiGeneratedMark())

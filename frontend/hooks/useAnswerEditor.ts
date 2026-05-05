@@ -20,14 +20,12 @@
  *  - No version numbers shown
  *  - Only a small "Saving…" / "Saved ✓" indicator is surfaced
  *
- * Debug:
- *  All console.debug calls are prefixed with "[useAnswerEditor]" so they can
- *  be filtered in the browser DevTools console.
+ * AI Detection logs are prefixed with "[AI-Detection]" — filter in DevTools.
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { submissionService, feedbackService, plagiarismService } from '@/lib/api/submission-services';
-import type { LiveFeedback, LivePlagiarismResult } from '@/types/submission.types';
+import type { LiveFeedback, LivePlagiarismResult, AiDetectionResult } from '@/types/submission.types';
 
 // ─── Word count helper ─────────────────────────────────────────
 
@@ -76,6 +74,10 @@ export interface UseAnswerEditorReturn {
     plagiarismResult: LivePlagiarismResult | null;
     /** True while the plagiarism check is in-flight. */
     plagiarismLoading: boolean;
+    /** AI-generated content detection result (null until first response). */
+    aiDetectionResult: AiDetectionResult | null;
+    /** True while the AI detection request is in-flight. */
+    aiDetectionLoading: boolean;
     /** True for the duration of the auto-save API call. */
     autoSaving: boolean;
     /** Timestamp of the last successful auto-save (null before first save). */
@@ -135,6 +137,10 @@ export function useAnswerEditor({
     const [plagiarismResult, setPlagiarismResult] = useState<LivePlagiarismResult | null>(initialPlagiarism);
     const [plagiarismLoading, setPlagiarismLoading] = useState<boolean>(false);
 
+    // ── AI detection state ─────────────────────────────────────
+    const [aiDetectionResult, setAiDetectionResult] = useState<AiDetectionResult | null>(null);
+    const [aiDetectionLoading, setAiDetectionLoading] = useState<boolean>(false);
+
     // Refs that let async callbacks read the latest state without stale-closure issues.
     // Updated in sync via useEffect so requestFeedback / requestPlagiarismCheck always
     // see the freshest values without needing them in their dependency arrays.
@@ -152,6 +158,7 @@ export function useAnswerEditor({
     // Using refs (not state) so resetting timers doesn't cause re-renders.
     const feedbackTimer    = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const plagiarismTimer  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const aiDetectionTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const autoSaveTimer    = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     // ── Pending analysis refs ──────────────────────────────────
@@ -162,10 +169,15 @@ export function useAnswerEditor({
     const pendingFeedbackRef   = useRef<LiveFeedback | null>(null);
     const pendingPlagiarismRef = useRef<LivePlagiarismResult | null>(null);
 
-    // Cache key = the exact text that produced the last successful feedback / plagiarism result.
+    // Ref always holds the latest AI detection result so grade recalculations can read it without
+    // waiting for a React re-render (same pattern as plagiarismResultRef).
+    const aiDetectionResultRef = useRef<AiDetectionResult | null>(null);
+
+    // Cache key = the exact text that produced the last successful feedback / plagiarism / AI detection result.
     // When the debounce fires with the identical text, we skip the API call and reuse the result.
-    const lastFeedbackTextRef   = useRef<string>('');
-    const lastPlagiarismTextRef = useRef<string>('');
+    const lastFeedbackTextRef     = useRef<string>('');
+    const lastPlagiarismTextRef   = useRef<string>('');
+    const lastAiDetectionTextRef  = useRef<string>('');
 
     // Tracks whether the one-time initialText seed has been applied.
     // Prevents re-seeding on subsequent renders and guards the race-condition
@@ -189,15 +201,12 @@ export function useAnswerEditor({
     /** Fire AI feedback request for the given text, then persist the result. */
     const requestFeedback = useCallback(async (text: string) => {
         if (!text || text.length < MIN_TEXT_LENGTH) {
-            console.debug('[useAnswerEditor] Skipping AI feedback — text too short:', text.length, 'chars (min:', MIN_TEXT_LENGTH, ')');
             return;
         }
         // Skip API call if text hasn't changed since the last successful response.
         if (text === lastFeedbackTextRef.current && liveFeedbackRef.current) {
-            console.debug('[useAnswerEditor] AI feedback cache HIT — skipping API call for questionId:', questionId);
             return;
         }
-        console.debug('[useAnswerEditor] AI feedback timer FIRED — questionId:', questionId, '| textLen:', text.length, '| expectedWords:', expectedWordCount ?? '(none)');
         setFeedbackLoading(true);
         try {
             const feedback = await feedbackService.generateLiveFeedback({
@@ -206,14 +215,10 @@ export function useAnswerEditor({
                 questionPrompt: questionText,
                 expectedWordCount,
                 maxPoints,
-                // Pass current plagiarism score so the backend can include penalty in projectedGrade.
+                // Pass current scores so the backend can include both penalties in projectedGrade.
                 similarityScore: plagiarismResultRef.current?.similarityScore,
+                aiDetectionScore: aiDetectionResultRef.current?.aiScore ?? undefined,
             });
-            console.debug('[useAnswerEditor] AI feedback received — questionId:', questionId,
-                '| grammar:', feedback.grammarScore,
-                '| clarity:', feedback.clarityScore,
-                '| completeness:', feedback.completenessScore,
-                '| relevance:', feedback.relevanceScore);
             setLiveFeedback(feedback);
             lastFeedbackTextRef.current = text;
             // Track latest feedback so auto-save can flush it if the row didn't exist yet
@@ -224,7 +229,8 @@ export function useAnswerEditor({
             // penalty.  Re-run grade calculation now with the known similarity score so the
             // displayed grade reflects the penalty immediately.
             const currentPlag = plagiarismResultRef.current;
-            if (currentPlag?.similarityScore != null && maxPoints) {
+            const currentAi   = aiDetectionResultRef.current;
+            if ((currentPlag?.similarityScore != null || (currentAi != null && currentAi.aiScore >= 0)) && maxPoints) {
                 const wc = countWords(text);
                 feedbackService.calculateGrade({
                     grammarScore:      feedback.grammarScore,
@@ -234,7 +240,8 @@ export function useAnswerEditor({
                     maxPoints,
                     wordCount: wc,
                     expectedWordCount,
-                    similarityScore: currentPlag.similarityScore,
+                    similarityScore:   currentPlag != null ? currentPlag.similarityScore : undefined,
+                    aiDetectionScore:  currentAi != null && currentAi.aiScore >= 0 ? currentAi.aiScore : undefined,
                 }).then(grade => {
                     setLiveFeedback(prev => prev ? { ...prev, ...grade } : null);
                     if (grade.projectedGrade != null) {
@@ -242,9 +249,6 @@ export function useAnswerEditor({
                             aiGeneratedMark: grade.projectedGrade,
                         }).catch(() => {});
                     }
-                    console.debug('[useAnswerEditor] Grade corrected for penalty after race-condition check — questionId:', questionId,
-                        '| similarity:', currentPlag.similarityScore, '%',
-                        '| projectedGrade:', grade.projectedGrade);
                 }).catch(() => {});
             }
 
@@ -260,12 +264,9 @@ export function useAnswerEditor({
                 // Store actual earned mark (0-maxPoints scale) directly — no 0-10 normalization
                 ...(feedback.projectedGrade != null && { aiGeneratedMark: feedback.projectedGrade }),
             }).then(() => {
-                // Saved successfully — no need for deferred flush
                 pendingFeedbackRef.current = null;
-                console.debug('[useAnswerEditor] AI feedback saved immediately for questionId:', questionId);
-            }).catch(err => console.warn('[useAnswerEditor] saveAnalysis(feedback) deferred (row not yet created?):', err));
-        } catch (err) {
-            console.warn('[useAnswerEditor] AI feedback FAILED for questionId:', questionId, '—', err);
+            }).catch(() => {});
+        } catch {
             // Don't clear existing feedback — keep the last good result visible.
         } finally {
             setFeedbackLoading(false);
@@ -275,15 +276,12 @@ export function useAnswerEditor({
     /** Fire plagiarism check for the given text, then persist the result. */
     const requestPlagiarismCheck = useCallback(async (text: string) => {
         if (!text || text.length < MIN_TEXT_LENGTH) {
-            console.debug('[useAnswerEditor] Skipping plagiarism check — text too short:', text.length, 'chars (min:', MIN_TEXT_LENGTH, ')');
             return;
         }
         // Skip API call if text hasn't changed since the last successful response.
         if (text === lastPlagiarismTextRef.current && plagiarismResultRef.current) {
-            console.debug('[useAnswerEditor] Plagiarism cache HIT — skipping API call for questionId:', questionId);
             return;
         }
-        console.debug('[useAnswerEditor] Plagiarism timer FIRED — questionId:', questionId, '| textLen:', text.length, '| sessionId:', sessionId.current);
         setPlagiarismLoading(true);
         try {
             const result = await plagiarismService.checkLiveSimilarity({
@@ -294,10 +292,6 @@ export function useAnswerEditor({
                 questionText,
                 submissionId: submissionId || undefined,
             });
-            console.debug('[useAnswerEditor] Plagiarism result — questionId:', questionId,
-                '| severity:', result.severity,
-                '| score:', result.similarityScore, '%',
-                '| flagged:', result.flagged);
             setPlagiarismResult(result);
             lastPlagiarismTextRef.current = text;
             // Keep ref in sync immediately (don't wait for useEffect) so requestFeedback
@@ -306,12 +300,12 @@ export function useAnswerEditor({
             // Track latest result so auto-save can flush it if the row didn't exist yet
             pendingPlagiarismRef.current = result;
 
-            // Re-compute projected grade on the backend now that we have the real
-            // similarity score.  Only fires when live feedback already exists and
-            // maxPoints is known — silent failure is acceptable.
+            // Re-compute projected grade now that we have the real similarity score.
+            // Also pass current AI detection score so both penalties are applied together.
             const fb = liveFeedbackRef.current;
             if (fb && maxPoints) {
                 const wc = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+                const curAi = aiDetectionResultRef.current;
                 feedbackService.calculateGrade({
                     grammarScore:      fb.grammarScore,
                     clarityScore:      fb.clarityScore,
@@ -320,14 +314,11 @@ export function useAnswerEditor({
                     maxPoints,
                     wordCount: wc,
                     expectedWordCount,
-                    similarityScore: result.similarityScore,
+                    similarityScore:  result.similarityScore,
+                    aiDetectionScore: curAi != null && curAi.aiScore >= 0 ? curAi.aiScore : undefined,
                 }).then(grade => {
                     setLiveFeedback(prev => prev ? { ...prev, ...grade } : null);
-                    console.debug('[useAnswerEditor] Grade updated after plagiarism — questionId:', questionId,
-                        '| projectedGrade:', grade.projectedGrade, '| letterGrade:', grade.letterGrade);
-                }).catch(() => {
-                    // Silent — grade display keeps old value until next feedback request
-                });
+                }).catch(() => {});
             }
 
             // Persist silently — server guards wordCount >= 1
@@ -340,26 +331,85 @@ export function useAnswerEditor({
                     plagiarismSources: JSON.stringify(result.internetMatches),
                 }),
             }).then(() => {
-                // Saved successfully — no need for deferred flush
                 pendingPlagiarismRef.current = null;
-                console.debug('[useAnswerEditor] Plagiarism result saved immediately for questionId:', questionId);
-            }).catch(err => console.warn('[useAnswerEditor] saveAnalysis(plagiarism) deferred (row not yet created?):', err));
-        } catch (err) {
-            console.warn('[useAnswerEditor] Plagiarism check FAILED for questionId:', questionId, '—', err);
+            }).catch(() => {});
+        } catch {
+            // Silent failure — plagiarism check is a background operation
         } finally {
             setPlagiarismLoading(false);
         }
     }, [submissionId, questionId, studentId, questionText]);
 
+    /** Fire AI-generated content detection for the given text, then persist and re-apply grade. */
+    const requestAiDetection = useCallback(async (text: string) => {
+        if (!text || text.length < MIN_TEXT_LENGTH) return;
+        if (text === lastAiDetectionTextRef.current && aiDetectionResultRef.current) {
+            console.log('[AI-Detection] Cache HIT — skipping API call for questionId:', questionId);
+            return;
+        }
+        console.log('[AI-Detection] Request fired — questionId:', questionId, '| textLen:', text.length);
+        setAiDetectionLoading(true);
+        try {
+            const result = await feedbackService.detectAiContent(text);
+            console.log('[AI-Detection] Result — questionId:', questionId,
+                '| aiScore:', result.aiScore,
+                '| label:', result.label,
+                '| isAiGenerated:', result.isAiGenerated);
+            setAiDetectionResult(result);
+            lastAiDetectionTextRef.current = text;
+            aiDetectionResultRef.current   = result;
+
+            // Skip grade recalculation when service is unavailable (score = -1)
+            if (result.aiScore >= 0 && maxPoints) {
+                const fb = liveFeedbackRef.current;
+                if (fb) {
+                    const wc = countWords(text);
+                    const curPlag = plagiarismResultRef.current;
+                    feedbackService.calculateGrade({
+                        grammarScore:      fb.grammarScore,
+                        clarityScore:      fb.clarityScore,
+                        completenessScore: fb.completenessScore,
+                        relevanceScore:    fb.relevanceScore,
+                        maxPoints,
+                        wordCount: wc,
+                        expectedWordCount,
+                        similarityScore:  curPlag != null ? curPlag.similarityScore : undefined,
+                        aiDetectionScore: result.aiScore,
+                    }).then(grade => {
+                        setLiveFeedback(prev => prev ? { ...prev, ...grade } : null);
+                        console.log('[AI-Detection] Grade updated — questionId:', questionId,
+                            '| projectedGrade:', grade.projectedGrade,
+                            '| letterGrade:', grade.letterGrade);
+                        if (grade.projectedGrade != null) {
+                            submissionService.saveAnswerAnalysis(submissionId, questionId, {
+                                aiGeneratedMark:  grade.projectedGrade,
+                                aiDetectionScore: result.aiScore,
+                                aiDetectionLabel: result.label,
+                            }).catch(() => {});
+                        }
+                    }).catch(() => {});
+                } else {
+                    // No feedback yet — just persist the detection result
+                    submissionService.saveAnswerAnalysis(submissionId, questionId, {
+                        aiDetectionScore: result.aiScore,
+                        aiDetectionLabel: result.label,
+                    }).catch(() => {});
+                }
+            }
+        } catch (err) {
+            console.warn('[AI-Detection] FAILED for questionId:', questionId, '—', err);
+        } finally {
+            setAiDetectionLoading(false);
+        }
+    }, [submissionId, questionId, expectedWordCount, maxPoints]);
+
     /** Auto-save the current text to the backend. */
     const autoSave = useCallback(async (text: string) => {
         // Only auto-save if there is a valid submission to attach the answer to.
         if (!submissionId) {
-            console.warn('[useAnswerEditor] Skipping auto-save — submissionId is empty/undefined for questionId:', questionId, '(submission not yet created?)');
             return;
         }
         const words = countWords(text);
-        console.debug('[useAnswerEditor] Auto-save timer FIRED — submissionId:', submissionId, '| questionId:', questionId, '| words:', words, '| chars:', text.length);
         setAutoSaving(true);
         try {
             await submissionService.saveAnswer(submissionId, questionId, {
@@ -374,7 +424,6 @@ export function useAnswerEditor({
             setLastSaved(savedAt);
             consecutiveFailuresRef.current = 0;
             setSaveError(null);
-            console.debug('[useAnswerEditor] Auto-save DONE at', savedAt.toLocaleTimeString(), '— submissionId:', submissionId, '| questionId:', questionId);
 
             // ── Flush deferred analysis ────────────────────────
             // If feedback/plagiarism arrived before this auto-save created the row,
@@ -382,8 +431,6 @@ export function useAnswerEditor({
             const fb = pendingFeedbackRef.current;
             const pl = pendingPlagiarismRef.current;
             if (fb || pl) {
-                console.debug('[useAnswerEditor] Flushing deferred analysis for questionId:', questionId,
-                    '| hasFeedback:', !!fb, '| hasPlagiarism:', !!pl);
                 submissionService.saveAnswerAnalysis(submissionId, questionId, {
                     ...(fb && {
                         grammarScore:       fb.grammarScore,
@@ -406,14 +453,10 @@ export function useAnswerEditor({
                 }).then(() => {
                     pendingFeedbackRef.current   = null;
                     pendingPlagiarismRef.current = null;
-                    console.debug('[useAnswerEditor] Deferred analysis flush DONE for questionId:', questionId);
-                }).catch(err => console.warn('[useAnswerEditor] Deferred analysis flush FAILED:', err));
+                }).catch(() => {});
             }
-        } catch (err) {
+        } catch {
             consecutiveFailuresRef.current += 1;
-            console.warn('[useAnswerEditor] Auto-save FAILED for submissionId:', submissionId,
-                '| questionId:', questionId,
-                '| consecutiveFailures:', consecutiveFailuresRef.current, '—', err);
             if (consecutiveFailuresRef.current >= SAVE_ERROR_THRESHOLD) {
                 setSaveError(
                     'Your answer is not saving. Check your connection — copy your work to avoid losing it.'
@@ -441,29 +484,32 @@ export function useAnswerEditor({
         clearTimeout(feedbackTimer.current);
         if (newText.length >= MIN_TEXT_LENGTH) {
             feedbackTimer.current = setTimeout(() => requestFeedback(newText), FEEDBACK_DEBOUNCE_MS);
-            console.debug('[useAnswerEditor] AI feedback timer scheduled (', FEEDBACK_DEBOUNCE_MS, 'ms) — questionId:', questionId, '| textLen:', newText.length);
         }
 
         // ── Reset and reschedule plagiarism check (2 s debounce)
         clearTimeout(plagiarismTimer.current);
         if (newText.length >= MIN_TEXT_LENGTH) {
             plagiarismTimer.current = setTimeout(() => requestPlagiarismCheck(newText), PLAGIARISM_DEBOUNCE_MS);
-            console.debug('[useAnswerEditor] Plagiarism timer scheduled (', PLAGIARISM_DEBOUNCE_MS, 'ms) — questionId:', questionId);
+        }
+
+        // ── Reset and reschedule AI detection (2 s debounce) ───
+        clearTimeout(aiDetectionTimer.current);
+        if (newText.length >= MIN_TEXT_LENGTH) {
+            aiDetectionTimer.current = setTimeout(() => requestAiDetection(newText), PLAGIARISM_DEBOUNCE_MS);
         }
 
         // ── Reset and reschedule auto-save (5 s debounce) ──────
         clearTimeout(autoSaveTimer.current);
         autoSaveTimer.current = setTimeout(() => autoSave(newText), AUTO_SAVE_DEBOUNCE_MS);
-        console.debug('[useAnswerEditor] Auto-save timer scheduled (', AUTO_SAVE_DEBOUNCE_MS, 'ms) — submissionId:', submissionId, '| questionId:', questionId);
-    }, [requestFeedback, requestPlagiarismCheck, autoSave, questionId, submissionId]);
+    }, [requestFeedback, requestPlagiarismCheck, requestAiDetection, autoSave, questionId, submissionId]);
 
     // ── Cleanup on unmount ─────────────────────────────────────
     // Clears all pending timers so no API calls fire after unmount.
     useEffect(() => {
         return () => {
-            console.debug('[useAnswerEditor] Unmounting — clearing timers for questionId:', questionId);
             clearTimeout(feedbackTimer.current);
             clearTimeout(plagiarismTimer.current);
+            clearTimeout(aiDetectionTimer.current);
             clearTimeout(autoSaveTimer.current);
         };
     }, [questionId]);
@@ -485,12 +531,9 @@ export function useAnswerEditor({
         // answerText to the dependency array (which would cause repeated firing).
         setAnswerText(current => {
             if (initialText.length > current.length) {
-                console.debug('[useAnswerEditor] Seeding initialText for questionId:', questionId,
-                    '| saved words:', countWords(initialText), '| typed so far:', countWords(current));
                 setWordCount(countWords(initialText));
                 return initialText;
             }
-            console.debug('[useAnswerEditor] Skipping initialText seed — student already typed more for questionId:', questionId);
             return current;
         });
     }, [initialText, questionId]);
@@ -507,8 +550,6 @@ export function useAnswerEditor({
             initialText.length >= MIN_TEXT_LENGTH &&
             !initialFeedback
         ) {
-            console.debug('[useAnswerEditor] Firing initial feedback on mount — questionId:', questionId,
-                '| textLen:', initialText.length, '| reason: no saved feedback');
             requestFeedback(initialText);
         }
         const plagiarismNeedsHydration =
@@ -519,12 +560,14 @@ export function useAnswerEditor({
             initialText.length >= MIN_TEXT_LENGTH &&
             plagiarismNeedsHydration
         ) {
-            console.debug('[useAnswerEditor] Firing initial plagiarism on mount — questionId:', questionId,
-                '| textLen:', initialText.length,
-                '| reason:', !initialPlagiarism ? 'no saved result' : 'saved result has no internet matches');
             requestPlagiarismCheck(initialText);
         }
-        // Run only once on mount; requestFeedback/requestPlagiarismCheck are stable callbacks
+        // Fire AI detection on mount if there's pre-loaded text (always — no DB cache for this)
+        if (initialText && initialText.length >= MIN_TEXT_LENGTH) {
+            console.log('[AI-Detection] Firing on mount — questionId:', questionId, '| textLen:', initialText.length);
+            requestAiDetection(initialText);
+        }
+        // Run only once on mount; stable callbacks
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -535,6 +578,8 @@ export function useAnswerEditor({
         feedbackLoading,
         plagiarismResult,
         plagiarismLoading,
+        aiDetectionResult,
+        aiDetectionLoading,
         autoSaving,
         lastSaved,
         saveError,

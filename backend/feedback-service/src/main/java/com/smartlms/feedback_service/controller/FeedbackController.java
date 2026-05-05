@@ -1,12 +1,15 @@
 package com.smartlms.feedback_service.controller;
 
+import com.smartlms.feedback_service.dto.request.AiDetectionRequest;
 import com.smartlms.feedback_service.dto.request.FeedbackRequest;
 import com.smartlms.feedback_service.dto.request.GradeCalculationRequest;
 import com.smartlms.feedback_service.dto.request.LiveFeedbackRequest;
+import com.smartlms.feedback_service.dto.response.AiDetectionResponse;
 import com.smartlms.feedback_service.dto.response.ApiResponse;
 import com.smartlms.feedback_service.dto.response.FeedbackResponse;
 import com.smartlms.feedback_service.dto.response.GradeCalculationResponse;
 import com.smartlms.feedback_service.dto.response.LiveFeedbackResponse;
+import com.smartlms.feedback_service.service.AiDetectionService;
 import com.smartlms.feedback_service.service.FeedbackService;
 import com.smartlms.feedback_service.service.LiveFeedbackService;
 import jakarta.validation.Valid;
@@ -27,6 +30,7 @@ public class FeedbackController {
 
     private final FeedbackService feedbackService;
     private final LiveFeedbackService liveFeedbackService;
+    private final AiDetectionService aiDetectionService;
 
     /**
      * Generate real-time live feedback as the student types (synchronous, no DB persistence).
@@ -95,7 +99,8 @@ public class FeedbackController {
                 request.getMaxPoints(),
                 request.getWordCount() != null ? request.getWordCount() : 0,
                 request.getExpectedWordCount(),
-                request.getSimilarityScore());
+                request.getSimilarityScore(),
+                request.getAiDetectionScore());
 
         GradeCalculationResponse grade = GradeCalculationResponse.builder()
                 .projectedGrade(stub.getProjectedGrade())
@@ -104,6 +109,22 @@ public class FeedbackController {
                 .build();
 
         return ResponseEntity.ok(ApiResponse.success("Grade calculated", grade));
+    }
+
+    /**
+     * Classify answer text as AI-generated or human-written.
+     * Uses the Hello-SimpleAI/chatgpt-detector-roberta model.
+     * Returns aiScore (0.0–1.0) and a label. -1.0 means the model was unavailable.
+     *
+     * POST /api/feedback/ai-detect
+     */
+    @PostMapping("/ai-detect")
+    public ResponseEntity<ApiResponse<AiDetectionResponse>> detectAiContent(
+            @Valid @RequestBody AiDetectionRequest request) {
+        log.info("POST /api/feedback/ai-detect — textLen={}", request.getAnswerText().length());
+        AiDetectionResponse result = aiDetectionService.detect(request.getAnswerText());
+        log.info("POST /api/feedback/ai-detect — DONE aiScore={} label={}", result.getAiScore(), result.getLabel());
+        return ResponseEntity.ok(ApiResponse.success("AI detection complete", result));
     }
 
     /**

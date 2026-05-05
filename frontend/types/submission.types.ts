@@ -512,6 +512,11 @@ export interface SaveAnswerAnalysisPayload {
     plagiarismFlagged?: boolean;
     /** JSON-serialised InternetMatch[] — persisted so the PDF report can render real source URLs. */
     plagiarismSources?: string;
+    // AI-generated content detection
+    /** Probability 0.0–1.0 that the answer is AI-generated. -1.0 = unavailable. */
+    aiDetectionScore?: number;
+    /** VERY_LIKELY_AI | LIKELY_AI | POSSIBLY_AI | HUMAN_WRITTEN | UNAVAILABLE */
+    aiDetectionLabel?: string;
     // Lecturer per-question grading (all optional)
     lecturerMark?: number;
     lecturerFeedbackText?: string;
@@ -552,6 +557,18 @@ export interface LiveFeedback {
     projectedGrade?: number;         // 0–maxPoints
     projectedGradePercent?: number;  // 0–100
     letterGrade?: string;            // A+, A, A-… F
+}
+
+/**
+ * Result from POST /api/feedback/ai-detect.
+ * aiScore is the probability (0–1) the text was AI-generated.
+ * -1.0 means the detection service was unavailable (no penalty applied).
+ */
+export interface AiDetectionResult {
+    aiScore: number;         // 0.0–1.0, or -1.0 if unavailable
+    isAiGenerated: boolean;  // true when aiScore >= 0.75
+    /** VERY_LIKELY_AI | LIKELY_AI | POSSIBLY_AI | HUMAN_WRITTEN | UNAVAILABLE */
+    label: string;
 }
 
 /**

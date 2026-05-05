@@ -40,4 +40,7 @@ public class GradeCalculationRequest {
 
     /** Current plagiarism similarity score (0–100). Null treated as 0 (no penalty). */
     private Double similarityScore;
+
+    /** AI-generated content score (0.0–1.0). Null or -1.0 treated as unknown (no penalty). */
+    private Double aiDetectionScore;
 }

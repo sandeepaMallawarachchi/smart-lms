@@ -451,7 +451,8 @@ public class LiveFeedbackService {
         int wordCount = countWords(request.getAnswerText());
         computeAndSetGrade(response,
                 request.getMaxPoints(), wordCount,
-                request.getExpectedWordCount(), request.getSimilarityScore());
+                request.getExpectedWordCount(), request.getSimilarityScore(),
+                request.getAiDetectionScore());
     }
 
     /**
@@ -461,18 +462,18 @@ public class LiveFeedbackService {
     public void attachProjectedGradeFromWordCount(
             LiveFeedbackResponse response,
             int maxPoints, int wordCount,
-            Integer expectedWordCount, Double similarityScore) {
-        computeAndSetGrade(response, maxPoints, wordCount, expectedWordCount, similarityScore);
+            Integer expectedWordCount, Double similarityScore, Double aiDetectionScore) {
+        computeAndSetGrade(response, maxPoints, wordCount, expectedWordCount, similarityScore, aiDetectionScore);
     }
 
     private void computeAndSetGrade(
             LiveFeedbackResponse response,
             int maxPts, int wordCount,
-            Integer expectedWordCount, Double similarityScore) {
+            Integer expectedWordCount, Double similarityScore, Double aiDetectionScore) {
 
         boolean isShort = maxPts <= 5 || wordCount <= 40;
 
-        // Plagiarism penalty tier
+        // Plagiarism penalty tier (internet/peer similarity 0–100)
         double plagPenalty = 0.0;
         if (similarityScore != null) {
             if      (similarityScore >= 70) plagPenalty = 0.60;
@@ -480,6 +481,17 @@ public class LiveFeedbackService {
             else if (similarityScore >= 30) plagPenalty = 0.30;
             else if (similarityScore >= 15) plagPenalty = 0.10;
         }
+
+        // AI-generated content penalty tier (probability 0.0–1.0; -1.0 = unavailable → skip)
+        double aiPenalty = 0.0;
+        if (aiDetectionScore != null && aiDetectionScore >= 0.0) {
+            if      (aiDetectionScore >= 0.90) aiPenalty = 0.60;
+            else if (aiDetectionScore >= 0.75) aiPenalty = 0.45;
+            else if (aiDetectionScore >= 0.60) aiPenalty = 0.25;
+            else if (aiDetectionScore >= 0.40) aiPenalty = 0.10;
+        }
+
+        double totalPenalty = plagPenalty + aiPenalty;
 
         double projectedRatio;
         if (isShort) {
@@ -489,7 +501,7 @@ public class LiveFeedbackService {
                                  + response.getGrammarScore()      * 0.10) / 10.0;
             double floored = response.getRelevanceScore() >= 5.0
                     ? Math.max(qualityScore, 0.20) : qualityScore;
-            projectedRatio = Math.max(0.0, floored - plagPenalty);
+            projectedRatio = Math.max(0.0, floored - totalPenalty);
         } else {
             double contentScore = (response.getGrammarScore()      * 0.20
                                  + response.getClarityScore()      * 0.30
@@ -506,7 +518,7 @@ public class LiveFeedbackService {
                 if      (ratio < 0.50) wcPenalty = 0.25;
                 else if (ratio < 0.75) wcPenalty = 0.10;
             }
-            projectedRatio = Math.max(0.0, base - plagPenalty - wcPenalty);
+            projectedRatio = Math.max(0.0, base - totalPenalty - wcPenalty);
         }
 
         double projectedGrade        = Math.round(projectedRatio * maxPts * 10.0) / 10.0;
@@ -517,9 +529,9 @@ public class LiveFeedbackService {
         response.setProjectedGradePercent(projectedGradePercent);
         response.setLetterGrade(toLetterGrade(projectedGradePercent));
 
-        log.info("[LiveFeedback] Grade: maxPts={} isShort={} plagPenalty={} projectedGrade={} ({}% {})",
-                maxPts, isShort, plagPenalty, projectedGrade, projectedGradePercent,
-                response.getLetterGrade());
+        log.info("[LiveFeedback] Grade: maxPts={} isShort={} plagPenalty={} aiPenalty={} totalPenalty={} projectedGrade={} ({}% {})",
+                maxPts, isShort, plagPenalty, aiPenalty, totalPenalty,
+                projectedGrade, projectedGradePercent, response.getLetterGrade());
     }
 
     /**

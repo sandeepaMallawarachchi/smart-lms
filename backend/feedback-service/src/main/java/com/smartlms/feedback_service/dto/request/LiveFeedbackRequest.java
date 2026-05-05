@@ -45,4 +45,12 @@ public class LiveFeedbackRequest {
      * Null is treated as zero (no penalty).
      */
     private Double similarityScore;
+
+    /**
+     * AI-generated content detection score (0.0–1.0), if already known.
+     * Probability that the answer was written by an AI (e.g. ChatGPT).
+     * When provided, the backend applies AI-detection-tier penalties to the projected grade.
+     * Null or -1.0 treated as unknown (no penalty).
+     */
+    private Double aiDetectionScore;
 }
