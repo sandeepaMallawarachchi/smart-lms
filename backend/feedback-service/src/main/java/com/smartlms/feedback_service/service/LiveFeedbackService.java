@@ -238,76 +238,81 @@ public class LiveFeedbackService {
                 ? "This question is worth " + request.getMaxPoints() + " mark(s).\n"
                 : "";
 
-        String lengthInfo = "Answer length: " + wordCount + " word(s).\n";
+        String reasoningSteps =
+                "Before scoring, work through these steps:\n"
+                + "  1. What specific topic or skill does the question test?\n"
+                + "  2. What did the student actually write — which concepts did they address?\n"
+                + "  3. What is correct or effective? What is missing or wrong?\n"
+                + "  4. Assign scores that honestly reflect this analysis.\n\n";
+
+        String scoringScale =
+                "Scoring scale (apply consistently to all dimensions):\n"
+                + "  0-3 = weak — missing, incorrect, or not relevant\n"
+                + "  4-6 = partial — some correct elements but significant gaps\n"
+                + "  7-9 = strong — mostly correct with minor gaps\n"
+                + "  10  = excellent — complete and accurate\n\n";
+
+        // Flexible 1–3 bullets per section; extractLines() handles any count via STRENGTH\d+ regex.
+        // Evidence requirement: STRENGTH and IMPROVEMENT bullets must reference the student's words.
+        String flexibleFormat =
+                "GRAMMAR: <integer>\n"
+                + "CLARITY: <integer>\n"
+                + "COMPLETENESS: <integer>\n"
+                + "RELEVANCE: <integer>\n"
+                + "STRENGTH1: <quote or paraphrase specific text from the student's answer that is correct>\n"
+                + "STRENGTH2: <a second specific strength from the answer; write 'None detected' if no second one>\n"
+                + "STRENGTH3: <a third strength if clearly present; omit this line otherwise>\n"
+                + "IMPROVEMENT1: <reference specific words or ideas from the answer — state what is wrong or missing>\n"
+                + "IMPROVEMENT2: <a second improvement point referencing the answer's content>\n"
+                + "IMPROVEMENT3: <a third improvement if needed; omit this line if two are sufficient>\n"
+                + "SUGGESTION1: <one actionable step the student can take immediately to improve>\n"
+                + "SUGGESTION2: <a second distinct suggestion; omit this line if one is sufficient>\n";
 
         if (shortAnswer) {
             return "You are a fair academic evaluator scoring a short-answer question.\n"
                     + markInfo
-                    + lengthInfo
-                    + "\n"
-                    + "=== MANDATORY SCORING RULES ===\n"
-                    + "1. CONSISTENCY: Your numeric scores MUST match your qualitative comments.\n"
-                    + "   - If you write any STRENGTH that says the answer is correct, accurate, identifies\n"
-                    + "     the right concept, or directly answers the question, then RELEVANCE must be >= 5\n"
-                    + "     and COMPLETENESS must be >= 4. This rule is ABSOLUTE.\n"
-                    + "2. SHORT-ANSWER GRADING: A one-sentence correct answer deserves full credit.\n"
-                    + "   - Correct + direct + relevant = RELEVANCE 7-9, COMPLETENESS 6-8.\n"
-                    + "   - Partially correct or missing detail = RELEVANCE 4-6, COMPLETENESS 3-5.\n"
-                    + "   - Wrong or irrelevant = RELEVANCE 0-2, COMPLETENESS 0-2.\n"
-                    + "   - NEVER give RELEVANCE 0 if the answer addresses the question topic.\n"
-                    + "3. GRAMMAR: For short answers, minor grammar issues are acceptable.\n"
-                    + "   - Do NOT let grammar dominate; a correct answer with poor grammar still scores well.\n"
-                    + "   - Perfect grammar on a wrong answer should still give RELEVANCE 0-2.\n"
-                    + "4. REPETITION: If the answer just repeats words from the question without explanation,\n"
-                    + "   COMPLETENESS must be 0-3 (no new information provided).\n"
-                    + "5. BLANK/GIBBERISH: ALL scores must be 0. Do not write this for meaningful answers.\n"
+                    + "Answer length: " + wordCount + " word(s).\n\n"
+                    + reasoningSteps
+                    + scoringScale
+                    + "=== SCORING GUIDELINES ===\n"
+                    + "SHORT-ANSWER GRADING:\n"
+                    + "  Correct, direct, and relevant = RELEVANCE 7-9, COMPLETENESS 6-8.\n"
+                    + "  Partially correct or missing detail = RELEVANCE 4-6, COMPLETENESS 3-5.\n"
+                    + "  Wrong or irrelevant = RELEVANCE 0-2, COMPLETENESS 0-2.\n"
+                    + "  A one-sentence correct answer deserves full credit.\n"
+                    + "CONSISTENCY: If a STRENGTH says the answer is correct, RELEVANCE should be >= 5.\n"
+                    + "GRAMMAR: Minor issues are acceptable — a correct answer with minor grammar still scores well.\n"
+                    + "REPETITION: If the answer just repeats question words without explanation, COMPLETENESS 0-3.\n"
                     + "\n"
                     + questionContext
                     + "Student Answer: " + request.getAnswerText() + "\n\n"
-                    + "Respond using this format:\n"
-                    + "GRAMMAR: <integer 0-10>\n"
-                    + "CLARITY: <integer 0-10>\n"
-                    + "COMPLETENESS: <integer 0-10>\n"
-                    + "RELEVANCE: <integer 0-10>\n"
-                    + "STRENGTH1: <quote or paraphrase a specific part of the student's answer that is correct>\n"
-                    + "STRENGTH2: <another specific strength referencing the answer, or 'None detected' if poor>\n"
-                    + "IMPROVEMENT1: <specific gap or error in the answer — reference the student's words>\n"
-                    + "IMPROVEMENT2: <a second distinct improvement point>\n"
-                    + "SUGGESTION1: <one actionable suggestion the student can act on immediately>\n"
-                    + "SUGGESTION2: <a second distinct actionable suggestion>";
+                    + "Respond using this format (scores must be integers 0-10):\n"
+                    + flexibleFormat;
         } else {
             String completenessHint = request.getExpectedWordCount() != null
                     ? "Expected length: " + request.getExpectedWordCount() + " words. Current: " + wordCount + " words.\n"
                     : "";
             return "You are a fair academic evaluator scoring a long-answer question.\n"
                     + markInfo
-                    + lengthInfo
-                    + completenessHint
-                    + "\n"
-                    + "=== MANDATORY SCORING RULES ===\n"
-                    + "1. CONSISTENCY: Your numeric scores MUST match your qualitative comments.\n"
-                    + "   - If any STRENGTH says the answer is correct or relevant, RELEVANCE >= 5.\n"
-                    + "   - If the answer is completely off-topic: RELEVANCE 0-2 and strengths must reflect this.\n"
-                    + "2. SCORING GUIDE:\n"
-                    + "   - Well-explained, mostly complete = 7-9 across all dimensions.\n"
-                    + "   - Shows genuine understanding with some gaps = 5-7.\n"
-                    + "   - Very incomplete or mostly incorrect = 2-4.\n"
-                    + "   - Gibberish or blank = 0.\n"
-                    + "3. REPETITION: If the answer just copies the question, COMPLETENESS must be 0-3.\n"
+                    + "Answer length: " + wordCount + " word(s).\n"
+                    + completenessHint + "\n"
+                    + reasoningSteps
+                    + scoringScale
+                    + "=== SCORING GUIDELINES ===\n"
+                    + "CONSISTENCY: Numeric scores should match the qualitative comments.\n"
+                    + "  If a STRENGTH says the answer is correct or relevant, RELEVANCE should be >= 5.\n"
+                    + "  If the answer is completely off-topic, RELEVANCE 0-2.\n"
+                    + "SCORING:\n"
+                    + "  Well-explained and mostly complete = 7-9 across all dimensions.\n"
+                    + "  Shows genuine understanding with some gaps = 5-7.\n"
+                    + "  Very incomplete or mostly incorrect = 2-4.\n"
+                    + "  Gibberish or blank = 0.\n"
+                    + "REPETITION: If the answer just copies the question, COMPLETENESS 0-3.\n"
                     + "\n"
                     + questionContext
                     + "Student Answer: " + request.getAnswerText() + "\n\n"
-                    + "Respond using this format:\n"
-                    + "GRAMMAR: <integer 0-10>\n"
-                    + "CLARITY: <integer 0-10>\n"
-                    + "COMPLETENESS: <integer 0-10>\n"
-                    + "RELEVANCE: <integer 0-10>\n"
-                    + "STRENGTH1: <quote or paraphrase a specific part of the student's answer that is correct or insightful>\n"
-                    + "STRENGTH2: <another specific strength referencing the answer content, or 'None detected' if poor>\n"
-                    + "IMPROVEMENT1: <specific gap or error in the answer — reference the student's words where possible>\n"
-                    + "IMPROVEMENT2: <a second distinct improvement point — do not repeat IMPROVEMENT1>\n"
-                    + "SUGGESTION1: <one actionable suggestion the student can act on immediately>\n"
-                    + "SUGGESTION2: <a second distinct actionable suggestion>";
+                    + "Respond using this format (scores must be integers 0-10):\n"
+                    + flexibleFormat;
         }
     }
 
