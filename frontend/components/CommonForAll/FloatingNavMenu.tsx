@@ -55,8 +55,24 @@ const FloatingNavMenu = () => {
         height: typeof window === 'undefined' ? 0 : window.innerHeight
     }));
     const menuRef = useRef<HTMLDivElement>(null);
+    const [userRole, setUserRole] = useState<string | null>(null);
 
-    const userRole = typeof window === 'undefined' ? null : localStorage.getItem('userRole');
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const syncRole = () => {
+            setUserRole(localStorage.getItem('userRole'));
+        };
+
+        syncRole();
+        window.addEventListener('storage', syncRole);
+        window.addEventListener('focus', syncRole);
+
+        return () => {
+            window.removeEventListener('storage', syncRole);
+            window.removeEventListener('focus', syncRole);
+        };
+    }, []);
 
     // Navigation items
     const navItems = useMemo(() => [
@@ -97,7 +113,10 @@ const FloatingNavMenu = () => {
         }
     ], [userRole]);
 
-    const isModulePage = navItems.some(item => pathname.startsWith(item.path));
+    const isModulePage =
+        pathname.startsWith('/projects-and-tasks') ||
+        pathname.startsWith('/learning-analytics') ||
+        pathname.startsWith('/submissions');
 
     useEffect(() => {
         const handleResize = () => {
