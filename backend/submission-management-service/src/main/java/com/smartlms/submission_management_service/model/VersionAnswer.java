@@ -64,6 +64,10 @@ public class VersionAnswer {
     @Column(name = "character_count")
     private Integer characterCount;
 
+    /** Allocated marks for this question (copied from Answer at snapshot time). */
+    @Column(name = "max_points")
+    private Double maxPoints;
+
     // ── AI Feedback (frozen at submit time) ──────────────────────────────────
 
     @Column(name = "grammar_score")

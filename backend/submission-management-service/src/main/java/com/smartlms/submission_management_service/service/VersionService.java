@@ -95,6 +95,7 @@ public class VersionService {
                     .answerText(a.getAnswerText())
                     .wordCount(a.getWordCount())
                     .characterCount(a.getCharacterCount())
+                    .maxPoints(a.getMaxPoints())
                     // AI feedback snapshot
                     .grammarScore(a.getGrammarScore())
                     .clarityScore(a.getClarityScore())
@@ -357,6 +358,7 @@ public class VersionService {
                 .answerText(va.getAnswerText())
                 .wordCount(va.getWordCount())
                 .characterCount(va.getCharacterCount())
+                .maxPoints(va.getMaxPoints())
                 .grammarScore(va.getGrammarScore())
                 .clarityScore(va.getClarityScore())
                 .completenessScore(va.getCompletenessScore())

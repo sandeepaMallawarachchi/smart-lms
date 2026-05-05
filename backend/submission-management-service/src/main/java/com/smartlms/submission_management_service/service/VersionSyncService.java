@@ -91,7 +91,7 @@ public class VersionSyncService {
             m.put("similarityScore",   a.getSimilarityScore());
             m.put("plagiarismSeverity", a.getPlagiarismSeverity());
             m.put("projectedGrade",    a.getAiGeneratedMark());
-            m.put("maxPoints",         10.0);
+            m.put("maxPoints",         a.getMaxPoints());
             return m;
         }).collect(Collectors.toList());
 

@@ -417,6 +417,12 @@ export default function FeedbackPage({ params }: { params: Promise<{ id: string 
     }, [version, id]);
 
     // Merge enriched sources into answers
+    console.log('[feedback] maxPoints debug — raw answers from API:', (version?.answers ?? []).map(a => ({
+        questionId: a.questionId,
+        questionText: a.questionText?.slice(0, 60),
+        maxPoints: a.maxPoints,
+        maxPointsType: typeof a.maxPoints,
+    })));
     const answers: VersionAnswer[] = (version?.answers ?? []).map(a => {
         if (a.plagiarismSources && a.plagiarismSources.length > 0) return a;
         const extra = enrichedSources[a.questionId];

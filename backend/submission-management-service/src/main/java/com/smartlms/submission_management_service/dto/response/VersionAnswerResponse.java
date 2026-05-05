@@ -22,6 +22,7 @@ public class VersionAnswerResponse {
     private String answerText;
     private Integer wordCount;
     private Integer characterCount;
+    private Double maxPoints;
 
     // ── AI Feedback (frozen at submit time) ──────────────────────────────────
     private Double grammarScore;
