@@ -82,7 +82,7 @@ public class HuggingFaceService {
             requestBody.put("model", model);
             requestBody.put("messages", List.of(message));
             requestBody.put("max_tokens", maxTokens);
-            requestBody.put("temperature", 0.0);
+            requestBody.put("temperature", 0.3);
 
             String jsonBody = objectMapper.writeValueAsString(requestBody);
             log.debug("[HuggingFace] Request body: {}", jsonBody);

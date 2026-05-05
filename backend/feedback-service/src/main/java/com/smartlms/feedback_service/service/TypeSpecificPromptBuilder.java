@@ -65,16 +65,17 @@ public class TypeSpecificPromptBuilder {
     }
 
     private String standardFormat() {
-        return "GRAMMAR: <integer 0-10>\n"
+        return "Use this exact format (only these keys, integers 0-10 for scores):\n"
+             + "GRAMMAR: <integer 0-10>\n"
              + "CLARITY: <integer 0-10>\n"
              + "COMPLETENESS: <integer 0-10>\n"
              + "RELEVANCE: <integer 0-10>\n"
-             + "STRENGTH1: <specific strength>\n"
-             + "STRENGTH2: <second strength, or 'None detected' if poor>\n"
-             + "IMPROVEMENT1: <specific improvement>\n"
-             + "IMPROVEMENT2: <second improvement>\n"
-             + "SUGGESTION1: <actionable suggestion>\n"
-             + "SUGGESTION2: <second suggestion>";
+             + "STRENGTH1: <quote or paraphrase a specific part of the student's answer that is correct or well-done>\n"
+             + "STRENGTH2: <another specific strength referencing the answer content, or 'None detected' if poor>\n"
+             + "IMPROVEMENT1: <specific content from the answer that needs improvement or is missing — reference the student's words>\n"
+             + "IMPROVEMENT2: <another specific improvement point — do not repeat IMPROVEMENT1>\n"
+             + "SUGGESTION1: <one actionable, specific suggestion the student can act on immediately>\n"
+             + "SUGGESTION2: <a second distinct actionable suggestion>";
     }
 
     // ── 1. COMPARATIVE ANALYSIS ───────────────────────────────────────────────────
@@ -102,7 +103,7 @@ public class TypeSpecificPromptBuilder {
              + "\n"
              + questionContext(r)
              + "Student Answer: " + r.getAnswerText() + "\n\n"
-             + "Respond ONLY in this exact format (no extra text):\n"
+             + "Respond using this format:\n"
              + "GRAMMAR: <integer 0-10>\n"
              + "CLARITY: <integer 0-10>\n"
              + "COMPLETENESS: <integer 0-10>\n"
@@ -142,7 +143,7 @@ public class TypeSpecificPromptBuilder {
              + "\n"
              + questionContext(r)
              + "Student Answer: " + r.getAnswerText() + "\n\n"
-             + "Respond ONLY in this exact format (no extra text):\n"
+             + "Respond using this format:\n"
              + "GRAMMAR: <integer 0-10>\n"
              + "CLARITY: <integer 0-10>\n"
              + "COMPLETENESS: <integer 0-10>\n"
@@ -182,7 +183,7 @@ public class TypeSpecificPromptBuilder {
              + "\n"
              + questionContext(r)
              + "Student Answer: " + r.getAnswerText() + "\n\n"
-             + "Respond ONLY in this exact format (no extra text):\n"
+             + "Respond using this format:\n"
              + standardFormat();
     }
 
@@ -207,7 +208,7 @@ public class TypeSpecificPromptBuilder {
              + "\n"
              + questionContext(r)
              + "Student Answer: " + r.getAnswerText() + "\n\n"
-             + "Respond ONLY in this exact format (no extra text):\n"
+             + "Respond using this format:\n"
              + standardFormat();
     }
 
@@ -238,7 +239,7 @@ public class TypeSpecificPromptBuilder {
              + "\n"
              + questionContext(r)
              + "Student Answer: " + r.getAnswerText() + "\n\n"
-             + "Respond ONLY in this exact format (no extra text):\n"
+             + "Respond using this format:\n"
              + "GRAMMAR: <integer 0-10>\n"
              + "CLARITY: <integer 0-10>\n"
              + "COMPLETENESS: <integer 0-10>\n"
@@ -277,7 +278,7 @@ public class TypeSpecificPromptBuilder {
              + "\n"
              + questionContext(r)
              + "Student Answer: " + r.getAnswerText() + "\n\n"
-             + "Respond ONLY in this exact format (no extra text):\n"
+             + "Respond using this format:\n"
              + standardFormat();
     }
 
@@ -306,7 +307,7 @@ public class TypeSpecificPromptBuilder {
              + "\n"
              + questionContext(r)
              + "Student Answer: " + r.getAnswerText() + "\n\n"
-             + "Respond ONLY in this exact format (no extra text):\n"
+             + "Respond using this format:\n"
              + standardFormat();
     }
 
@@ -334,7 +335,7 @@ public class TypeSpecificPromptBuilder {
              + "\n"
              + questionContext(r)
              + "Student Answer: " + r.getAnswerText() + "\n\n"
-             + "Respond ONLY in this exact format (no extra text):\n"
+             + "Respond using this format:\n"
              + standardFormat();
     }
 
@@ -364,7 +365,7 @@ public class TypeSpecificPromptBuilder {
              + "\n"
              + questionContext(r)
              + "Student Answer: " + r.getAnswerText() + "\n\n"
-             + "Respond ONLY in this exact format (no extra text):\n"
+             + "Respond using this format:\n"
              + standardFormat();
     }
 
@@ -394,7 +395,7 @@ public class TypeSpecificPromptBuilder {
              + "\n"
              + questionContext(r)
              + "Student Answer: " + r.getAnswerText() + "\n\n"
-             + "Respond ONLY in this exact format (no extra text):\n"
+             + "Respond using this format:\n"
              + standardFormat();
     }
 
@@ -421,7 +422,7 @@ public class TypeSpecificPromptBuilder {
              + "\n"
              + questionContext(r)
              + "Student Answer: " + r.getAnswerText() + "\n\n"
-             + "Respond ONLY in this exact format (no extra text):\n"
+             + "Respond using this format:\n"
              + standardFormat();
     }
 
@@ -446,7 +447,7 @@ public class TypeSpecificPromptBuilder {
              + "\n"
              + questionContext(r)
              + "Student Answer: " + r.getAnswerText() + "\n\n"
-             + "Respond ONLY in this exact format (no extra text):\n"
+             + "Respond using this format:\n"
              + standardFormat();
     }
 
@@ -474,7 +475,7 @@ public class TypeSpecificPromptBuilder {
              + "\n"
              + questionContext(r)
              + "Student Answer: " + r.getAnswerText() + "\n\n"
-             + "Respond ONLY in this exact format (no extra text):\n"
+             + "Respond using this format:\n"
              + standardFormat();
     }
 
@@ -495,7 +496,7 @@ public class TypeSpecificPromptBuilder {
              + "\n"
              + questionContext(r)
              + "Student Answer: " + r.getAnswerText() + "\n\n"
-             + "Respond ONLY in this exact format (no extra text):\n"
+             + "Respond using this format:\n"
              + standardFormat();
     }
 
