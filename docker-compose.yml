@@ -165,6 +165,20 @@ services:
       - heatmap
     restart: unless-stopped
 
+  code-analytics-module:
+    build:
+      context: ./backend/code-analytics-module
+      dockerfile: Dockerfile
+    container_name: code-analytics-module
+    env_file:
+      - .env.backend
+    environment:
+      PORT: 8000
+      CODE_ANALYTICS_PROVIDER: groq
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   uploads:

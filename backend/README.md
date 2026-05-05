@@ -124,6 +124,7 @@ Backend CI workflows now exist per deployed service under `.github/workflows/`.
 - `backend-learning-analytics.yml`
 - `backend-heatmap.yml`
 - `backend-chatbot.yml`
+- `backend-code-analytics.yml`
 
 They all call the shared reusable workflow `backend-service-ci.yml`, which:
 
@@ -131,7 +132,7 @@ They all call the shared reusable workflow `backend-service-ci.yml`, which:
 - validates Python services by installing dependencies and compiling sources
 - builds each service Docker image in CI
 
-The coding evaluation module is intentionally not included yet.
+The code analytics module is now deployed separately from the learning analytics stack and uses the same shared backend CI/CD pattern.
 
 ### Optional EC2 auto-deploy
 
@@ -147,7 +148,7 @@ Deployment behavior:
 
 - CI runs first
 - if CI passes on `main`, GitHub Actions SSHs into the EC2 host
-- runs `git pull --ff-only origin main`
+- synchronizes the EC2 repository to `origin/main`
 - rebuilds only the matching Compose service with `docker compose up -d --build <service>`
 
 This expects the EC2 server to have the repository checked out at `~/smart-lms`.

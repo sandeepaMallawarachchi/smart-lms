@@ -104,6 +104,9 @@ const ScoreRing = ({ score }: { score: number }) => {
 
 const analyzeCodeWithAI = async (code: string, language: string): Promise<AnalysisResult> => {
   try {
+    const analyticsApiBase =
+      process.env.NEXT_PUBLIC_ANALYTICS_API || 'https://api.smartapi.infinityfreeapp.com/code-analytics'
+
     // Filter out the first line if it's a comment (e.g. "// ITXXXXXXXX Thennakoon A G N S")
     const codeLines = code.split('\n');
     let codeToSend = code;
@@ -112,12 +115,12 @@ const analyzeCodeWithAI = async (code: string, language: string): Promise<Analys
     }
 
     const [metricsRes, auditRes] = await Promise.all([
-      fetch(`${process.env.NEXT_PUBLIC_ANALYTICS_API}/api/analyze_metrics`, {
+      fetch(`${analyticsApiBase}/api/analyze_metrics`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: codeToSend })
       }).catch(() => null),
-      fetch(`${process.env.NEXT_PUBLIC_ANALYTICS_API}/api/audit`, {
+      fetch(`${analyticsApiBase}/api/audit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: codeToSend })

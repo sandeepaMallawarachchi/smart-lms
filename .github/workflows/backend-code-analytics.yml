@@ -1,0 +1,30 @@
+name: Code Analytics Service CI
+
+on:
+  push:
+    paths:
+      - "backend/code-analytics-module/**"
+      - ".github/workflows/backend-code-analytics.yml"
+      - ".github/workflows/backend-service-ci.yml"
+  pull_request:
+    paths:
+      - "backend/code-analytics-module/**"
+      - ".github/workflows/backend-code-analytics.yml"
+      - ".github/workflows/backend-service-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  ci:
+    uses: ./.github/workflows/backend-service-ci.yml
+    with:
+      service_name: Code Analytics Service
+      service_path: backend/code-analytics-module
+      runtime: python
+      dockerfile_path: backend/code-analytics-module/Dockerfile
+      python_version: "3.11"
+      compose_service: code-analytics-module
+      deploy_on_main: true
+    secrets:
+      ec2_host: ${{ secrets.EC2_HOST }}
+      ec2_user: ${{ secrets.EC2_USER }}
+      ec2_ssh_key: ${{ secrets.EC2_SSH_KEY }}

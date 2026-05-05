@@ -31,7 +31,7 @@ export default function AssignmentEditorPage() {
         }
 
         const response = await fetch(
-          `/api/projects-and-tasks/lecturer/create-projects-and-tasks/code-assignment?courseId=${courseId}`, 
+          `/api/projects-and-tasks/lecturer/create-projects-and-tasks/code-assignment/${assignmentId}`,
           {
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -44,20 +44,15 @@ export default function AssignmentEditorPage() {
           throw new Error('Failed to fetch assignment details')
         }
 
-        const result: ApiResponse = await response.json()
-        
-        if (result.data && Array.isArray(result.data.assignments)) {
-          const foundAssignment = result.data.assignments.find(
-            (a: Assignment) => a._id === assignmentId
-          )
+        const result = await response.json()
+        const foundAssignment = result?.data as Assignment | undefined
 
-          if (foundAssignment) {
-            setAssignment(foundAssignment)
-          } else {
-            setError('Assignment not found')
-          }
+        if (!foundAssignment) {
+          setError('Assignment not found')
+        } else if (foundAssignment.courseId !== courseId) {
+          setError('Assignment does not belong to this course')
         } else {
-          setError('No data found')
+          setAssignment(foundAssignment)
         }
 
       } catch (err: any) {
