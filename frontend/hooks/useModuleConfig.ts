@@ -62,8 +62,8 @@ export function useModuleConfig(userRole: UserRole) {
     if (currentModule === 'submissions' && userRole !== 'superadmin') {
       let isMounted = true
 
-      const SUBMISSION_API = process.env.NEXT_PUBLIC_SUBMISSION_API_URL ?? 'http://localhost:8081'
-      const PLAGIARISM_API = process.env.NEXT_PUBLIC_PLAGIARISM_API_URL ?? 'http://localhost:8084'
+      const SUBMISSION_API = process.env.NEXT_PUBLIC_SUBMISSION_API_URL ?? 'https://api.smartapi.infinityfreeapp.com/submissions'
+      const PLAGIARISM_API = process.env.NEXT_PUBLIC_PLAGIARISM_API_URL ?? 'https://api.smartapi.infinityfreeapp.com/integrity'
       const token = localStorage.getItem('authToken')
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
 

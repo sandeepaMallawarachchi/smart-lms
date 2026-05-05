@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
 
     // ── Notify the student about the new annotation (best-effort) ──
     try {
-      const SUBMISSION_API = process.env.NEXT_PUBLIC_SUBMISSION_API_URL ?? 'http://localhost:8081';
+      const SUBMISSION_API = process.env.NEXT_PUBLIC_SUBMISSION_API_URL ?? 'https://api.smartapi.infinityfreeapp.com/submissions';
       const subRes = await fetch(`${SUBMISSION_API}/api/submissions/${encodeURIComponent(submissionId)}`);
       if (subRes.ok) {
         const subJson = await subRes.json();

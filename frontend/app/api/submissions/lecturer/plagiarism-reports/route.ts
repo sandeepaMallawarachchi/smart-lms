@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
-const SUBMISSION_API = process.env.NEXT_PUBLIC_SUBMISSION_API_URL ?? 'http://localhost:8081';
-const PLAGIARISM_API = process.env.NEXT_PUBLIC_PLAGIARISM_API_URL ?? 'http://localhost:8084';
+const SUBMISSION_API = process.env.NEXT_PUBLIC_SUBMISSION_API_URL ?? 'https://api.smartapi.infinityfreeapp.com/submissions';
+const PLAGIARISM_API = process.env.NEXT_PUBLIC_PLAGIARISM_API_URL ?? 'https://api.smartapi.infinityfreeapp.com/integrity';
 
 interface SubmissionDTO {
     id: number;
