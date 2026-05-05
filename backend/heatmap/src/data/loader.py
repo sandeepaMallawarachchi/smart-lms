@@ -3,6 +3,10 @@ from pymongo import MongoClient
 from bson import ObjectId
 from config import Config
 
+
+VISIBLE_PROGRESS_STATUSES = {"inprogress", "done"}
+
+
 class DataLoader:
     def __init__(self):
         self.client = MongoClient(Config.MONGODB_URI)
@@ -44,6 +48,9 @@ class DataLoader:
         
         # Process project progress
         for progress in project_progress:
+            status = progress.get("status", "todo")
+            if status not in VISIBLE_PROGRESS_STATUSES:
+                continue
             if 'updatedAt' in progress:
                 date_str = progress['updatedAt'].strftime('%Y-%m-%d')
                 if date_str in activity_map:
@@ -54,12 +61,15 @@ class DataLoader:
                     activity_map[date_str]["items"].append({
                         "type": "project",
                         "name": project_map.get(project_id, "Unknown Project"),
-                        "status": progress.get("status", "todo"),
+                        "status": status,
                         "id": project_id
                     })
-        
+
         # Process task progress
         for progress in task_progress:
+            status = progress.get("status", "todo")
+            if status not in VISIBLE_PROGRESS_STATUSES:
+                continue
             if 'updatedAt' in progress:
                 date_str = progress['updatedAt'].strftime('%Y-%m-%d')
                 if date_str in activity_map:
@@ -70,7 +80,7 @@ class DataLoader:
                     activity_map[date_str]["items"].append({
                         "type": "task",
                         "name": task_map.get(task_id, "Unknown Task"),
-                        "status": progress.get("status", "todo"),
+                        "status": status,
                         "id": task_id
                     })
         

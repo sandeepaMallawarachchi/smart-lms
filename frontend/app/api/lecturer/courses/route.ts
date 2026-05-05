@@ -3,6 +3,7 @@
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Course from '@/model/Course';
+import '@/model/Lecturer';
 import { verifyToken } from '@/lib/jwt';
 import { successResponse, unauthorizedResponse, serverErrorResponse } from '@/lib/api-response';
 
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
       ],
       isArchived: false,
     })
+      .select('courseName courseCode credits year semester specializations lecturerInCharge lecturers isArchived createdAt updatedAt')
       .populate('lecturerInCharge', 'name email position')
       .populate('lecturers', 'name email position')
       .sort({ courseName: 1 })

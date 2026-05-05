@@ -251,7 +251,7 @@ export const learningAnalyticsConfig: Record<'student' | 'lecture', ModuleConfig
           href: '/learning-analytics/lecturer/student-insights',
           subsections: [
             { id: 'individual-progress', label: 'Individual Progress', href: '/learning-analytics/lecturer/student-insights?risk=all' },
-            { id: 'at-risk-students', label: 'At-Risk Students', badge: 3, href: '/learning-analytics/lecturer/student-insights?risk=high' },
+            { id: 'at-risk-students', label: 'At-Risk Students', href: '/learning-analytics/lecturer/student-insights?risk=high' },
             { id: 'top-performers', label: 'Top Performers', href: '/learning-analytics/lecturer/student-insights?sortBy=score&order=desc' },
           ],
         },

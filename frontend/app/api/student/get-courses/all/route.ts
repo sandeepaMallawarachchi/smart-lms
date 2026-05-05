@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Student from '@/model/Student';
 import Course from '@/model/Course';
+import '@/model/Lecturer';
 import { successResponse, unauthorizedResponse, notFoundResponse, serverErrorResponse } from '@/lib/api-response';
 import { verifyToken } from '@/lib/jwt';
 
@@ -72,6 +73,7 @@ export async function GET(request: NextRequest) {
     }
 
     const courses = await Course.find(query)
+      .select('courseName courseCode credits year semester specializations lecturerInCharge lecturers isArchived createdAt updatedAt')
       .populate('lecturerInCharge', 'name email position')
       .populate('lecturers', 'name email position')
       .sort({ year: 1, semester: 1, courseName: 1 })

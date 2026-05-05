@@ -21,6 +21,8 @@ type ProgressLite = {
   studentId: string;
 };
 
+const VISIBLE_PROGRESS_STATUSES = new Set(['inprogress', 'done']);
+
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
@@ -150,6 +152,11 @@ export async function GET(request: NextRequest) {
     }
 
     const registerProgress = (entry: ProgressLite, type: 'project' | 'task') => {
+      const status = entry.status || 'todo';
+      if (!VISIBLE_PROGRESS_STATUSES.has(status)) {
+        return;
+      }
+
       const updatedAtRaw = entry.updatedAt;
       if (!updatedAtRaw) return;
       const updatedAt = updatedAtRaw instanceof Date ? updatedAtRaw : new Date(updatedAtRaw);
@@ -169,7 +176,7 @@ export async function GET(request: NextRequest) {
         type,
         id: itemId,
         name: itemName || (type === 'project' ? 'Project' : 'Task'),
-        status: entry.status || 'todo',
+        status,
         studentId: entry.studentId,
         studentName: studentMeta?.name || 'Student',
       });

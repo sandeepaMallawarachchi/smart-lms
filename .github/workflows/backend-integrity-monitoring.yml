@@ -1,0 +1,30 @@
+name: Integrity Monitoring Service CI
+
+on:
+  push:
+    paths:
+      - "backend/integrity-monitoring-service/**"
+      - ".github/workflows/backend-integrity-monitoring.yml"
+      - ".github/workflows/backend-service-ci.yml"
+  pull_request:
+    paths:
+      - "backend/integrity-monitoring-service/**"
+      - ".github/workflows/backend-integrity-monitoring.yml"
+      - ".github/workflows/backend-service-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  ci:
+    uses: ./.github/workflows/backend-service-ci.yml
+    with:
+      service_name: Integrity Monitoring Service
+      service_path: backend/integrity-monitoring-service
+      runtime: java
+      dockerfile_path: backend/integrity-monitoring-service/Dockerfile
+      java_version: "21"
+      compose_service: integrity-monitoring-service
+      deploy_on_main: true
+    secrets:
+      ec2_host: ${{ secrets.EC2_HOST }}
+      ec2_user: ${{ secrets.EC2_USER }}
+      ec2_ssh_key: ${{ secrets.EC2_SSH_KEY }}

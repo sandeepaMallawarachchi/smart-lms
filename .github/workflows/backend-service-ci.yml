@@ -1,0 +1,146 @@
+name: Backend Service CI
+
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        required: true
+        type: string
+      service_path:
+        required: true
+        type: string
+      runtime:
+        required: true
+        type: string
+      dockerfile_path:
+        required: true
+        type: string
+      java_version:
+        required: false
+        type: string
+        default: "21"
+      python_version:
+        required: false
+        type: string
+        default: "3.11"
+      compose_service:
+        required: false
+        type: string
+        default: ""
+      deploy_on_main:
+        required: false
+        type: boolean
+        default: false
+      deploy_branch:
+        required: false
+        type: string
+        default: "main"
+      ec2_project_dir:
+        required: false
+        type: string
+        default: "~/smart-lms"
+    secrets:
+      ec2_host:
+        required: false
+      ec2_user:
+        required: false
+      ec2_ssh_key:
+        required: false
+
+jobs:
+  validate-and-build:
+    name: ${{ inputs.service_name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ${{ inputs.service_path }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        if: ${{ inputs.runtime == 'java' }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java_version }}
+          cache: maven
+
+      - name: Set up Python
+        if: ${{ inputs.runtime == 'python' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python_version }}
+          cache: pip
+          cache-dependency-path: ${{ inputs.service_path }}/requirements.txt
+
+      - name: Validate Java service
+        if: ${{ inputs.runtime == 'java' }}
+        run: |
+          if [ -x "./mvnw" ]; then
+            ./mvnw -B -ntp package -DskipTests
+          else
+            mvn -B -ntp package -DskipTests
+          fi
+
+      - name: Validate Python service
+        if: ${{ inputs.runtime == 'python' }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m compileall .
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.service_path }}
+          file: ${{ inputs.dockerfile_path }}
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy ${{ inputs.service_name }}
+    needs: validate-and-build
+    runs-on: ubuntu-latest
+    if: >-
+      ${{
+        inputs.deploy_on_main &&
+        inputs.compose_service != '' &&
+        github.event_name == 'push' &&
+        github.ref == format('refs/heads/{0}', inputs.deploy_branch)
+      }}
+    steps:
+      - name: Verify deploy secrets
+        env:
+          EC2_HOST: ${{ secrets.ec2_host }}
+          EC2_USER: ${{ secrets.ec2_user }}
+          EC2_SSH_KEY: ${{ secrets.ec2_ssh_key }}
+        run: |
+          test -n "$EC2_HOST"
+          test -n "$EC2_USER"
+          test -n "$EC2_SSH_KEY"
+
+      - name: Deploy service on EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ec2_host }}
+          username: ${{ secrets.ec2_user }}
+          key: ${{ secrets.ec2_ssh_key }}
+          script: |
+            set -e
+            cd ${{ inputs.ec2_project_dir }}
+            git fetch origin ${{ inputs.deploy_branch }}
+            git reset --hard origin/${{ inputs.deploy_branch }}
+            git clean -fd -e .env.backend
+            EXISTING_CONTAINERS=$(docker ps -aq --filter "name=${{ inputs.compose_service }}")
+            if [ -n "$EXISTING_CONTAINERS" ]; then
+              docker rm -f $EXISTING_CONTAINERS
+            fi
+            docker compose up -d --build --force-recreate ${{ inputs.compose_service }}
