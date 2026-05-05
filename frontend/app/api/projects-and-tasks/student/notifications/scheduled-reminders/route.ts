@@ -19,6 +19,7 @@ type ItemLite = {
   taskName?: string;
   deadlineDate?: string;
   deadlineTime?: string;
+  createdAt?: string | Date;
 };
 type ProjectProgressLite = { projectId: string; status?: 'todo' | 'inprogress' | 'done' };
 type TaskProgressLite = { taskId: string; status?: 'todo' | 'inprogress' | 'done' };
@@ -29,6 +30,191 @@ function parseDeadline(deadlineDate?: string, deadlineTime?: string): Date | nul
   if (!deadlineDate) return null;
   const parsed = new Date(`${deadlineDate}T${deadlineTime || '23:59'}:00`);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function computeReminderScheduleTimesFromStart(start: Date, deadline: Date) {
+  const totalMs = deadline.getTime() - start.getTime();
+  if (totalMs <= 0) return [];
+
+  const checkpoints = [25, 50, 75, 100] as const;
+  return checkpoints.map((percentage) => {
+    const offsetMs = Math.floor((totalMs * percentage) / 100);
+    return {
+      percentage,
+      scheduledFor: new Date(start.getTime() + offsetMs),
+    };
+  });
+}
+
+function buildReminderContent(input: {
+  itemType: 'project' | 'task';
+  itemName: string;
+  reminderPercentage: 25 | 50 | 75 | 100;
+}) {
+  const prefix = input.itemType === 'project' ? 'Project' : 'Task';
+
+  if (input.reminderPercentage === 25) {
+    return {
+      title: `${prefix}: ${input.itemName} - Time to Start (25%)`,
+      message: `${input.itemName} deadline is approaching.`,
+      description: 'You still have 75% of the time left. Start now.',
+      type: input.itemType === 'project' ? 'project_reminder' : 'task_reminder',
+      reminderType: `${input.itemType}_25` as const,
+    };
+  }
+
+  if (input.reminderPercentage === 50) {
+    return {
+      title: `${prefix}: ${input.itemName} - Halfway (50%)`,
+      message: `${input.itemName} has reached the halfway point.`,
+      description: "You're at the 50% time mark.",
+      type: input.itemType === 'project' ? 'project_reminder' : 'task_reminder',
+      reminderType: `${input.itemType}_50` as const,
+    };
+  }
+
+  if (input.reminderPercentage === 75) {
+    return {
+      title: `${prefix}: ${input.itemName} - Deadline Near (75%)`,
+      message: `${input.itemName} is nearing its deadline.`,
+      description: 'Only 25% of time remains.',
+      type: 'deadline_warning' as const,
+      reminderType: `${input.itemType}_75` as const,
+    };
+  }
+
+  return {
+    title: `${prefix}: ${input.itemName} - Deadline Time`,
+    message: `${input.itemName} deadline is now.`,
+    description: 'Final reminder for this deadline.',
+    type: 'deadline_warning' as const,
+    reminderType: `${input.itemType}_deadline` as const,
+  };
+}
+
+async function backfillElapsedReminderNotifications(studentId: string) {
+  const student = (await Student.findById(studentId).lean()) as StudentLite | null;
+  if (!student) return;
+
+  const assignedCourses = await Course.find({
+    year: parseInt(String(student.academicYear), 10),
+    semester: parseInt(String(student.semester), 10),
+    specializations: student.specialization,
+    isArchived: false,
+  })
+    .select('_id')
+    .lean();
+
+  const courseIds = (assignedCourses as CourseLite[]).map((course) => course._id.toString());
+  if (courseIds.length === 0) return;
+
+  const [projects, tasks, projectProgress, taskProgress] = await Promise.all([
+    Project.find({
+      courseId: { $in: courseIds },
+      isPublished: { $ne: false },
+      isArchived: { $ne: true },
+    })
+      .select('_id projectName deadlineDate deadlineTime createdAt')
+      .lean(),
+    Task.find({
+      courseId: { $in: courseIds },
+      isPublished: { $ne: false },
+      isArchived: { $ne: true },
+    })
+      .select('_id taskName deadlineDate deadlineTime createdAt')
+      .lean(),
+    StudentProjectProgress.find({ studentId }).select('projectId status').lean(),
+    StudentTaskProgress.find({ studentId }).select('taskId status').lean(),
+  ]);
+
+  const now = Date.now();
+  const projectProgressById = new Map(
+    (projectProgress as ProjectProgressLite[]).map((row) => [String(row.projectId), row.status || 'todo'])
+  );
+  const taskProgressById = new Map(
+    (taskProgress as TaskProgressLite[]).map((row) => [String(row.taskId), row.status || 'todo'])
+  );
+
+  const reminderDocs: Array<{
+    studentId: string;
+    projectId?: string;
+    taskId?: string;
+    itemType: 'project' | 'task';
+    itemName: string;
+    reminderType: 'project_25' | 'project_50' | 'project_75' | 'project_deadline' | 'task_25' | 'task_50' | 'task_75' | 'task_deadline';
+    dedupeKey: string;
+    type: 'project_reminder' | 'task_reminder' | 'deadline_warning';
+    reminderPercentage: number;
+    title: string;
+    message: string;
+    description: string;
+    isRead: boolean;
+    isSent: boolean;
+    sentAt: Date;
+    scheduledFor: Date;
+  }> = [];
+
+  const collectReminderDoc = (itemType: 'project' | 'task', item: ItemLite, status: string) => {
+    if (status === 'done') return;
+
+    const deadline = parseDeadline(item.deadlineDate, item.deadlineTime);
+    if (!deadline) return;
+    if (deadline.getTime() <= now) return;
+
+    const itemId = item._id.toString();
+    const itemName = String(itemType === 'project' ? item.projectName || 'Project' : item.taskName || 'Task');
+    const parsedStart = item.createdAt ? new Date(item.createdAt) : null;
+    const start =
+      parsedStart && !Number.isNaN(parsedStart.getTime()) && parsedStart.getTime() < deadline.getTime()
+        ? parsedStart
+        : new Date();
+
+    const checkpoints = computeReminderScheduleTimesFromStart(start, deadline).filter(
+      (point) => point.scheduledFor.getTime() <= now
+    );
+    if (checkpoints.length === 0) return;
+
+    const latestCheckpoint = checkpoints[checkpoints.length - 1];
+    const content = buildReminderContent({
+      itemType,
+      itemName,
+      reminderPercentage: latestCheckpoint.percentage,
+    });
+    const dedupeKey = `notif:${studentId}:${itemId}:${content.reminderType}`;
+
+    reminderDocs.push({
+      studentId,
+      projectId: itemType === 'project' ? itemId : undefined,
+      taskId: itemType === 'task' ? itemId : undefined,
+      itemType,
+      itemName,
+      reminderType: content.reminderType,
+      dedupeKey,
+      type: content.type,
+      reminderPercentage: latestCheckpoint.percentage,
+      title: content.title,
+      message: content.message,
+      description: content.description,
+      isRead: false,
+      isSent: true,
+      sentAt: new Date(),
+      scheduledFor: latestCheckpoint.scheduledFor,
+    });
+  };
+
+  (projects as ItemLite[]).forEach((project) => {
+    collectReminderDoc('project', project, projectProgressById.get(project._id.toString()) || 'todo');
+  });
+
+  (tasks as ItemLite[]).forEach((task) => {
+    collectReminderDoc('task', task, taskProgressById.get(task._id.toString()) || 'todo');
+  });
+
+  for (const doc of reminderDocs) {
+    const existing = await Notification.findOne({ dedupeKey: doc.dedupeKey }).select('_id').lean();
+    if (existing) continue;
+    await Notification.create(doc);
+  }
 }
 
 async function backfillOverdueNotifications(studentId: string) {
@@ -264,6 +450,7 @@ export async function GET(request: NextRequest) {
       return unauthorizedResponse('Unauthorized access');
     }
 
+    await backfillElapsedReminderNotifications(payload.userId);
     await backfillOverdueNotifications(payload.userId);
 
     const notifications = await Notification.find({
