@@ -37,13 +37,13 @@ import type {
 // ─── Base URLs ────────────────────────────────────────────────
 
 const SUBMISSION_API =
-    process.env.NEXT_PUBLIC_SUBMISSION_API_URL ?? 'http://localhost:8081';
+    process.env.NEXT_PUBLIC_SUBMISSION_API_URL ?? 'https://api.smartapi.infinityfreeapp.com/submissions';
 const VERSION_API =
-    process.env.NEXT_PUBLIC_VERSION_API_URL ?? 'http://localhost:8082';
+    process.env.NEXT_PUBLIC_VERSION_API_URL ?? 'https://api.smartapi.infinityfreeapp.com/versions';
 const FEEDBACK_API =
-    process.env.NEXT_PUBLIC_FEEDBACK_API_URL ?? 'http://localhost:8083';
+    process.env.NEXT_PUBLIC_FEEDBACK_API_URL ?? 'https://api.smartapi.infinityfreeapp.com/feedback';
 const PLAGIARISM_API =
-    process.env.NEXT_PUBLIC_PLAGIARISM_API_URL ?? 'http://localhost:8084';
+    process.env.NEXT_PUBLIC_PLAGIARISM_API_URL ?? 'https://api.smartapi.infinityfreeapp.com/integrity';
 
 // ─── Auth helper ──────────────────────────────────────────────
 

@@ -14,7 +14,7 @@ const row = (...values: unknown[]) => values.map(escapeCell).join(',');
 // ─── Backend URL ──────────────────────────────────────────────
 
 const SUBMISSION_API =
-    process.env.NEXT_PUBLIC_SUBMISSION_API_URL ?? 'http://localhost:8081';
+    process.env.NEXT_PUBLIC_SUBMISSION_API_URL ?? 'https://api.smartapi.infinityfreeapp.com/submissions';
 
 /**
  * GET /api/submissions/lecturer/export/grades
