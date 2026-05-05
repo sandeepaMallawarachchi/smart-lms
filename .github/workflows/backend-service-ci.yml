@@ -136,6 +136,7 @@ jobs:
           script: |
             set -e
             cd ${{ inputs.ec2_project_dir }}
-            git pull --ff-only origin ${{ inputs.deploy_branch }}
+            git fetch origin ${{ inputs.deploy_branch }}
+            git reset --hard origin/${{ inputs.deploy_branch }}
+            git clean -fd -e .env.backend
             docker compose up -d --build ${{ inputs.compose_service }}
-
