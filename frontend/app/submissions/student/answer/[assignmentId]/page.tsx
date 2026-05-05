@@ -22,8 +22,6 @@
  *  Confirm dialog → submissionService.submitSubmission(id)
  *  → toast → redirect to /submissions/student/my-submissions
  *
- * Debug:
- *  All console.debug calls are prefixed with "[AnswerPage]".
  */
 
 import { useState, useEffect, useCallback, use } from 'react';
@@ -181,8 +179,6 @@ export default function AnswerPage({
         return () => clearInterval(id);
     }, []);
 
-    console.debug('[AnswerPage] assignmentId:', assignmentId, '| submissionId:', submissionId);
-
     // ── Load data on mount ────────────────────────────────────
     useEffect(() => {
         const sid = getStudentId();
@@ -192,14 +188,12 @@ export default function AnswerPage({
         async function load() {
             try {
                 setLoading(true);
-                console.debug('[AnswerPage] load START — assignmentId:', assignmentId, '| studentId:', sid);
 
                 // 1. Fetch assignment (with questions); falls back to sample data if API is down
                 const raw = await getAssignmentWithFallback(assignmentId, typeHint);
                 // Cast — questions[] is returned by the backend but typed as optional
                 const asg = raw as AssignmentWithQuestions;
                 setAssignment(asg);
-                console.debug('[AnswerPage] Assignment loaded — title:', asg.title, '| questions:', asg.questions?.length ?? 0, '| type:', asg.assignmentType ?? '(none)', '| dueDate:', asg.dueDate ?? '(none)');
 
                 // 2. Deadline guard: if the assignment deadline has passed, only allow
                 //    access if the student has already submitted. Otherwise redirect to
@@ -218,11 +212,9 @@ export default function AnswerPage({
                         } catch { /* non-fatal — default to redirect */ }
 
                         if (!hasSubmitted) {
-                            console.debug('[AnswerPage] Deadline passed & no terminal submission — redirecting');
                             router.replace('/submissions/student/my-submissions');
                             return;
                         }
-                        console.debug('[AnswerPage] Deadline passed but student has a submission — allowing read-only view');
                     }
                 }
 
@@ -236,11 +228,6 @@ export default function AnswerPage({
                     asg.moduleName,
                 );
                 setSubmissionId(draft.id);
-                console.debug('[AnswerPage] Draft submission — id:', draft.id, '| status:', draft.status);
-
-                if (!draft.id) {
-                    console.error('[AnswerPage] WARNING: draft.id is falsy — auto-save will be skipped! draft:', draft);
-                }
 
                 // 3. Pre-load saved answers (+ their persisted feedback/plagiarism)
                 try {
@@ -260,16 +247,9 @@ export default function AnswerPage({
                     setFeedbackMap(fbMap);
                     setPlagiarismMap(plagMap);
 
-                    const withFeedback   = answers.filter(a => fbMap[a.questionId]   != null).length;
-                    const withPlagiarism = answers.filter(a => plagMap[a.questionId] != null).length;
-                    console.debug('[AnswerPage] Pre-loaded', answers.length, 'saved answers for submissionId:', draft.id,
-                        '| withSavedFeedback:', withFeedback, '| withSavedPlagiarism:', withPlagiarism);
-                } catch (ansErr) {
+                } catch {
                     // No answers yet — that's fine
-                    console.debug('[AnswerPage] No saved answers (or fetch failed) for submissionId:', draft.id, '—', ansErr);
                 }
-
-                console.debug('[AnswerPage] Load COMPLETE — submissionId:', draft.id, '| questions:', asg.questions?.length ?? 0);
             } catch (err) {
                 console.error('[AnswerPage] Load FAILED:', err);
                 setError('Could not load the assignment. Please try again.');
@@ -333,18 +313,13 @@ export default function AnswerPage({
     // ── Submit handler ────────────────────────────────────────
 
     async function handleSubmit() {
-        if (!submissionId) {
-            console.error('[AnswerPage] handleSubmit called but submissionId is empty!');
-            return;
-        }
-        console.debug('[AnswerPage] handleSubmit — submissionId:', submissionId, '| answeredCount:', answeredCount, '/', questions.length, '| totalWords:', totalWords);
+        if (!submissionId) return;
         setSubmitting(true);
         try {
             const submittedResult = await submissionService.submitSubmission(submissionId);
             const versionNumber = submittedResult?.totalVersions ?? submittedResult?.versionNumber ?? 1;
             setSubmitDone(true);
             setShowConfirm(false);
-            console.debug('[AnswerPage] Submit SUCCESS — submissionId:', submissionId, '| versionNumber:', versionNumber);
 
             // ── Send full text snapshot to version-control-service (fire-and-forget) ──
             // All answer texts, AI scores, and plagiarism data (including internet
@@ -421,13 +396,8 @@ export default function AnswerPage({
                     answers:       answerSnapshots,
                 };
                 // Fire-and-forget — don't await, never block the UI
-                versionService.createTextSnapshot(snapshotPayload).catch(e =>
-                    console.warn('[AnswerPage] VCS snapshot failed (non-fatal):', e)
-                );
-                console.debug('[AnswerPage] VCS snapshot dispatched — v', versionNumber);
-            } catch (snapErr) {
-                console.warn('[AnswerPage] VCS snapshot build failed (non-fatal):', snapErr);
-            }
+                versionService.createTextSnapshot(snapshotPayload).catch(() => {});
+            } catch { /* snapshot build failure is non-fatal */ }
 
             // ── Notify the lecturer about the new submission ─────────────
             try {

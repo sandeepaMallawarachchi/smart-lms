@@ -555,12 +555,6 @@ export default function MySubmissionsPage() {
             item.moduleCode?.toLowerCase() === selectedCourse.courseCode?.toLowerCase() ||
             item.moduleName?.toLowerCase() === selectedCourse.name?.toLowerCase()
         );
-        if (result.length === 0 && sorted.length > 0) {
-            console.warn('[MySubmissions] Course filter matched 0 of', sorted.length, 'items.',
-                'selectedCourse:', selectedCourse,
-                'item samples:', sorted.slice(0, 3).map(i => ({ moduleCode: i.moduleCode, moduleName: i.moduleName }))
-            );
-        }
         return result;
     }, [sorted, selectedCourse]);
 
