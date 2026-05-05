@@ -67,6 +67,14 @@ class AnalyticsChatbot:
             'semester': semester,
             'specialization': specialization
         }
+
+    def _prediction_student_query(self, student_id):
+        query = {"studentId": student_id}
+        try:
+            query = {"$or": [{"studentId": student_id}, {"studentId": ObjectId(student_id)}]}
+        except Exception:
+            pass
+        return query
     
     def get_risk_prediction(self, student_id):
         try:
@@ -98,7 +106,7 @@ class AnalyticsChatbot:
             
             # Get the latest prediction from database
             latest_prediction = self.db.predictions.find_one(
-                {"studentId": student_id},
+                self._prediction_student_query(student_id),
                 sort=[("createdAt", -1)]
             )
             
@@ -145,7 +153,9 @@ class AnalyticsChatbot:
             return {'error': str(e), 'fallback': True}
     
     def get_stored_predictions(self, student_id):
-        predictions = list(self.db.predictions.find({"studentId": student_id}).sort("createdAt", -1).limit(5))
+        predictions = list(
+            self.db.predictions.find(self._prediction_student_query(student_id)).sort("createdAt", -1).limit(5)
+        )
         return predictions
     
     def generate_recommendations(self, student_id, prediction_data, student_context):
@@ -727,7 +737,7 @@ What would you like to know about?"""
             for student in students:
                 sid = str(student["_id"])
                 latest_prediction = self.db.predictions.find_one(
-                    {"studentId": sid},
+                    self._prediction_student_query(sid),
                     sort=[("createdAt", -1)]
                 )
 
