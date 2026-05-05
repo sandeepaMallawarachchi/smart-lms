@@ -29,6 +29,12 @@ type IncomingMainTask = {
   subtasks?: IncomingSubtask[];
 };
 
+function runReminderSchedulingInBackground(work: () => Promise<unknown>) {
+  void work().catch((scheduleError) => {
+    console.error('Project reminder rescheduling warning:', scheduleError);
+  });
+}
+
 function normalizeProjectMainTasks(mainTasks: unknown): { ok: true; value: IncomingMainTask[] } | { ok: false; message: string } {
   if (!Array.isArray(mainTasks)) {
     return { ok: false, message: 'Main tasks must be an array' };
@@ -290,37 +296,39 @@ export async function PUT(
     const publishStateChanged = (existingProject.isPublished ?? true) !== (updatedProject.isPublished ?? true);
 
     if (shouldRescheduleReminders || publishStateChanged) {
-      const activeProgress = await StudentProjectProgress.find({
-        projectId,
-        status: { $ne: 'done' },
-      })
-        .select('studentId')
-        .lean();
+      runReminderSchedulingInBackground(async () => {
+        const activeProgress = await StudentProjectProgress.find({
+          projectId,
+          status: { $ne: 'done' },
+        })
+          .select('studentId')
+          .lean();
 
-      if (updatedProject.isPublished) {
-        await Promise.all(
-          activeProgress.map((row: { studentId: string }) =>
-            scheduleReminderJobsForStudentItem({
-              studentId: row.studentId,
-              itemType: 'project',
-              itemId: projectId,
-              itemName: updatedProject.projectName,
-              deadlineDate: updatedProject.deadlineDate,
-              deadlineTime: updatedProject.deadlineTime || '23:59',
-              startAt: existingProject.createdAt || updatedProject.createdAt,
-            })
-          )
-        );
-      } else {
-        await Promise.all(
-          activeProgress.map((row: { studentId: string }) =>
-            cancelReminderJobsForStudentItem({
-              studentId: row.studentId,
-              projectId,
-            })
-          )
-        );
-      }
+        if (updatedProject.isPublished) {
+          await Promise.allSettled(
+            activeProgress.map((row: { studentId: string }) =>
+              scheduleReminderJobsForStudentItem({
+                studentId: row.studentId,
+                itemType: 'project',
+                itemId: projectId,
+                itemName: updatedProject.projectName,
+                deadlineDate: updatedProject.deadlineDate,
+                deadlineTime: updatedProject.deadlineTime || '23:59',
+                startAt: existingProject.createdAt || updatedProject.createdAt,
+              })
+            )
+          );
+        } else {
+          await Promise.allSettled(
+            activeProgress.map((row: { studentId: string }) =>
+              cancelReminderJobsForStudentItem({
+                studentId: row.studentId,
+                projectId,
+              })
+            )
+          );
+        }
+      });
     }
 
     console.log('Project updated successfully');

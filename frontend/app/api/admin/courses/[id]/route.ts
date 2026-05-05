@@ -3,6 +3,7 @@
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Course from '@/model/Course';
+import '@/model/Lecturer';
 import { verifyToken } from '@/lib/jwt';
 import { successResponse, unauthorizedResponse, errorResponse, serverErrorResponse } from '@/lib/api-response';
 

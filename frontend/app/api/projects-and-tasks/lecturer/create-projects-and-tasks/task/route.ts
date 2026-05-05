@@ -11,6 +11,12 @@ import { scheduleReminderJobsForStudentItem } from '@/lib/projects-and-tasks/rem
 type IncomingSubtask = { id?: string; title?: string; description?: string; marks?: number | string };
 type EligibleStudentLite = { _id: { toString(): string } };
 
+function runReminderSchedulingInBackground(work: () => Promise<unknown>) {
+  void work().catch((scheduleError) => {
+    console.error('Task reminder scheduling warning:', scheduleError);
+  });
+}
+
 function normalizeTaskSubtasks(subtasks: unknown): { ok: true; value: IncomingSubtask[] } | { ok: false; message: string } {
   if (!Array.isArray(subtasks)) {
     return { ok: false, message: 'Subtasks must be an array' };
@@ -177,13 +183,13 @@ export async function POST(request: NextRequest) {
 
     // Schedule deadline reminders immediately for all students in the module.
     if ((task.isPublished ?? true) && deadlineDate) {
-      try {
+      runReminderSchedulingInBackground(async () => {
         const courseAndStudents = await getEligibleStudentsForCourse(courseId);
         const recipientStudentIds = ((courseAndStudents?.students || []) as EligibleStudentLite[]).map((student) =>
           student._id.toString()
         );
 
-        await Promise.all(
+        await Promise.allSettled(
           recipientStudentIds.map((studentId) =>
             scheduleReminderJobsForStudentItem({
               studentId,
@@ -196,9 +202,7 @@ export async function POST(request: NextRequest) {
             })
           )
         );
-      } catch (scheduleError) {
-        console.error('Task reminder scheduling warning:', scheduleError);
-      }
+      });
     }
 
     return NextResponse.json(
@@ -276,7 +280,6 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
 
 
 

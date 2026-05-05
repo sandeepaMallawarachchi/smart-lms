@@ -22,6 +22,12 @@ type IncomingMainTask = {
 type GroupStudentsLite = { studentIds?: unknown[] };
 type EligibleStudentLite = { _id: { toString(): string } };
 
+function runReminderSchedulingInBackground(work: () => Promise<unknown>) {
+  void work().catch((scheduleError) => {
+    console.error('Project reminder scheduling warning:', scheduleError);
+  });
+}
+
 function normalizeProjectMainTasks(mainTasks: unknown): { ok: true; value: IncomingMainTask[] } | { ok: false; message: string } {
   if (!Array.isArray(mainTasks)) {
     return { ok: false, message: 'Main tasks must be an array' };
@@ -259,7 +265,7 @@ export async function POST(request: NextRequest) {
 
     // Schedule deadline reminders immediately for assigned students.
     if ((project.isPublished ?? true) && deadlineDate) {
-      try {
+      runReminderSchedulingInBackground(async () => {
         let recipientStudentIds: string[] = [];
 
         if (projectType === 'group') {
@@ -287,7 +293,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        await Promise.all(
+        await Promise.allSettled(
           recipientStudentIds.map((studentId) =>
             scheduleReminderJobsForStudentItem({
               studentId,
@@ -300,9 +306,7 @@ export async function POST(request: NextRequest) {
             })
           )
         );
-      } catch (scheduleError) {
-        console.error('Project reminder scheduling warning:', scheduleError);
-      }
+      });
     }
 
     return NextResponse.json(

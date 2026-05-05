@@ -8,6 +8,12 @@ import Course from '@/model/Course';
 
 type IncomingSubtask = { id?: string; title?: string; description?: string; marks?: number | string };
 
+function runReminderSchedulingInBackground(work: () => Promise<unknown>) {
+  void work().catch((scheduleError) => {
+    console.error('Task reminder rescheduling warning:', scheduleError);
+  });
+}
+
 function normalizeTaskSubtasks(subtasks: unknown): { ok: true; value: IncomingSubtask[] } | { ok: false; message: string } {
   if (!Array.isArray(subtasks)) {
     return { ok: false, message: 'Subtasks must be an array' };
@@ -183,37 +189,39 @@ export async function PUT(
     const shouldRescheduleReminders = deadlineChanged || nameChanged || publishStateChanged;
 
     if (shouldRescheduleReminders) {
-      const activeProgress = await StudentTaskProgress.find({
-        taskId,
-        status: { $ne: 'done' },
-      })
-        .select('studentId')
-        .lean();
+      runReminderSchedulingInBackground(async () => {
+        const activeProgress = await StudentTaskProgress.find({
+          taskId,
+          status: { $ne: 'done' },
+        })
+          .select('studentId')
+          .lean();
 
-      if (updatedTask.isPublished && updatedTask.deadlineDate) {
-        await Promise.all(
-          activeProgress.map((row: { studentId: string }) =>
-            scheduleReminderJobsForStudentItem({
-              studentId: row.studentId,
-              itemType: 'task',
-              itemId: taskId,
-              itemName: updatedTask.taskName,
-              deadlineDate: updatedTask.deadlineDate,
-              deadlineTime: updatedTask.deadlineTime || '23:59',
-              startAt: existingTask.createdAt || updatedTask.createdAt,
-            })
-          )
-        );
-      } else {
-        await Promise.all(
-          activeProgress.map((row: { studentId: string }) =>
-            cancelReminderJobsForStudentItem({
-              studentId: row.studentId,
-              taskId,
-            })
-          )
-        );
-      }
+        if (updatedTask.isPublished && updatedTask.deadlineDate) {
+          await Promise.allSettled(
+            activeProgress.map((row: { studentId: string }) =>
+              scheduleReminderJobsForStudentItem({
+                studentId: row.studentId,
+                itemType: 'task',
+                itemId: taskId,
+                itemName: updatedTask.taskName,
+                deadlineDate: updatedTask.deadlineDate,
+                deadlineTime: updatedTask.deadlineTime || '23:59',
+                startAt: existingTask.createdAt || updatedTask.createdAt,
+              })
+            )
+          );
+        } else {
+          await Promise.allSettled(
+            activeProgress.map((row: { studentId: string }) =>
+              cancelReminderJobsForStudentItem({
+                studentId: row.studentId,
+                taskId,
+              })
+            )
+          );
+        }
+      });
     }
 
     console.log('Task updated successfully');
