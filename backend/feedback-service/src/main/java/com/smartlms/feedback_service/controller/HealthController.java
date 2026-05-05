@@ -26,7 +26,7 @@ public class HealthController {
     @Value("${server.port}")
     private String serverPort;
 
-    @Value("${huggingface.model}")
+    @Value("${groq.model}")
     private String huggingFaceModel;
 
     @GetMapping
