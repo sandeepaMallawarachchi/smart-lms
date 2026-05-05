@@ -12,6 +12,7 @@ interface Course {
   academicYear?: string | number
   semester?: string | number
   specialization?: string
+  assignmentCount?: number
 }
 
 export default function StudentCodeAssignmentsLandingPage() {
@@ -31,7 +32,7 @@ export default function StudentCodeAssignmentsLandingPage() {
           return
         }
 
-        const response = await fetch('/api/student/get-courses', {
+        const response = await fetch('/api/projects-and-tasks/student/code-assignments', {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -50,7 +51,7 @@ export default function StudentCodeAssignmentsLandingPage() {
         }
 
         const result = await response.json()
-        const fetchedCourses: Course[] = Array.isArray(result.courses) ? result.courses : []
+        const fetchedCourses: Course[] = Array.isArray(result.data?.courses) ? result.data.courses : []
 
         setCourses(fetchedCourses)
 
@@ -90,7 +91,7 @@ export default function StudentCodeAssignmentsLandingPage() {
               <CodeXml size={28} />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Code Assignments</h1>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Code Assignments</h1>
               <p className="mt-1.5 text-sm text-gray-500">
                 Choose a course to view the coding assignments assigned to you.
               </p>
@@ -108,8 +109,8 @@ export default function StudentCodeAssignmentsLandingPage() {
         {courses.length === 0 ? (
           <div className="text-center py-20 bg-white/50 rounded-2xl border-2 border-dashed border-gray-200">
             <BookOpen className="mx-auto text-gray-300 mb-4" size={48} />
-            <h3 className="text-lg font-semibold text-gray-900">No Courses Available</h3>
-            <p className="text-gray-500">No assigned courses were found for code assignments.</p>
+            <h3 className="text-lg font-semibold text-gray-900">No Code Assignments Available</h3>
+            <p className="text-gray-500">No coding assignments were found in your assigned courses.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -138,6 +139,9 @@ export default function StudentCodeAssignmentsLandingPage() {
                   </h3>
                   <p className="mt-3 text-sm text-gray-500">
                     Year {course.academicYear ?? '-'} • Semester {course.semester ?? '-'}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-blue-600">
+                    {course.assignmentCount ?? 0} code assignment{(course.assignmentCount ?? 0) === 1 ? '' : 's'}
                   </p>
                 </div>
               </motion.button>

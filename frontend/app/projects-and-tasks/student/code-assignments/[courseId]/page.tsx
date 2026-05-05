@@ -58,7 +58,7 @@ export default function StudentCodeAssignmentsPage() {
         }
 
         const response = await fetch(
-          `/api/projects-and-tasks/lecturer/create-projects-and-tasks/code-assignment?courseId=${courseId}`, 
+          `/api/projects-and-tasks/student/code-assignments?courseId=${courseId}`, 
           {
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -71,7 +71,7 @@ export default function StudentCodeAssignmentsPage() {
           throw new Error('Failed to fetch assignments')
         }
 
-        const result: ApiResponse = await response.json()
+        const result = await response.json()
         
         if (result.data && Array.isArray(result.data.assignments)) {
           setAssignments(result.data.assignments)
