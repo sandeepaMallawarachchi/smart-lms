@@ -4,7 +4,19 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="35028d62-d265-4594-b0aa-b0ca768e692d" name="Changes" comment="" />
+    <list default="true" id="35028d62-d265-4594-b0aa-b0ca768e692d" name="Changes" comment="bulk plagiarism recheck">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/feedback-service/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/backend/feedback-service/Dockerfile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/feedback-service/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/backend/feedback-service/src/main/resources/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/integrity-monitoring-service/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/backend/integrity-monitoring-service/src/main/resources/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/submission-management-service/src/main/java/com/smartlms/submission_management_service/model/Answer.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/submission-management-service/src/main/java/com/smartlms/submission_management_service/model/Answer.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/submission-management-service/src/main/java/com/smartlms/submission_management_service/repository/SubmissionRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/submission-management-service/src/main/java/com/smartlms/submission_management_service/repository/SubmissionRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/submission-management-service/src/main/java/com/smartlms/submission_management_service/util/JwtUtils.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/submission-management-service/src/main/java/com/smartlms/submission_management_service/util/JwtUtils.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/submission-management-service/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/backend/submission-management-service/src/main/resources/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker-compose.yml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/app/submissions/lecturer/submissions/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/app/submissions/lecturer/submissions/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/hooks/useModuleConfig.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/hooks/useModuleConfig.ts" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -14,6 +26,11 @@
     <option name="cachedIndexableFilesCount" value="34154" />
   </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="GitHubPullRequestSearchHistory"><![CDATA[{
@@ -32,49 +49,228 @@
     <commands />
     <urls />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 1
-}]]></component>
-  <component name="ProjectId" id="3AqCZTO5qoWHZDwqqoYZNiHVPCV" />
+  <component name="ProjectColorInfo">{
+  &quot;customColor&quot;: &quot;&quot;,
+  &quot;associatedIndex&quot;: 2
+}</component>
+  <component name="ProjectId" id="3BbaHoLuUCwJ4EA4OQVXxEfC40P" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "main",
-    "junie.onboarding.icon.badge.shown": "true",
-    "kotlin-language-version-configured": "true",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "to.speed.mode.migration.done": "true",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;IT22586766/feature/008/plagiarism-report&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;ts.external.directory.path&quot;: &quot;C:\\RP\\smart-lms\\frontend\\node_modules\\typescript\\lib&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-jdk-30f59d01ecdd-2fc7cc6b9a17-intellij.indexing.shared.core-IU-253.30387.90" />
-        <option value="bundled-js-predefined-d6986cc7102b-9b0f141eb926-JavaScript-IU-253.30387.90" />
+        <option value="bundled-js-predefined-d6986cc7102b-09060db00ec0-JavaScript-WS-251.26927.40" />
       </set>
     </attachedChunks>
   </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
       <changelist id="35028d62-d265-4594-b0aa-b0ca768e692d" name="Changes" comment="" />
-      <created>1773310770225</created>
+      <created>1774760152183</created>
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
-      <updated>1773310770225</updated>
-      <workItem from="1773310771707" duration="11000" />
+      <updated>1774760152183</updated>
+      <workItem from="1774760153743" duration="2985000" />
+      <workItem from="1774798106240" duration="4544000" />
+      <workItem from="1774882538352" duration="5845000" />
+      <workItem from="1775367703489" duration="15000" />
+      <workItem from="1777535087674" duration="334000" />
     </task>
+    <task id="LOCAL-00001" summary="downloadable plagiarism report">
+      <option name="closed" value="true" />
+      <created>1774765012728</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1774765012729</updated>
+    </task>
+    <task id="LOCAL-00002" summary="refactor">
+      <option name="closed" value="true" />
+      <created>1774882697037</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1774882697037</updated>
+    </task>
+    <task id="LOCAL-00003" summary="assignment cache on frontend">
+      <option name="closed" value="true" />
+      <created>1774882891721</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1774882891721</updated>
+    </task>
+    <task id="LOCAL-00004" summary="optimize pdf report generating">
+      <option name="closed" value="true" />
+      <created>1774883038373</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1774883038373</updated>
+    </task>
+    <task id="LOCAL-00005" summary="index on submission_id column">
+      <option name="closed" value="true" />
+      <created>1774883250159</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1774883250160</updated>
+    </task>
+    <task id="LOCAL-00006" summary="Shared scoring logic for AI-generated answer marks">
+      <option name="closed" value="true" />
+      <created>1774883389499</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1774883389499</updated>
+    </task>
+    <task id="LOCAL-00007" summary="shared utility method for splitPipe()">
+      <option name="closed" value="true" />
+      <created>1774883584540</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1774883584540</updated>
+    </task>
+    <task id="LOCAL-00008" summary="validations">
+      <option name="closed" value="true" />
+      <created>1774883871215</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1774883871215</updated>
+    </task>
+    <task id="LOCAL-00009" summary="validations">
+      <option name="closed" value="true" />
+      <created>1774883958096</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1774883958096</updated>
+    </task>
+    <task id="LOCAL-00010" summary="word count validation on answers">
+      <option name="closed" value="true" />
+      <created>1774884269611</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1774884269611</updated>
+    </task>
+    <task id="LOCAL-00011" summary="in-page notification">
+      <option name="closed" value="true" />
+      <created>1774884416071</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1774884416071</updated>
+    </task>
+    <task id="LOCAL-00012" summary="bulk grading option">
+      <option name="closed" value="true" />
+      <created>1774884756306</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1774884756306</updated>
+    </task>
+    <task id="LOCAL-00013" summary="loading indicator">
+      <option name="closed" value="true" />
+      <created>1774884875261</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1774884875261</updated>
+    </task>
+    <task id="LOCAL-00014" summary="detailed diff">
+      <option name="closed" value="true" />
+      <created>1774885103835</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1774885103835</updated>
+    </task>
+    <task id="LOCAL-00015" summary="live projected grade pill">
+      <option name="closed" value="true" />
+      <created>1774885517797</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1774885517797</updated>
+    </task>
+    <task id="LOCAL-00016" summary="deadline countdown">
+      <option name="closed" value="true" />
+      <created>1774885656601</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1774885656601</updated>
+    </task>
+    <task id="LOCAL-00017" summary="plagiarism recheck">
+      <option name="closed" value="true" />
+      <created>1774885881202</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1774885881202</updated>
+    </task>
+    <task id="LOCAL-00018" summary="bulk plagiarism recheck">
+      <option name="closed" value="true" />
+      <created>1774888825295</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1774888825295</updated>
+    </task>
+    <option name="localTasksCounter" value="19" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="downloadable plagiarism report" />
+    <MESSAGE value="refactor" />
+    <MESSAGE value="assignment cache on frontend" />
+    <MESSAGE value="optimize pdf report generating" />
+    <MESSAGE value="index on submission_id column" />
+    <MESSAGE value="Shared scoring logic for AI-generated answer marks" />
+    <MESSAGE value="shared utility method for splitPipe()" />
+    <MESSAGE value="validations" />
+    <MESSAGE value="word count validation on answers" />
+    <MESSAGE value="in-page notification" />
+    <MESSAGE value="bulk grading option" />
+    <MESSAGE value="loading indicator" />
+    <MESSAGE value="detailed diff" />
+    <MESSAGE value="live projected grade pill" />
+    <MESSAGE value="deadline countdown" />
+    <MESSAGE value="plagiarism recheck" />
+    <MESSAGE value="bulk plagiarism recheck" />
+    <option name="LAST_COMMIT_MESSAGE" value="bulk plagiarism recheck" />
   </component>
 </project>

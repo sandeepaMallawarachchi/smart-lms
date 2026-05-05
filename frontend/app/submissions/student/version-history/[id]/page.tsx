@@ -9,8 +9,7 @@ import {
 } from 'lucide-react';
 import { useVersions } from '@/hooks/useVersions';
 import { useSubmission } from '@/hooks/useSubmissions';
-import { versionService } from '@/lib/api/submission-services';
-import { submissionService } from '@/lib/api/submission-services';
+import { versionService, submissionService, scoreToLetterGrade } from '@/lib/api/submission-services';
 import { diffWords, mergeDiffTokens } from '@/lib/textDiff';
 import type { SubmissionVersion, VersionAnswer } from '@/types/submission.types';
 import AnnotatedText from '@/components/submissions/AnnotatedText';
@@ -43,6 +42,49 @@ function scoreBar(value?: number | null, max = 10) {
     );
 }
 
+// ─── Version Diff Summary ─────────────────────────────────────
+
+interface VersionDiffSummary {
+    wordsAdded: number;
+    wordsRemoved: number;
+    questionsChanged: number;
+    questionsAdded: number;
+}
+
+/**
+ * Count word-level additions and removals between two sets of answers.
+ * Uses the same diffWords function used by ComparisonView so the numbers
+ * are consistent with what the student sees in the full diff modal.
+ */
+function computeVersionDiff(
+    prevAnswers: VersionAnswer[],
+    nextAnswers: VersionAnswer[],
+): VersionDiffSummary {
+    const prevMap = new Map(prevAnswers.map(a => [a.questionId, a.answerText ?? '']));
+    let wordsAdded = 0, wordsRemoved = 0, questionsChanged = 0, questionsAdded = 0;
+
+    for (const next of nextAnswers) {
+        const oldText = prevMap.get(next.questionId) ?? '';
+        const newText = next.answerText ?? '';
+        if (oldText === '' && newText !== '') {
+            questionsAdded++;
+            wordsAdded += newText.trim().split(/\s+/).filter(Boolean).length;
+            questionsChanged++;
+            continue;
+        }
+        if (oldText === newText) continue;
+        questionsChanged++;
+        const tokens = diffWords(oldText, newText);
+        for (const t of tokens) {
+            const wordCount = t.value.trim().split(/\s+/).filter(Boolean).length;
+            if (t.type === 'added')   wordsAdded   += wordCount;
+            if (t.type === 'removed') wordsRemoved += wordCount;
+        }
+    }
+
+    return { wordsAdded, wordsRemoved, questionsChanged, questionsAdded };
+}
+
 // ─── VersionCard ──────────────────────────────────────────────
 
 function VersionCard({
@@ -53,6 +95,7 @@ function VersionCard({
     compareSelected,
     onCompareToggle,
     compareDisabled,
+    diffSummary,
 }: {
     version: SubmissionVersion;
     isLatest: boolean;
@@ -61,9 +104,43 @@ function VersionCard({
     compareSelected: boolean;
     onCompareToggle: () => void;
     compareDisabled: boolean;
+    /** Change summary vs the immediately preceding version. Undefined for v1. */
+    diffSummary?: VersionDiffSummary;
 }) {
     const [expanded, setExpanded] = useState(false);
+    const [downloadingReport, setDownloadingReport] = useState(false);
     const answers: VersionAnswer[] = version.answers ?? [];
+    console.log('[version-history] maxPoints debug — version', version.versionNumber, answers.map(a => ({
+        questionId: a.questionId,
+        questionText: a.questionText?.slice(0, 60),
+        maxPoints: a.maxPoints,
+        maxPointsType: typeof a.maxPoints,
+    })));
+
+    const revertMatch = version.commitMessage?.match(/^Reverted from v(\d+)$/);
+    const revertedFromVersion = revertMatch ? Number(revertMatch[1]) : null;
+
+    const handleDownload = async () => {
+        const submissionId = version.submissionId?.toString() ?? '';
+        if (!submissionId) return;
+        setDownloadingReport(true);
+        try {
+            const { plagiarismService } = await import('@/lib/api/submission-services');
+            const blob = await plagiarismService.downloadReport(submissionId);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Integrity_Feedback_Report_V${version.versionNumber ?? 1}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Download failed:', err);
+        } finally {
+            setDownloadingReport(false);
+        }
+    };
 
     const plagColor = (score?: number | null) => {
         if (!score || score < 20) return 'text-green-600';
@@ -72,12 +149,12 @@ function VersionCard({
     };
 
     return (
-        <div className={`bg-white border rounded-lg overflow-hidden ${compareSelected ? 'border-purple-400 ring-2 ring-purple-200' : isLatest ? 'border-purple-300 shadow-md' : 'border-gray-200'}`}>
-            {/* Header row */}
-            <div className="p-5 flex flex-wrap items-center gap-4">
-                {/* Compare checkbox */}
+        <div className={`bg-white border rounded-xl overflow-hidden ${compareSelected ? 'border-purple-400 ring-2 ring-purple-200' : isLatest ? 'border-purple-300 shadow-md' : 'border-gray-200'}`}>
+            <div className="p-6 flex items-start gap-4">
+
+                {/* ── Compare checkbox ────────────────────────── */}
                 <label
-                    className={`flex items-center justify-center w-6 h-6 shrink-0 cursor-pointer ${compareDisabled && !compareSelected ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    className={`flex items-center justify-center w-6 h-6 shrink-0 mt-1 cursor-pointer ${compareDisabled && !compareSelected ? 'opacity-40 cursor-not-allowed' : ''}`}
                     title={compareSelected ? 'Deselect for comparison' : compareDisabled ? '2 versions already selected' : 'Select for comparison'}
                 >
                     <input
@@ -89,88 +166,154 @@ function VersionCard({
                     />
                 </label>
 
-                {/* Version badge */}
+                {/* ── Version circle ───────────────────────────── */}
                 <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 ${isLatest ? 'bg-purple-600' : 'bg-gray-400'}`}>
-                    <span className="text-white font-bold text-sm">v{version.versionNumber}</span>
+                    <span className="text-white font-bold text-base">v{version.versionNumber}</span>
                 </div>
 
-                {/* Meta */}
+                {/* ── Left: title + meta + metrics ─────────────── */}
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-gray-900">{version.commitMessage ?? `Version ${version.versionNumber}`}</span>
+
+                    {/* Title row + status badges */}
+                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                        <h3 className="text-base font-bold text-gray-900 leading-tight">
+                            {revertedFromVersion != null
+                                ? `Version ${version.versionNumber}`
+                                : (version.commitMessage ?? `Version ${version.versionNumber}`)}
+                        </h3>
                         {isLatest && (
-                            <span className="text-xs font-semibold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Latest</span>
+                            <span className="text-xs font-semibold bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full">Latest</span>
+                        )}
+                        {revertedFromVersion != null && (
+                            <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full flex items-center gap-1">
+                                <Undo2 size={11} />
+                                Reverted from v{revertedFromVersion}
+                            </span>
                         )}
                         {version.isLate && (
-                            <span className="text-xs font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Late</span>
+                            <span className="text-xs font-semibold bg-red-100 text-red-700 px-2.5 py-1 rounded-full">Late</span>
                         )}
                         {version.hasLecturerOverride && (
-                            <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Lecturer Graded</span>
+                            <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full">Lecturer Graded</span>
                         )}
                     </div>
-                    <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
-                        <Clock size={12} />
+
+                    {/* Timestamp */}
+                    <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-2">
+                        <Clock size={14} />
                         <span>Submitted {formatDate(version.submittedAt)}</span>
                     </div>
-                </div>
 
-                {/* Metrics */}
-                <div className="flex gap-6 text-center shrink-0">
-                    <div>
-                        <div className="text-xs text-gray-500 mb-0.5">AI Score</div>
-                        <div className="text-lg font-bold text-purple-600">
-                            {version.aiScore != null ? `${version.aiScore.toFixed(0)}%` : '—'}
+                    {/* Change summary vs previous version */}
+                    {diffSummary && (
+                        <div className="flex items-center gap-2 mb-3 flex-wrap">
+                            {diffSummary.wordsAdded === 0 && diffSummary.wordsRemoved === 0 && diffSummary.questionsAdded === 0 ? (
+                                <span className="text-sm text-gray-400 italic">No text changes from previous version</span>
+                            ) : (
+                                <>
+                                    {diffSummary.wordsAdded > 0 && (
+                                        <span className="inline-flex items-center gap-0.5 px-2 py-1 rounded bg-green-100 text-green-700 text-sm font-medium">
+                                            +{diffSummary.wordsAdded} word{diffSummary.wordsAdded !== 1 ? 's' : ''}
+                                        </span>
+                                    )}
+                                    {diffSummary.wordsRemoved > 0 && (
+                                        <span className="inline-flex items-center gap-0.5 px-2 py-1 rounded bg-red-100 text-red-700 text-sm font-medium">
+                                            −{diffSummary.wordsRemoved} word{diffSummary.wordsRemoved !== 1 ? 's' : ''}
+                                        </span>
+                                    )}
+                                    {diffSummary.questionsAdded > 0 && (
+                                        <span className="inline-flex items-center gap-0.5 px-2 py-1 rounded bg-purple-100 text-purple-700 text-sm font-medium">
+                                            {diffSummary.questionsAdded} new answer{diffSummary.questionsAdded !== 1 ? 's' : ''}
+                                        </span>
+                                    )}
+                                    {diffSummary.questionsChanged > 0 && (
+                                        <span className="text-sm text-gray-400">
+                                            across {diffSummary.questionsChanged} question{diffSummary.questionsChanged !== 1 ? 's' : ''}
+                                        </span>
+                                    )}
+                                </>
+                            )}
                         </div>
-                    </div>
-                    <div>
-                        <div className="text-xs text-gray-500 mb-0.5">Plagiarism</div>
-                        <div className={`text-lg font-bold ${plagColor(version.plagiarismScore)}`}>
-                            {version.plagiarismScore != null ? `${version.plagiarismScore.toFixed(0)}%` : '—'}
-                        </div>
-                    </div>
-                    <div>
-                        <div className="text-xs text-gray-500 mb-0.5">Final Grade</div>
-                        <div className="text-lg font-bold text-blue-600">
-                            {version.finalGrade != null
-                                ? `${version.finalGrade}${version.maxGrade ? ` / ${version.maxGrade}` : ''}`
-                                : '—'}
-                        </div>
-                    </div>
-                    <div>
-                        <div className="text-xs text-gray-500 mb-0.5">Words</div>
-                        <div className="text-lg font-bold text-gray-700">
-                            {version.totalWordCount ?? '—'}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2 shrink-0">
-                    {!isLatest && (
-                        <button
-                            onClick={onRevert}
-                            className="px-3 py-2 bg-amber-50 text-amber-700 text-sm font-medium rounded-lg hover:bg-amber-100 border border-amber-200 transition-colors cursor-pointer flex items-center gap-1.5"
-                            title="Revert to this version as a new draft"
-                        >
-                            <Undo2 size={15} />
-                            Revert
-                        </button>
                     )}
+
+                    {/* ── Metrics row (below title, not competing with buttons) ── */}
+                    <div className="flex flex-wrap gap-4 pt-2 border-t border-gray-100">
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-xs text-gray-400 uppercase tracking-wide font-medium">AI Score</span>
+                            <span className="text-xl font-bold text-purple-600">
+                                {version.aiScore != null ? `${version.aiScore.toFixed(0)}%` : '—'}
+                            </span>
+                        </div>
+                        <div className="w-px bg-gray-200 self-stretch" />
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-xs text-gray-400 uppercase tracking-wide font-medium">Plagiarism</span>
+                            <span className={`text-xl font-bold ${plagColor(version.plagiarismScore)}`}>
+                                {version.plagiarismScore != null ? `${version.plagiarismScore.toFixed(0)}%` : '—'}
+                            </span>
+                        </div>
+                        <div className="w-px bg-gray-200 self-stretch" />
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-xs text-gray-400 uppercase tracking-wide font-medium">AI Grade</span>
+                            <span className="text-xl font-bold text-blue-600">
+                                {version.aiScore != null ? scoreToLetterGrade(version.aiScore) : '—'}
+                            </span>
+                        </div>
+                        <div className="w-px bg-gray-200 self-stretch" />
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-xs text-gray-400 uppercase tracking-wide font-medium">Words</span>
+                            <span className="text-xl font-bold text-gray-700">
+                                {version.totalWordCount ?? '—'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* ── Right: action buttons column ─────────────── */}
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                    {/* Primary action */}
                     <button
                         onClick={onViewReport}
-                        className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors cursor-pointer"
+                        className="px-5 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors cursor-pointer whitespace-nowrap"
                     >
                         View Report
                     </button>
-                    {answers.length > 0 && (
+
+                    {/* Secondary actions */}
+                    <div className="flex flex-wrap gap-2 justify-end">
+                        {!isLatest && (
+                            <button
+                                onClick={onRevert}
+                                className="px-3 py-1.5 bg-amber-50 text-amber-700 text-sm font-medium rounded-lg hover:bg-amber-100 border border-amber-200 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap"
+                                title="Revert to this version as a new draft"
+                            >
+                                <Undo2 size={14} />
+                                Revert
+                            </button>
+                        )}
                         <button
-                            onClick={() => setExpanded(e => !e)}
-                            className="px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200 transition-colors cursor-pointer flex items-center gap-1"
+                            onClick={handleDownload}
+                            disabled={downloadingReport}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50 whitespace-nowrap"
                         >
-                            {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                            Answers
+                            {downloadingReport ? (
+                                <span className="animate-spin text-sm">⟳</span>
+                            ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                            )}
+                            Download Report
                         </button>
-                    )}
+                        {answers.length > 0 && (
+                            <button
+                                onClick={() => setExpanded(e => !e)}
+                                className="px-3 py-1.5 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap"
+                            >
+                                {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                                Answers
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -216,12 +359,12 @@ function VersionCard({
                             <div className="flex items-center gap-4 mt-2 text-xs">
                                 {a.aiGeneratedMark != null && (
                                     <span className="text-purple-600 font-semibold">
-                                        AI Mark: {a.aiGeneratedMark.toFixed(1)} / 10
+                                        AI Mark: {a.aiGeneratedMark.toFixed(1)}{a.maxPoints != null ? ` / ${a.maxPoints}` : ''}
                                     </span>
                                 )}
                                 {a.lecturerMark != null && (
                                     <span className="text-blue-600 font-semibold">
-                                        Lecturer Mark: {a.lecturerMark.toFixed(1)} / 10
+                                        Lecturer Mark: {a.lecturerMark.toFixed(1)} / {a.maxPoints ?? 10}
                                     </span>
                                 )}
                             </div>
@@ -317,9 +460,13 @@ function ComparisonView({
                         {' '}{metricDelta(left.plagiarismScore, right.plagiarismScore)}
                     </div>
                     <div>
-                        <span className="text-gray-500 block mb-0.5">Final Grade</span>
-                        <span className="font-semibold">{left.finalGrade ?? '—'} → {right.finalGrade ?? '—'}</span>
-                        {' '}{metricDelta(left.finalGrade, right.finalGrade)}
+                        <span className="text-gray-500 block mb-0.5">AI Grade</span>
+                        <span className="font-semibold">
+                            {left.aiScore != null ? scoreToLetterGrade(left.aiScore) : '—'}
+                            {' → '}
+                            {right.aiScore != null ? scoreToLetterGrade(right.aiScore) : '—'}
+                        </span>
+                        {' '}{metricDelta(left.aiScore, right.aiScore)}
                     </div>
                     <div>
                         <span className="text-gray-500 block mb-0.5">Word Count</span>
@@ -346,7 +493,7 @@ function ComparisonView({
                                 {/* Metric deltas for this question */}
                                 <div className="flex flex-wrap gap-4 mb-3 text-xs text-gray-600">
                                     <span>Words: {la?.wordCount ?? 0} → {ra?.wordCount ?? 0} {metricDelta(la?.wordCount, ra?.wordCount)}</span>
-                                    <span>AI Mark: {la?.aiGeneratedMark?.toFixed(1) ?? '—'} → {ra?.aiGeneratedMark?.toFixed(1) ?? '—'} {metricDelta(la?.aiGeneratedMark, ra?.aiGeneratedMark)}</span>
+                                    <span>AI Mark: {la?.aiGeneratedMark != null ? `${la.aiGeneratedMark.toFixed(1)}${la.maxPoints != null ? `/${la.maxPoints}` : ''}` : '—'} → {ra?.aiGeneratedMark != null ? `${ra.aiGeneratedMark.toFixed(1)}${ra.maxPoints != null ? `/${ra.maxPoints}` : ''}` : '—'} {metricDelta(la?.aiGeneratedMark, ra?.aiGeneratedMark)}</span>
                                     <span>Plagiarism: {la?.plagiarismSeverity ?? 'N/A'} → {ra?.plagiarismSeverity ?? 'N/A'}</span>
                                 </div>
 
@@ -788,6 +935,18 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
         return () => { cancelled = true; };
     }, [versions, id]);
 
+    /* ── Per-version diff summaries (versionId → summary vs prev) ── */
+    const diffSummaries = useMemo<Map<string, VersionDiffSummary>>(() => {
+        const map = new Map<string, VersionDiffSummary>();
+        // detailedVersions is sorted ascending (v1, v2, v3…)
+        for (let i = 1; i < detailedVersions.length; i++) {
+            const prev = detailedVersions[i - 1];
+            const curr = detailedVersions[i];
+            map.set(curr.id, computeVersionDiff(prev.answers ?? [], curr.answers ?? []));
+        }
+        return map;
+    }, [detailedVersions]);
+
     /* ── Comparison state ── */
     const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
     const [comparing, setComparing] = useState(false);
@@ -862,7 +1021,13 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
                 })
             ));
 
-            // 4. Navigate to answer page
+            // 4. Record which version was reverted so the answer page can tag the new snapshot
+            sessionStorage.setItem(
+                `smartlms_revert_source_${submission.assignmentId}`,
+                String(fullVersion.versionNumber),
+            );
+
+            // 5. Navigate to answer page
             router.push(`/submissions/student/answer/${submission.assignmentId}`);
         } catch (err) {
             console.error('[VersionHistory] Revert failed:', err);
@@ -945,24 +1110,19 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
 
                     <div className="bg-green-50 border-2 border-green-200 rounded-lg p-5">
                         <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-medium text-gray-600">Final Grade</span>
+                            <span className="text-xs font-medium text-gray-600">AI Grade</span>
                             <Star size={20} className="text-green-600" />
                         </div>
                         {(() => {
                             const latest = versions?.[0];
-                            if (!latest) return <p className="text-2xl font-bold text-green-600">—</p>;
-                            const g = latest.finalGrade;
-                            const max = latest.maxGrade;
+                            const score = latest?.aiScore;
                             return (
                                 <>
-                                    <p className="text-2xl font-bold text-green-600">
-                                        {g != null ? g : '—'}
-                                        {max != null ? ` / ${max}` : ''}
+                                    <p className="text-3xl font-bold text-green-600">
+                                        {score != null ? scoreToLetterGrade(score) : '—'}
                                     </p>
-                                    {g != null && max != null && max > 0 && (
-                                        <p className="text-xs font-semibold text-green-700 mt-1">
-                                            {Math.round((g / max) * 100)}%
-                                        </p>
+                                    {score != null && (
+                                        <p className="text-xs text-gray-400 mt-1">{score.toFixed(1)}%</p>
                                     )}
                                 </>
                             );
@@ -1018,6 +1178,7 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
                             compareSelected={compareIds.has(v.id)}
                             onCompareToggle={() => toggleCompare(v.id)}
                             compareDisabled={compareIds.size >= 2}
+                            diffSummary={diffSummaries.get(v.id)}
                         />
                     ))}
                 </div>
@@ -1124,14 +1285,12 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
                             </div>
                         </div>
 
-                        {/* Final grade bars */}
+                        {/* AI grade bars */}
                         <div>
-                            <p className="text-sm font-medium text-gray-700 mb-3">Final Grade</p>
+                            <p className="text-sm font-medium text-gray-700 mb-3">AI Grade</p>
                             <div className="flex items-end gap-2">
                                 {sortedAsc.map(v => {
-                                    const pct = v.finalGrade != null && v.maxGrade
-                                        ? Math.round((v.finalGrade / v.maxGrade) * 100)
-                                        : 0;
+                                    const pct = v.aiScore ?? 0;
                                     return (
                                         <div key={v.id} className="flex-1">
                                             <div className="h-20 bg-gray-100 rounded-lg relative overflow-hidden">
@@ -1141,7 +1300,7 @@ export default function VersionHistoryPage({ params }: { params: Promise<{ id: s
                                                 />
                                                 <div className="absolute inset-0 flex items-end justify-center pb-1">
                                                     <span className="text-xs font-bold text-white drop-shadow">
-                                                        {v.finalGrade != null ? v.finalGrade : '—'}
+                                                        {v.aiScore != null ? scoreToLetterGrade(v.aiScore) : '—'}
                                                     </span>
                                                 </div>
                                             </div>

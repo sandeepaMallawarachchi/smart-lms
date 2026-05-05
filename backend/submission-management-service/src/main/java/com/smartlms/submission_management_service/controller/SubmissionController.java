@@ -1,13 +1,23 @@
 package com.smartlms.submission_management_service.controller;
 
 import java.util.List;
+import java.util.Map;
 
 import com.smartlms.submission_management_service.dto.request.GradeRequest;
 import com.smartlms.submission_management_service.dto.request.SubmissionRequest;
 import com.smartlms.submission_management_service.dto.response.ApiResponse;
 import com.smartlms.submission_management_service.dto.response.SubmissionResponse;
+import com.smartlms.submission_management_service.exception.AccessDeniedException;
 import com.smartlms.submission_management_service.exception.ResourceNotFoundException;
 import com.smartlms.submission_management_service.service.SubmissionService;
+import com.smartlms.submission_management_service.util.JwtUtils;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -19,10 +29,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * REST Controller for managing student submissions in the Smart LMS system.
@@ -51,6 +57,37 @@ import lombok.extern.slf4j.Slf4j;
 public class SubmissionController {
 
     private final SubmissionService submissionService;
+
+    // ── Auth helpers ──────────────────────────────────────────────────────────
+
+    /**
+     * Parse JWT claims from the request's Authorization header.
+     * Returns null when the header is absent or malformed (→ 401).
+     */
+    private Map<String, Object> claims(HttpServletRequest req) {
+        return JwtUtils.parseClaims(req.getHeader("Authorization"));
+    }
+
+    /** Throw 401 when claims are null (no / bad token). */
+    private Map<String, Object> requireAuth(HttpServletRequest req) {
+        Map<String, Object> c = claims(req);
+        if (c == null) throw new AccessDeniedException("Authentication required");
+        return c;
+    }
+
+    /** Throw 403 when the caller is not a lecturer. */
+    private void requireLecturer(Map<String, Object> claims) {
+        if (!JwtUtils.isLecturer(claims)) {
+            throw new AccessDeniedException("Lecturer role required");
+        }
+    }
+
+    /** Throw 403 when the caller is not a student. */
+    private void requireStudent(Map<String, Object> claims) {
+        if (!JwtUtils.isStudent(claims)) {
+            throw new AccessDeniedException("Student role required");
+        }
+    }
 
     /**
      * Creates a new submission for a student.
@@ -101,8 +138,15 @@ public class SubmissionController {
      */
     @PostMapping
     public ResponseEntity<ApiResponse<SubmissionResponse>> createSubmission(
-            @Valid @RequestBody SubmissionRequest request) {
-        log.info("POST /api/submissions - Creating submission");
+            @Valid @RequestBody SubmissionRequest request,
+            HttpServletRequest httpRequest) {
+        Map<String, Object> c = requireAuth(httpRequest);
+        requireStudent(c);
+        String callerId = JwtUtils.extractUserId(c);
+        if (!callerId.equals(request.getStudentId())) {
+            throw new AccessDeniedException("Cannot create a submission on behalf of another student");
+        }
+        log.info("POST /api/submissions - Creating submission for student={}", callerId);
         SubmissionResponse response = submissionService.createSubmission(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Submission created successfully", response));
@@ -132,9 +176,15 @@ public class SubmissionController {
      * Response includes full submission details with file information
      */
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<SubmissionResponse>> getSubmissionById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<SubmissionResponse>> getSubmissionById(
+            @PathVariable Long id,
+            HttpServletRequest httpRequest) {
+        Map<String, Object> c = requireAuth(httpRequest);
         log.info("GET /api/submissions/{} - Fetching submission", id);
         SubmissionResponse response = submissionService.getSubmissionById(id);
+        if (JwtUtils.isStudent(c) && !JwtUtils.extractUserId(c).equals(response.getStudentId())) {
+            throw new AccessDeniedException("You do not have permission to view submission " + id);
+        }
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -166,25 +216,50 @@ public class SubmissionController {
      * Returns all submissions created by student IT22586766
      */
     @GetMapping
-    public ResponseEntity<ApiResponse<List<SubmissionResponse>>> getAllSubmissions(
+    public ResponseEntity<ApiResponse<?>> getAllSubmissions(
             @RequestParam(required = false) String studentId,
-            @RequestParam(required = false) String assignmentId) {
-        log.info("GET /api/submissions - studentId={} assignmentId={}", studentId, assignmentId);
+            @RequestParam(required = false) String assignmentId,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size,
+            HttpServletRequest httpRequest) {
+        Map<String, Object> c = requireAuth(httpRequest);
+        String callerId = JwtUtils.extractUserId(c);
 
-        List<SubmissionResponse> submissions;
-
-        // Support both params together (used by getOrCreateDraftSubmission on the frontend)
-        if (studentId != null && assignmentId != null) {
-            submissions = submissionService.getSubmissionsByStudentIdAndAssignmentId(studentId, assignmentId);
-        } else if (studentId != null) {
-            submissions = submissionService.getSubmissionsByStudentId(studentId);
-        } else if (assignmentId != null) {
-            submissions = submissionService.getSubmissionsByAssignmentId(assignmentId);
-        } else {
-            submissions = submissionService.getAllSubmissions();
+        // Students may only query their own submissions.
+        if (JwtUtils.isStudent(c)) {
+            if (studentId == null) {
+                throw new AccessDeniedException("Students must provide their own studentId filter");
+            }
+            if (!callerId.equals(studentId)) {
+                throw new AccessDeniedException("Students may only query their own submissions");
+            }
         }
 
-        return ResponseEntity.ok(ApiResponse.success(submissions));
+        log.info("GET /api/submissions - studentId={} assignmentId={} page={} size={}",
+                studentId, assignmentId, page, size);
+
+        // Scoped queries return a bounded list — no pagination needed.
+        if (studentId != null && assignmentId != null) {
+            List<SubmissionResponse> submissions =
+                    submissionService.getSubmissionsByStudentIdAndAssignmentId(studentId, assignmentId);
+            return ResponseEntity.ok(ApiResponse.success(submissions));
+        }
+        if (studentId != null) {
+            List<SubmissionResponse> submissions =
+                    submissionService.getSubmissionsByStudentId(studentId);
+            return ResponseEntity.ok(ApiResponse.success(submissions));
+        }
+        if (assignmentId != null) {
+            List<SubmissionResponse> submissions =
+                    submissionService.getSubmissionsByAssignmentId(assignmentId);
+            return ResponseEntity.ok(ApiResponse.success(submissions));
+        }
+
+        // No filter — lecturer only; paginate to avoid loading the full table into memory.
+        requireLecturer(c);
+        PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Page<SubmissionResponse> pageResult = submissionService.getAllSubmissions(pageable);
+        return ResponseEntity.ok(ApiResponse.success(pageResult));
     }
 
     /**
@@ -215,9 +290,13 @@ public class SubmissionController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<SubmissionResponse>> updateSubmission(
             @PathVariable Long id,
-            @Valid @RequestBody SubmissionRequest request) {
-        log.info("PUT /api/submissions/{} - Updating submission", id);
-        SubmissionResponse response = submissionService.updateSubmission(id, request);
+            @Valid @RequestBody SubmissionRequest request,
+            HttpServletRequest httpRequest) {
+        Map<String, Object> c = requireAuth(httpRequest);
+        requireStudent(c);
+        String callerId = JwtUtils.extractUserId(c);
+        log.info("PUT /api/submissions/{} - Updating submission by student={}", id, callerId);
+        SubmissionResponse response = submissionService.updateSubmission(id, request, callerId);
         return ResponseEntity.ok(ApiResponse.success("Submission updated successfully", response));
     }
 
@@ -247,9 +326,14 @@ public class SubmissionController {
      * Example: DELETE /api/submissions/1
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Void>> deleteSubmission(@PathVariable Long id) {
-        log.info("DELETE /api/submissions/{} - Deleting submission", id);
-        submissionService.deleteSubmission(id);
+    public ResponseEntity<ApiResponse<Void>> deleteSubmission(
+            @PathVariable Long id,
+            HttpServletRequest httpRequest) {
+        Map<String, Object> c = requireAuth(httpRequest);
+        requireStudent(c);
+        String callerId = JwtUtils.extractUserId(c);
+        log.info("DELETE /api/submissions/{} - Deleting submission by student={}", id, callerId);
+        submissionService.deleteSubmission(id, callerId);
         return ResponseEntity.ok(ApiResponse.success("Submission deleted successfully", null));
     }
 
@@ -285,9 +369,14 @@ public class SubmissionController {
      * Example: POST /api/submissions/1/submit
      */
     @PostMapping("/{id}/submit")
-    public ResponseEntity<ApiResponse<SubmissionResponse>> submitSubmission(@PathVariable Long id) {
-        log.info("POST /api/submissions/{}/submit - Submitting submission", id);
-        SubmissionResponse response = submissionService.submitSubmission(id);
+    public ResponseEntity<ApiResponse<SubmissionResponse>> submitSubmission(
+            @PathVariable Long id,
+            HttpServletRequest httpRequest) {
+        Map<String, Object> c = requireAuth(httpRequest);
+        requireStudent(c);
+        String callerId = JwtUtils.extractUserId(c);
+        log.info("POST /api/submissions/{}/submit - Submitting by student={}", id, callerId);
+        SubmissionResponse response = submissionService.submitSubmission(id, callerId);
         return ResponseEntity.ok(ApiResponse.success("Submission submitted successfully", response));
     }
 
@@ -324,8 +413,13 @@ public class SubmissionController {
     @PostMapping("/{id}/grade")
     public ResponseEntity<ApiResponse<SubmissionResponse>> gradeSubmission(
             @PathVariable Long id,
-            @RequestBody GradeRequest request) {
-        log.info("POST /api/submissions/{}/grade - Grading submission", id);
+            @RequestBody GradeRequest request,
+            HttpServletRequest httpRequest) {
+        Map<String, Object> c = requireAuth(httpRequest);
+        requireLecturer(c);
+        // Override lecturerId from JWT — do not trust the request body.
+        request.setLecturerId(JwtUtils.extractUserId(c));
+        log.info("POST /api/submissions/{}/grade - Grading by lecturer={}", id, request.getLecturerId());
         SubmissionResponse response = submissionService.gradeSubmission(id, request);
         return ResponseEntity.ok(ApiResponse.success("Submission graded successfully", response));
     }

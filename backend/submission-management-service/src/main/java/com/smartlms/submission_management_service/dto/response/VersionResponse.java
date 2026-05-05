@@ -44,6 +44,13 @@ public class VersionResponse {
     /** True when a lecturer has overridden at least one question mark on this version. */
     private Boolean hasLecturerOverride;
 
+    /**
+     * True when the lecturer has graded some but not all questions.
+     * When true, finalGrade is computed over graded questions only and the
+     * frontend should display a "partial grade" warning to the lecturer.
+     */
+    private Boolean partiallyGraded;
+
     // ── Labels ────────────────────────────────────────────────────────────────
     private String commitMessage;
     private String createdAt;

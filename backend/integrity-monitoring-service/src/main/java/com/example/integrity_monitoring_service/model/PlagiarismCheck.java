@@ -72,6 +72,19 @@ public class PlagiarismCheck {
     @Column(name = "flagged")
     private Boolean flagged = false;
 
+    // Match category percentages (0.0–100.0)
+    @Column(name = "not_cited_pct")
+    private Double notCitedPct;
+
+    @Column(name = "missing_quotations_pct")
+    private Double missingQuotationsPct;
+
+    @Column(name = "missing_citation_pct")
+    private Double missingCitationPct;
+
+    @Column(name = "cited_and_quoted_pct")
+    private Double citedAndQuotedPct;
+
     @Column(name = "matches_found")
     private Integer matchesFound = 0;
 

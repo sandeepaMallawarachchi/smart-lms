@@ -1,10 +1,15 @@
 package com.smartlms.feedback_service.controller;
 
+import com.smartlms.feedback_service.dto.request.AiDetectionRequest;
 import com.smartlms.feedback_service.dto.request.FeedbackRequest;
+import com.smartlms.feedback_service.dto.request.GradeCalculationRequest;
 import com.smartlms.feedback_service.dto.request.LiveFeedbackRequest;
+import com.smartlms.feedback_service.dto.response.AiDetectionResponse;
 import com.smartlms.feedback_service.dto.response.ApiResponse;
 import com.smartlms.feedback_service.dto.response.FeedbackResponse;
+import com.smartlms.feedback_service.dto.response.GradeCalculationResponse;
 import com.smartlms.feedback_service.dto.response.LiveFeedbackResponse;
+import com.smartlms.feedback_service.service.AiDetectionService;
 import com.smartlms.feedback_service.service.FeedbackService;
 import com.smartlms.feedback_service.service.LiveFeedbackService;
 import jakarta.validation.Valid;
@@ -25,6 +30,7 @@ public class FeedbackController {
 
     private final FeedbackService feedbackService;
     private final LiveFeedbackService liveFeedbackService;
+    private final AiDetectionService aiDetectionService;
 
     /**
      * Generate real-time live feedback as the student types (synchronous, no DB persistence).
@@ -36,7 +42,7 @@ public class FeedbackController {
      * POST /api/feedback/live
      */
     @PostMapping("/live")
-    public ResponseEntity<ApiResponse<LiveFeedbackResponse>> generateLiveFeedback(
+    public CompletableFuture<ResponseEntity<ApiResponse<LiveFeedbackResponse>>> generateLiveFeedback(
             @Valid @RequestBody LiveFeedbackRequest request) {
         log.info("POST /api/feedback/live — questionId={} textLen={} questionPrompt='{}'",
                 request.getQuestionId(),
@@ -45,19 +51,80 @@ public class FeedbackController {
                         ? request.getQuestionPrompt().substring(0, Math.min(60, request.getQuestionPrompt().length()))
                         : "(none)");
 
-        ApiResponse<LiveFeedbackResponse> response = liveFeedbackService.generateLiveFeedback(request);
-        log.info("POST /api/feedback/live — DONE questionId={} grammar={} clarity={}",
-                request.getQuestionId(),
-                response.getData() != null ? response.getData().getGrammarScore() : "null",
-                response.getData() != null ? response.getData().getClarityScore() : "null");
-        return ResponseEntity.ok(response);
+        return liveFeedbackService.generateLiveFeedback(request)
+                .thenApply(response -> {
+                    log.info("POST /api/feedback/live — DONE questionId={} grammar={} clarity={}",
+                            request.getQuestionId(),
+                            response.getData() != null ? response.getData().getGrammarScore() : "null",
+                            response.getData() != null ? response.getData().getClarityScore() : "null");
+                    return ResponseEntity.ok(response);
+                })
+                .exceptionally(ex -> {
+                    log.error("POST /api/feedback/live — FAILED questionId={}: {}",
+                            request.getQuestionId(), ex.getMessage());
+                    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                            .body(ApiResponse.error("AI feedback service temporarily unavailable: " + ex.getMessage()));
+                });
     }
 
-    @org.springframework.web.bind.annotation.ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ApiResponse<Void>> handleRuntimeException(RuntimeException ex) {
-        log.error("Unhandled exception in FeedbackController: {}", ex.getMessage(), ex);
-        return ResponseEntity.status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
-                .body(ApiResponse.error("AI feedback service temporarily unavailable: " + ex.getMessage()));
+    /**
+     * Re-compute the projected grade from existing AI scores + an updated plagiarism score.
+     *
+     * Called by the frontend when the plagiarism check completes after live feedback
+     * has already been received (the two debounced operations fire independently).
+     * This avoids keeping grade formula logic in the frontend.
+     *
+     * POST /api/feedback/grade
+     */
+    @PostMapping("/grade")
+    public ResponseEntity<ApiResponse<GradeCalculationResponse>> calculateGrade(
+            @RequestBody GradeCalculationRequest request) {
+        log.info("POST /api/feedback/grade — maxPts={} wordCount={} simScore={}",
+                request.getMaxPoints(), request.getWordCount(), request.getSimilarityScore());
+
+        if (request.getMaxPoints() == null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("maxPoints is required for grade calculation"));
+        }
+
+        LiveFeedbackResponse stub = LiveFeedbackResponse.builder()
+                .grammarScore(request.getGrammarScore())
+                .clarityScore(request.getClarityScore())
+                .completenessScore(request.getCompletenessScore())
+                .relevanceScore(request.getRelevanceScore())
+                .build();
+
+        liveFeedbackService.attachProjectedGradeFromWordCount(
+                stub,
+                request.getMaxPoints(),
+                request.getWordCount() != null ? request.getWordCount() : 0,
+                request.getExpectedWordCount(),
+                request.getSimilarityScore(),
+                request.getAiDetectionScore());
+
+        GradeCalculationResponse grade = GradeCalculationResponse.builder()
+                .projectedGrade(stub.getProjectedGrade())
+                .projectedGradePercent(stub.getProjectedGradePercent())
+                .letterGrade(stub.getLetterGrade())
+                .build();
+
+        return ResponseEntity.ok(ApiResponse.success("Grade calculated", grade));
+    }
+
+    /**
+     * Classify answer text as AI-generated or human-written.
+     * Uses the Hello-SimpleAI/chatgpt-detector-roberta model.
+     * Returns aiScore (0.0–1.0) and a label. -1.0 means the model was unavailable.
+     *
+     * POST /api/feedback/ai-detect
+     */
+    @PostMapping("/ai-detect")
+    public ResponseEntity<ApiResponse<AiDetectionResponse>> detectAiContent(
+            @Valid @RequestBody AiDetectionRequest request) {
+        log.info("POST /api/feedback/ai-detect — textLen={}", request.getAnswerText().length());
+        AiDetectionResponse result = aiDetectionService.detect(request.getAnswerText());
+        log.info("POST /api/feedback/ai-detect — DONE aiScore={} label={}", result.getAiScore(), result.getLabel());
+        return ResponseEntity.ok(ApiResponse.success("AI detection complete", result));
     }
 
     /**

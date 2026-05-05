@@ -3,6 +3,7 @@ package com.smartlms.submission_management_service.repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import com.smartlms.submission_management_service.model.Submission;
 import com.smartlms.submission_management_service.model.SubmissionStatus;
@@ -26,6 +27,10 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
     @Query("SELECT s FROM Submission s WHERE s.studentId = :studentId AND s.assignmentId = :assignmentId ORDER BY s.versionNumber DESC")
     List<Submission> findByStudentIdAndAssignmentId(@Param("studentId") String studentId,
                                                     @Param("assignmentId") String assignmentId);
+
+    @Query("SELECT s FROM Submission s WHERE s.studentId = :studentId AND s.assignmentId = :assignmentId AND s.status = 'DRAFT'")
+    Optional<Submission> findDraftByStudentIdAndAssignmentId(@Param("studentId") String studentId,
+                                                             @Param("assignmentId") String assignmentId);
 
     @Query("SELECT s FROM Submission s WHERE s.dueDate < :now AND s.status = 'SUBMITTED' AND s.isLate = false")
     List<Submission> findOverdueSubmissions(@Param("now") LocalDateTime now);

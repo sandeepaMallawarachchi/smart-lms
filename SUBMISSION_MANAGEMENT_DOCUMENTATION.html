@@ -1,0 +1,2554 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Smart LMS Submission Management Documentation</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.6; max-width: 900px; margin: 40px auto; color: #222; padding: 0 20px; }
+  h1 { font-size: 22pt; color: #1a1a2e; border-bottom: 3px solid #4a90d9; padding-bottom: 10px; }
+  h2 { font-size: 16pt; color: #16213e; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-top: 40px; }
+  h3 { font-size: 13pt; color: #0f3460; margin-top: 25px; }
+  h4 { font-size: 11pt; color: #533483; }
+  table { border-collapse: collapse; width: 100%; margin: 15px 0; font-size: 10pt; }
+  th { background-color: #4a90d9; color: white; padding: 8px 10px; text-align: left; }
+  td { border: 1px solid #ddd; padding: 6px 10px; vertical-align: top; }
+  tr:nth-child(even) { background-color: #f8f9fa; }
+  code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: Consolas, monospace; font-size: 9.5pt; }
+  pre { background: #f4f4f4; padding: 14px; border-left: 4px solid #4a90d9; overflow-x: auto; font-size: 9pt; line-height: 1.4; border-radius: 4px; }
+  pre code { background: none; padding: 0; }
+  hr { border: none; border-top: 1px solid #ccc; margin: 25px 0; }
+  ul, ol { margin-left: 25px; }
+  li { margin-bottom: 5px; }
+  @media print {
+    body { margin: 1cm; max-width: none; }
+    h2 { page-break-before: always; }
+    pre { white-space: pre-wrap; }
+  }
+</style>
+</head>
+<body>
+<h1 id="smart-lms-submission-management-component">Smart LMS Submission Management Component</h1>
+<h2 id="comprehensive-technical-documentation">Comprehensive Technical Documentation</h2>
+<p><strong>System:</strong> Smart Learning Management System (Smart LMS)<br />
+<strong>Component:</strong> Submission Management, AI Feedback, Plagiarism Detection &amp; Grading Subsystem<br />
+<strong>Developer:</strong> IT22586766 — Sachini Dilrangi<br />
+<strong>Date:</strong> April 2026<br />
+<strong>Version:</strong> 1.0</p>
+<hr />
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol>
+<li><a href="#1-system-overview">System Overview</a></li>
+<li><a href="#2-system-architecture">System Architecture</a></li>
+<li><a href="#3-database-design">Database Design</a></li>
+<li><a href="#4-frontend-architecture">Frontend Architecture</a></li>
+<li><a href="#5-text-submission-system">Text Submission System</a></li>
+<li><a href="#6-ai-feedback-engine">AI Feedback Engine</a></li>
+<li><a href="#7-plagiarism-detection-system">Plagiarism Detection System</a></li>
+<li><a href="#8-grading-system">Grading System</a></li>
+<li><a href="#9-version-control-system">Version Control System</a></li>
+<li><a href="#10-deadline-enforcement">Deadline Enforcement</a></li>
+<li><a href="#11-instructor-features">Instructor Features</a></li>
+<li><a href="#12-pdf-report-generation">PDF Report Generation</a></li>
+<li><a href="#13-complete-data-flows--workflows">Complete Data Flows &amp; Workflows</a></li>
+<li><a href="#14-performance-scalability--security">Performance, Scalability &amp; Security</a></li>
+<li><a href="#15-testing-strategy">Testing Strategy</a></li>
+<li><a href="#16-system-integrations">System Integrations</a></li>
+<li><a href="#17-technical-challenges--innovations">Technical Challenges &amp; Innovations</a></li>
+<li><a href="#18-limitations--future-work">Limitations &amp; Future Work</a></li>
+<li><a href="#19-technology-stack">Technology Stack</a></li>
+<li><a href="#20-api-reference">API Reference</a></li>
+</ol>
+<hr />
+<h2 id="1-system-overview">1. System Overview</h2>
+<h3 id="11-introduction">1.1 Introduction</h3>
+<p>The Smart LMS Submission Management Component is a full-stack, microservice-based subsystem embedded within a larger collaborative Learning Management System. It handles the complete lifecycle of student text-based assignment submissions — from draft creation through real-time AI analysis, plagiarism detection, version snapshotting, and lecturer grading — all within a cohesive, responsive web interface.</p>
+<p>Unlike conventional LMS submission modules that merely receive and store files, this component provides <strong>live, in-editor intelligence</strong>: as students compose their answers, the system continuously evaluates grammatical quality, semantic clarity, content completeness, topical relevance, and textual similarity against a corpus of peer submissions and internet content — all within the browser, with sub-5-second feedback latency.</p>
+<h3 id="12-problem-statement">1.2 Problem Statement</h3>
+<p>Traditional LMS tools suffer from several well-documented shortcomings in assessment workflows:</p>
+<ul>
+<li><strong>Delayed feedback</strong>: Students receive evaluation only after deadlines, offering no opportunity to improve work in progress.</li>
+<li><strong>Manual plagiarism detection</strong>: Instructors spend significant time cross-referencing submissions, a process that is both time-intensive and inconsistent.</li>
+<li><strong>Opaque grading</strong>: Students receive numeric scores without structured diagnostic feedback tied to specific quality dimensions.</li>
+<li><strong>No version history</strong>: Resubmissions overwrite originals, making it impossible to track student progress or detect post-deadline edits.</li>
+<li><strong>Disconnected tooling</strong>: Separate systems for submission, feedback, and grading create fragmented student and instructor experiences.</li>
+</ul>
+<p>This component addresses all five shortcomings in a single, integrated subsystem.</p>
+<h3 id="13-component-scope">1.3 Component Scope</h3>
+<p>The component is responsible for:</p>
+<table>
+<thead>
+<tr>
+<th>Responsibility</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Assignment intake</td>
+<td>Loading questions from the Projects &amp; Tasks service</td>
+</tr>
+<tr>
+<td>Draft management</td>
+<td>Creating, updating, and locking submissions</td>
+</tr>
+<tr>
+<td>Text answer persistence</td>
+<td>Upsert-on-keystroke with debounce</td>
+</tr>
+<tr>
+<td>Live AI feedback</td>
+<td>Real-time grammar, clarity, completeness, relevance scoring</td>
+</tr>
+<tr>
+<td>Live plagiarism detection</td>
+<td>Peer-comparison + internet similarity on save</td>
+</tr>
+<tr>
+<td>Version snapshotting</td>
+<td>Immutable snapshots on formal submission</td>
+</tr>
+<tr>
+<td>Deadline enforcement</td>
+<td>Hard lock on all mutations after deadline</td>
+</tr>
+<tr>
+<td>Lecturer grading</td>
+<td>Per-question mark + feedback after deadline</td>
+</tr>
+<tr>
+<td>PDF report generation</td>
+<td>Downloadable feedback and plagiarism PDFs</td>
+</tr>
+<tr>
+<td>Analytics dashboard</td>
+<td>Submission statistics, grade distribution, plagiarism flags</td>
+</tr>
+</tbody>
+</table>
+<h3 id="14-key-performance-targets">1.4 Key Performance Targets</h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Target</th>
+<th>Achieved</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AI feedback latency (live)</td>
+<td>&lt; 5 s</td>
+<td>~3–4 s (Zephyr-7B)</td>
+</tr>
+<tr>
+<td>Plagiarism check latency (live)</td>
+<td>&lt; 3 s</td>
+<td>~1–2 s (local peer) / ~3–4 s (internet)</td>
+</tr>
+<tr>
+<td>Auto-save persistence delay</td>
+<td>&lt; 5 s after keystroke</td>
+<td>5 s debounce</td>
+</tr>
+<tr>
+<td>Submission lock after deadline</td>
+<td>Immediate</td>
+<td>Enforced at service layer</td>
+</tr>
+<tr>
+<td>Version snapshot atomicity</td>
+<td>100%</td>
+<td><code>@Transactional</code> + idempotency guard</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2-system-architecture">2. System Architecture</h2>
+<h3 id="21-high-level-architecture">2.1 High-Level Architecture</h3>
+<p>The system follows a <strong>microservice architecture</strong> with a Next.js 16 frontend acting as an orchestration layer. Four dedicated backend services handle distinct domains:</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────┐
+│                    Next.js 16 Frontend (Port 3000)               │
+│  React 19 · TypeScript · Tailwind CSS 4 · Lucide Icons           │
+│                                                                   │
+│  ┌──────────────┐  ┌───────────────┐  ┌───────────────────────┐  │
+│  │ Student Pages│  │ Lecturer Pages│  │ Shared Hooks/Services │  │
+│  └──────────────┘  └───────────────┘  └───────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+          │               │               │               │
+          ▼               ▼               ▼               ▼
+  ┌───────────┐  ┌──────────────┐ ┌────────────┐ ┌────────────────┐
+  │Submission │  │   Feedback   │ │ Integrity  │ │ Version Control│
+  │Management │  │   Service    │ │ Monitoring │ │   Service      │
+  │  :8081    │  │    :8083     │ │  Service   │ │   (in-process) │
+  └─────┬─────┘  └──────┬───────┘ │   :8084    │ └────────────────┘
+        │               │         └──────┬─────┘
+        ▼               ▼                ▼
+  ┌─────────────────────────────────────────────┐
+  │           PostgreSQL :5432 / lms_db          │
+  │  submission_schema · integrity_schema        │
+  └─────────────────────────────────────────────┘
+</code></pre>
+<h3 id="22-service-responsibilities">2.2 Service Responsibilities</h3>
+<h4 id="submission-management-service-port-8081">Submission Management Service (Port 8081)</h4>
+<p>The core service responsible for:
+- CRUD operations on <code>Submission</code> and <code>Answer</code> entities
+- Submission lifecycle state machine (DRAFT → SUBMITTED → GRADED)
+- Deadline enforcement
+- AI mark computation at submit time
+- Aggregate score calculation
+- Version snapshot orchestration
+- Lecturer grading writes</p>
+<p><strong>Technology</strong>: Spring Boot 3.x, Spring Data JPA, PostgreSQL, Lombok</p>
+<h4 id="feedback-service-port-8083">Feedback Service (Port 8083)</h4>
+<p>Stateless AI feedback service:
+- Receives answer text + question text via REST
+- Constructs a structured prompt for a hosted LLM (Zephyr-7B-Beta via HuggingFace/Featherless)
+- Parses the LLM response into four numeric scores and three bullet-point arrays
+- Applies consistency enforcement rules to eliminate internal contradictions
+- Returns a structured <code>LiveFeedbackResponse</code> — no database writes</p>
+<p><strong>Technology</strong>: Spring Boot 3.x, HuggingFace Inference API, <code>@Async</code> with thread pool, Caffeine cache</p>
+<h4 id="integrity-monitoring-service-port-8084">Integrity Monitoring Service (Port 8084)</h4>
+<p>Dual-mode plagiarism detection:
+- <strong>Peer comparison</strong>: TF-IDF cosine similarity + Jaccard + N-gram Dice against the class corpus
+- <strong>Internet similarity</strong>: SerpAPI web search followed by corpus concatenation + TF-IDF cosine
+- Risk score calculation and severity bucketing
+- WebSocket push notifications on flag events
+- Batch re-check and scheduled sweep
+- PDF report generation</p>
+<p><strong>Technology</strong>: Spring Boot 3.x, Apache Commons Math, SerpAPI, WebSocket (STOMP), JasperReports/iText</p>
+<h4 id="version-control-in-process">Version Control (In-Process)</h4>
+<p>Originally planned as a separate service; integrated into the Submission Management Service to guarantee atomic transactional consistency between submission finalization and version snapshotting.</p>
+<h3 id="23-inter-service-communication">2.3 Inter-Service Communication</h3>
+<p>All communication is <strong>synchronous HTTP REST</strong> using Spring's <code>RestTemplate</code> for backend-to-backend calls and the browser's <code>fetch</code> API for frontend-to-backend calls.</p>
+<p>There is no message queue or event bus in the current implementation — this is identified as a limitation in Section 18.</p>
+<h3 id="24-authentication-authorization">2.4 Authentication &amp; Authorization</h3>
+<ul>
+<li><strong>JWT-based authentication</strong>: Tokens are issued by the Next.js auth service and stored in <code>localStorage['authToken']</code>.</li>
+<li><strong>Token structure</strong>: <code>{ userId, userRole, ... }</code> signed with a shared secret.</li>
+<li><strong>Backend validation</strong>: Each service validates the Bearer token in the <code>Authorization</code> header via <code>JwtUtils.extractRole()</code>, which checks both <code>role</code> and <code>userRole</code> claim keys for compatibility with multiple token issuers.</li>
+<li><strong>Role values</strong>: <code>'student'</code> and <code>'lecture'</code> (note: not <code>'lecturer'</code>).</li>
+</ul>
+<hr />
+<h2 id="3-database-design">3. Database Design</h2>
+<h3 id="31-schema-overview">3.1 Schema Overview</h3>
+<p>The component uses two PostgreSQL schemas within a shared <code>lms_db</code> database:</p>
+<table>
+<thead>
+<tr>
+<th>Schema</th>
+<th>Owner Service</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>submission_schema</code></td>
+<td>Submission Management Service</td>
+<td>Submissions, answers, version snapshots</td>
+</tr>
+<tr>
+<td><code>integrity_schema</code></td>
+<td>Integrity Monitoring Service</td>
+<td>Plagiarism checks, similarity matches, internet matches</td>
+</tr>
+</tbody>
+</table>
+<p>Hibernate <code>ddl-auto=update</code> manages all table DDL within each schema, ensuring schema evolution across deployments without manual migration scripts.</p>
+<h3 id="32-submission-schema">3.2 Submission Schema</h3>
+<h4 id="table-submission_schemasubmissions">Table: <code>submission_schema.submissions</code></h4>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>BIGINT</td>
+<td>PK, auto-increment</td>
+<td>Submission identifier</td>
+</tr>
+<tr>
+<td><code>assignment_id</code></td>
+<td>VARCHAR(255)</td>
+<td>NOT NULL</td>
+<td>Foreign key to assignment service</td>
+</tr>
+<tr>
+<td><code>student_id</code></td>
+<td>VARCHAR(255)</td>
+<td>NOT NULL</td>
+<td>Student identifier from JWT</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>VARCHAR(20)</td>
+<td>NOT NULL</td>
+<td>DRAFT / SUBMITTED / GRADED</td>
+</tr>
+<tr>
+<td><code>submission_type</code></td>
+<td>VARCHAR(20)</td>
+<td></td>
+<td>TEXT / FILE</td>
+</tr>
+<tr>
+<td><code>file_path</code></td>
+<td>TEXT</td>
+<td></td>
+<td>Path for file submissions</td>
+</tr>
+<tr>
+<td><code>word_count</code></td>
+<td>INT</td>
+<td></td>
+<td>Aggregate word count</td>
+</tr>
+<tr>
+<td><code>character_count</code></td>
+<td>INT</td>
+<td></td>
+<td>Aggregate character count</td>
+</tr>
+<tr>
+<td><code>submitted_at</code></td>
+<td>TIMESTAMP</td>
+<td></td>
+<td>When formally submitted</td>
+</tr>
+<tr>
+<td><code>deadline</code></td>
+<td>TIMESTAMP</td>
+<td></td>
+<td>Submission deadline</td>
+</tr>
+<tr>
+<td><code>ai_score</code></td>
+<td>DOUBLE</td>
+<td></td>
+<td>Aggregate AI quality score (0–100)</td>
+</tr>
+<tr>
+<td><code>plagiarism_score</code></td>
+<td>DOUBLE</td>
+<td></td>
+<td>Highest plagiarism similarity score</td>
+</tr>
+<tr>
+<td><code>lecturer_grade</code></td>
+<td>DOUBLE</td>
+<td></td>
+<td>Final grade set by lecturer</td>
+</tr>
+<tr>
+<td><code>lecturer_feedback</code></td>
+<td>TEXT</td>
+<td></td>
+<td>Aggregate lecturer feedback</td>
+</tr>
+<tr>
+<td><code>graded_at</code></td>
+<td>TIMESTAMP</td>
+<td></td>
+<td>When grading was completed</td>
+</tr>
+<tr>
+<td><code>question_marks_json</code></td>
+<td>TEXT</td>
+<td></td>
+<td>JSON: per-question marks from lecturer</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>TIMESTAMP</td>
+<td></td>
+<td>Creation timestamp (auto)</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>TIMESTAMP</td>
+<td></td>
+<td>Last update timestamp (auto)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Indexes:</strong>
+- <code>idx_submissions_student_assignment</code> on <code>(student_id, assignment_id)</code> — covers draft lookup
+- <code>idx_submissions_assignment_status</code> on <code>(assignment_id, status)</code> — covers lecturer dashboard</p>
+<h4 id="table-submission_schemaanswers">Table: <code>submission_schema.answers</code></h4>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>BIGINT</td>
+<td>PK, auto-increment</td>
+<td>Answer identifier</td>
+</tr>
+<tr>
+<td><code>submission_id</code></td>
+<td>BIGINT</td>
+<td>NOT NULL</td>
+<td>FK to submissions.id</td>
+</tr>
+<tr>
+<td><code>student_id</code></td>
+<td>VARCHAR(255)</td>
+<td></td>
+<td>Student identifier (for cross-submission peer exclusion)</td>
+</tr>
+<tr>
+<td><code>question_id</code></td>
+<td>VARCHAR(255)</td>
+<td>NOT NULL</td>
+<td>Question identifier from assignment service</td>
+</tr>
+<tr>
+<td><code>question_text</code></td>
+<td>VARCHAR(2000)</td>
+<td></td>
+<td>Snapshot of question text at save time</td>
+</tr>
+<tr>
+<td><code>answer_text</code></td>
+<td>TEXT</td>
+<td></td>
+<td>Full answer content</td>
+</tr>
+<tr>
+<td><code>word_count</code></td>
+<td>INT</td>
+<td></td>
+<td>Word count from frontend</td>
+</tr>
+<tr>
+<td><code>character_count</code></td>
+<td>INT</td>
+<td></td>
+<td>Character count from frontend</td>
+</tr>
+<tr>
+<td><code>last_modified</code></td>
+<td>TIMESTAMP</td>
+<td>NOT NULL</td>
+<td>Auto-updated on every write</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>TIMESTAMP</td>
+<td></td>
+<td>Auto-set on first INSERT (nullable for migration)</td>
+</tr>
+<tr>
+<td><code>grammar_score</code></td>
+<td>DOUBLE</td>
+<td></td>
+<td>AI grammar score 0–10</td>
+</tr>
+<tr>
+<td><code>clarity_score</code></td>
+<td>DOUBLE</td>
+<td></td>
+<td>AI clarity score 0–10</td>
+</tr>
+<tr>
+<td><code>completeness_score</code></td>
+<td>DOUBLE</td>
+<td></td>
+<td>AI completeness score 0–10</td>
+</tr>
+<tr>
+<td><code>relevance_score</code></td>
+<td>DOUBLE</td>
+<td></td>
+<td>AI relevance score 0–10</td>
+</tr>
+<tr>
+<td><code>ai_strengths</code></td>
+<td>TEXT</td>
+<td></td>
+<td>Comma-separated strength bullets</td>
+</tr>
+<tr>
+<td><code>ai_improvements</code></td>
+<td>TEXT</td>
+<td></td>
+<td>Comma-separated improvement bullets</td>
+</tr>
+<tr>
+<td><code>ai_suggestions</code></td>
+<td>TEXT</td>
+<td></td>
+<td>Comma-separated suggestion bullets</td>
+</tr>
+<tr>
+<td><code>feedback_saved_at</code></td>
+<td>TIMESTAMP</td>
+<td></td>
+<td>When AI feedback was last persisted</td>
+</tr>
+<tr>
+<td><code>similarity_score</code></td>
+<td>DOUBLE</td>
+<td></td>
+<td>Plagiarism similarity 0–100</td>
+</tr>
+<tr>
+<td><code>plagiarism_severity</code></td>
+<td>VARCHAR(10)</td>
+<td></td>
+<td>LOW / MEDIUM / HIGH</td>
+</tr>
+<tr>
+<td><code>plagiarism_flagged</code></td>
+<td>BOOLEAN</td>
+<td></td>
+<td>True if severity &gt;= MEDIUM</td>
+</tr>
+<tr>
+<td><code>plagiarism_checked_at</code></td>
+<td>TIMESTAMP</td>
+<td></td>
+<td>When plagiarism was last checked</td>
+</tr>
+<tr>
+<td><code>ai_generated_mark</code></td>
+<td>DOUBLE</td>
+<td></td>
+<td>Weighted AI mark (0–maxPoints), immutable after submit</td>
+</tr>
+<tr>
+<td><code>lecturer_mark</code></td>
+<td>DOUBLE</td>
+<td></td>
+<td>Lecturer-assigned mark</td>
+</tr>
+<tr>
+<td><code>lecturer_feedback_text</code></td>
+<td>TEXT</td>
+<td></td>
+<td>Lecturer feedback for this question</td>
+</tr>
+<tr>
+<td><code>lecturer_updated_at</code></td>
+<td>TIMESTAMP</td>
+<td></td>
+<td>When lecturer last updated</td>
+</tr>
+<tr>
+<td><code>lecturer_updated_by</code></td>
+<td>VARCHAR(100)</td>
+<td></td>
+<td>Lecturer ID who updated</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Indexes:</strong>
+- <code>idx_answers_submission_id_question_id</code> on <code>(submission_id, question_id)</code> — covers upsert lookup
+- <code>idx_answers_question_id_last_modified</code> on <code>(question_id, last_modified)</code> — covers peer plagiarism query</p>
+<h4 id="table-submission_schemasubmission_versions">Table: <code>submission_schema.submission_versions</code></h4>
+<p>Stores immutable snapshots created on each formal submission:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>BIGINT</td>
+<td>PK</td>
+</tr>
+<tr>
+<td><code>submission_id</code></td>
+<td>BIGINT</td>
+<td>FK to submissions</td>
+</tr>
+<tr>
+<td><code>version_number</code></td>
+<td>INT</td>
+<td>Sequential version (1, 2, 3, …)</td>
+</tr>
+<tr>
+<td><code>answers_snapshot_json</code></td>
+<td>TEXT</td>
+<td>Full JSON snapshot of all answers at submit time</td>
+</tr>
+<tr>
+<td><code>total_word_count</code></td>
+<td>INT</td>
+<td>Total words at this version</td>
+</tr>
+<tr>
+<td><code>ai_score_snapshot</code></td>
+<td>DOUBLE</td>
+<td>AI score at this version</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>TIMESTAMP</td>
+<td>When snapshot was created</td>
+</tr>
+</tbody>
+</table>
+<h3 id="33-integrity-schema">3.3 Integrity Schema</h3>
+<h4 id="table-integrity_schemaplagiarism_checks">Table: <code>integrity_schema.plagiarism_checks</code></h4>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>BIGINT</td>
+<td>PK</td>
+</tr>
+<tr>
+<td><code>submission_id</code></td>
+<td>VARCHAR</td>
+<td>Submission being checked</td>
+</tr>
+<tr>
+<td><code>student_id</code></td>
+<td>VARCHAR</td>
+<td>Student identifier</td>
+</tr>
+<tr>
+<td><code>assignment_id</code></td>
+<td>VARCHAR</td>
+<td>Assignment identifier</td>
+</tr>
+<tr>
+<td><code>content_type</code></td>
+<td>VARCHAR(10)</td>
+<td>TEXT / CODE</td>
+</tr>
+<tr>
+<td><code>check_type</code></td>
+<td>VARCHAR(20)</td>
+<td>REALTIME / BATCH / SCHEDULED</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>VARCHAR(20)</td>
+<td>PENDING / COMPLETED / FAILED</td>
+</tr>
+<tr>
+<td><code>max_similarity_score</code></td>
+<td>DOUBLE</td>
+<td>Highest similarity found (0.0–1.0)</td>
+</tr>
+<tr>
+<td><code>risk_score</code></td>
+<td>DOUBLE</td>
+<td>Computed risk (0–100)</td>
+</tr>
+<tr>
+<td><code>severity</code></td>
+<td>VARCHAR(10)</td>
+<td>LOW / MEDIUM / HIGH</td>
+</tr>
+<tr>
+<td><code>flagged</code></td>
+<td>BOOLEAN</td>
+<td>Whether this check triggered a flag</td>
+</tr>
+<tr>
+<td><code>question_id</code></td>
+<td>VARCHAR</td>
+<td>Question checked (for per-question checks)</td>
+</tr>
+<tr>
+<td><code>internet_similarity</code></td>
+<td>DOUBLE</td>
+<td>Highest internet match score</td>
+</tr>
+<tr>
+<td><code>metadata</code></td>
+<td>JSONB</td>
+<td>Check metadata (thresholds, options)</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>TIMESTAMP</td>
+<td>Check creation time</td>
+</tr>
+<tr>
+<td><code>completed_at</code></td>
+<td>TIMESTAMP</td>
+<td>When check finished</td>
+</tr>
+<tr>
+<td><code>checked_by</code></td>
+<td>VARCHAR</td>
+<td>Who triggered the check (SYSTEM / lecturerId)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="table-integrity_schemasimilarity_matches">Table: <code>integrity_schema.similarity_matches</code></h4>
+<p>Per-peer match records linked to a plagiarism check:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>BIGINT</td>
+<td>PK</td>
+</tr>
+<tr>
+<td><code>check_id</code></td>
+<td>BIGINT</td>
+<td>FK to plagiarism_checks</td>
+</tr>
+<tr>
+<td><code>matched_submission_id</code></td>
+<td>VARCHAR</td>
+<td>The peer submission matched against</td>
+</tr>
+<tr>
+<td><code>matched_student_id</code></td>
+<td>VARCHAR</td>
+<td>The peer student</td>
+</tr>
+<tr>
+<td><code>similarity_score</code></td>
+<td>DOUBLE</td>
+<td>Similarity score for this pair</td>
+</tr>
+<tr>
+<td><code>algorithm</code></td>
+<td>VARCHAR</td>
+<td>Algorithm that detected this match</td>
+</tr>
+</tbody>
+</table>
+<h4 id="table-integrity_schemainternet_matches">Table: <code>integrity_schema.internet_matches</code></h4>
+<p>Per-URL internet match records:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>BIGINT</td>
+<td>PK</td>
+</tr>
+<tr>
+<td><code>check_id</code></td>
+<td>BIGINT</td>
+<td>FK to plagiarism_checks</td>
+</tr>
+<tr>
+<td><code>url</code></td>
+<td>TEXT</td>
+<td>Matched URL</td>
+</tr>
+<tr>
+<td><code>title</code></td>
+<td>VARCHAR</td>
+<td>Page title</td>
+</tr>
+<tr>
+<td><code>snippet</code></td>
+<td>TEXT</td>
+<td>Matched text snippet</td>
+</tr>
+<tr>
+<td><code>similarity_score</code></td>
+<td>DOUBLE</td>
+<td>Similarity to this page</td>
+</tr>
+<tr>
+<td><code>source_category</code></td>
+<td>VARCHAR</td>
+<td>ACADEMIC / ENCYCLOPEDIA / NEWS / BLOG / etc.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="4-frontend-architecture">4. Frontend Architecture</h2>
+<h3 id="41-technology-stack">4.1 Technology Stack</h3>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Technology</th>
+<th>Version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Framework</td>
+<td>Next.js</td>
+<td>16</td>
+</tr>
+<tr>
+<td>UI Library</td>
+<td>React</td>
+<td>19</td>
+</tr>
+<tr>
+<td>Language</td>
+<td>TypeScript</td>
+<td>5.x</td>
+</tr>
+<tr>
+<td>Styling</td>
+<td>Tailwind CSS</td>
+<td>4</td>
+</tr>
+<tr>
+<td>Icons</td>
+<td>Lucide React</td>
+<td>Latest</td>
+</tr>
+<tr>
+<td>State Management</td>
+<td>React hooks (no Redux)</td>
+<td>—</td>
+</tr>
+<tr>
+<td>HTTP Client</td>
+<td>Browser <code>fetch</code> API</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42-directory-structure">4.2 Directory Structure</h3>
+<pre><code>frontend/
+├── app/
+│   └── submissions/
+│       ├── student/
+│       │   ├── answer/[assignmentId]/page.tsx      # Main text-answer page
+│       │   ├── submit/page.tsx                     # File submission page
+│       │   ├── my-submissions/page.tsx             # Submission list
+│       │   ├── feedback/[id]/page.tsx              # Feedback view
+│       │   └── version-history/[id]/page.tsx       # Version history
+│       └── lecturer/
+│           ├── submissions/page.tsx                # Submission management
+│           ├── grading/[submissionId]/page.tsx     # Per-submission grading
+│           └── plagiarism/page.tsx                 # Plagiarism dashboard
+├── components/submissions/
+│   ├── QuestionCard.tsx                            # Wires editor + feedback + plagiarism
+│   ├── RichTextEditor.tsx                          # Auto-resize textarea + word count
+│   ├── LiveFeedbackPanel.tsx                       # Real-time AI scores + bullets
+│   ├── PlagiarismWarning.tsx                       # Severity chip below editor
+│   ├── AIFeedbackCard.tsx                          # Static feedback display
+│   ├── PlagiarismReportCard.tsx                    # Traffic-light + match list
+│   ├── VersionTimeline.tsx                         # Version history timeline
+│   ├── DiffViewer.tsx                              # Line-level diff view
+│   └── FileUploader.tsx                            # Drag-and-drop file upload
+├── hooks/
+│   ├── useAnswerEditor.ts                          # Per-question debounce logic
+│   ├── useSubmissions.ts                           # Submission CRUD hooks
+│   ├── useVersions.ts                              # Version history hooks
+│   ├── useFeedback.ts                              # Feedback hooks
+│   ├── usePlagiarism.ts                            # Plagiarism hooks
+│   └── useModuleConfig.ts                          # Module-level configuration
+├── lib/api/
+│   └── submission-services.ts                     # All API call functions
+└── types/
+    └── submission.types.ts                         # All TypeScript interfaces
+</code></pre>
+<h3 id="43-core-hook-useanswereditor">4.3 Core Hook: <code>useAnswerEditor</code></h3>
+<p>The <code>useAnswerEditor</code> hook is the central orchestration point for the student answer editing experience. It manages three concurrent, independent debounce timers using <code>useRef</code> (not <code>setTimeout</code> directly, to prevent stale closures and allow cancellation):</p>
+<pre><code class="language-typescript">// Simplified structure
+function useAnswerEditor(submissionId: string, questionId: string, questionText: string) {
+  const [text, setText] = useState('');
+  const [liveFeedback, setLiveFeedback] = useState&lt;LiveFeedback | null&gt;(null);
+  const [livePlagiarism, setLivePlagiarism] = useState&lt;LivePlagiarismResult | null&gt;(null);
+  const [saveStatus, setSaveStatus] = useState&lt;'idle' | 'saving' | 'saved' | 'error'&gt;('idle');
+
+  const feedbackTimerRef = useRef&lt;NodeJS.Timeout | null&gt;(null);
+  const plagiarismTimerRef = useRef&lt;NodeJS.Timeout | null&gt;(null);
+  const autoSaveTimerRef = useRef&lt;NodeJS.Timeout | null&gt;(null);
+
+  const handleTextChange = (newText: string) =&gt; {
+    setText(newText);
+
+    // Reset all timers on each keystroke
+    clearTimeout(feedbackTimerRef.current!);
+    clearTimeout(plagiarismTimerRef.current!);
+    clearTimeout(autoSaveTimerRef.current!);
+
+    feedbackTimerRef.current = setTimeout(() =&gt; triggerLiveFeedback(newText), 3000);
+    plagiarismTimerRef.current = setTimeout(() =&gt; triggerLivePlagiarism(newText), 3000);
+    autoSaveTimerRef.current = setTimeout(() =&gt; saveAnswer(newText), 5000);
+  };
+
+  return { text, handleTextChange, liveFeedback, livePlagiarism, saveStatus };
+}
+</code></pre>
+<p><strong>Debounce intervals:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Delay</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AI Feedback</td>
+<td>3 seconds</td>
+<td>Balances responsiveness vs. LLM API cost</td>
+</tr>
+<tr>
+<td>Plagiarism Check</td>
+<td>3 seconds</td>
+<td>Network + computation cost</td>
+</tr>
+<tr>
+<td>Auto-save</td>
+<td>5 seconds</td>
+<td>Avoids excessive DB writes on fast typists</td>
+</tr>
+</tbody>
+</table>
+<h3 id="44-typescript-type-system">4.4 TypeScript Type System</h3>
+<p>The component defines a comprehensive type system in <code>submission.types.ts</code> covering all entities:</p>
+<pre><code class="language-typescript">interface Submission { id: string; assignmentId: string; studentId: string; status: 'DRAFT' | 'SUBMITTED' | 'GRADED'; ... }
+interface Answer { id: number; submissionId: string; questionId: string; answerText: string; wordCount: number; grammarScore?: number; clarityScore?: number; completenessScore?: number; relevanceScore?: number; strengths?: string[]; improvements?: string[]; suggestions?: string[]; similarityScore?: number; plagiarismSeverity?: 'LOW' | 'MEDIUM' | 'HIGH'; plagiarismFlagged?: boolean; aiGeneratedMark?: number; lecturerMark?: number; ... }
+interface LiveFeedback { grammarScore: number; clarityScore: number; completenessScore: number; relevanceScore: number; strengths: string[]; improvements: string[]; suggestions: string[]; }
+interface LivePlagiarismResult { similarityScore: number; severity: 'LOW' | 'MEDIUM' | 'HIGH'; flagged: boolean; matchedStudents?: string[]; internetMatches?: InternetMatch[]; }
+</code></pre>
+<hr />
+<h2 id="5-text-submission-system">5. Text Submission System</h2>
+<h3 id="51-question-loading">5.1 Question Loading</h3>
+<p>When a student navigates to <code>/submissions/student/answer/[assignmentId]</code>, the frontend:</p>
+<ol>
+<li>Decodes the JWT to extract <code>studentId</code> and <code>userRole</code></li>
+<li>Calls <code>getAssignmentWithFallback(assignmentId)</code> which attempts:</li>
+<li><code>GET /api/projects-and-tasks/project/[id]</code> → maps <code>mainTasks[]</code> to <code>Question[]</code></li>
+<li><code>GET /api/projects-and-tasks/task/[id]</code> → maps <code>subtasks[]</code> to <code>Question[]</code></li>
+<li><code>GET http://localhost:8081/api/assignments/[id]</code> as legacy fallback</li>
+<li>Checks for an existing draft via <code>GET /api/submissions/student/{studentId}?assignmentId={id}&amp;status=DRAFT</code></li>
+<li>Creates a new draft via <code>POST /api/submissions</code> if none exists</li>
+<li>Loads existing answers via <code>GET /api/submissions/{submissionId}/answers</code></li>
+</ol>
+<h3 id="52-draft-state-machine">5.2 Draft State Machine</h3>
+<pre><code>                    POST /api/submissions
+                   (assignmentId, studentId)
+                           │
+                           ▼
+                      ┌─────────┐
+                      │  DRAFT  │ ◄─── Auto-save (every 5s after keystroke)
+                      └────┬────┘      PUT /api/submissions/{id}/answers/{qId}
+                           │
+              Student clicks &quot;Submit Assignment&quot;
+                           │
+                           ▼
+              Deadline check (service layer)
+              AI mark computation
+              Version snapshot (atomic)
+                           │
+                           ▼
+                    ┌───────────┐
+                    │ SUBMITTED │ ◄─── Immutable (no further edits)
+                    └─────┬─────┘
+                          │
+              Lecturer grades all questions
+                          │
+                          ▼
+                    ┌────────┐
+                    │ GRADED │
+                    └────────┘
+</code></pre>
+<h3 id="53-answer-upsert-pattern">5.3 Answer Upsert Pattern</h3>
+<p>The backend implements a safe upsert to handle auto-save correctly:</p>
+<pre><code class="language-java">// AnswerService.java
+public AnswerResponse saveOrUpdateAnswer(Long submissionId, String questionId, SaveAnswerRequest req) {
+    Answer answer = answerRepository
+        .findBySubmissionIdAndQuestionId(submissionId, questionId)
+        .orElseGet(() -&gt; Answer.builder()
+            .submissionId(submissionId)
+            .questionId(questionId)
+            .build());
+
+    answer.setAnswerText(req.getAnswerText());
+    answer.setQuestionText(req.getQuestionText());
+    answer.setWordCount(req.getWordCount());
+    answer.setCharacterCount(req.getCharacterCount());
+    answer.setStudentId(req.getStudentId());
+
+    return toResponse(answerRepository.save(answer));
+}
+</code></pre>
+<p>This pattern guarantees exactly one <code>Answer</code> row per <code>(submissionId, questionId)</code> pair regardless of how many auto-save calls fire concurrently.</p>
+<h3 id="54-minimum-word-enforcement">5.4 Minimum Word Enforcement</h3>
+<p>The submission service enforces a minimum word count before accepting a formal submission:</p>
+<pre><code class="language-java">// Configurable via application.properties
+@Value(&quot;${submission.min-words-per-answer:3}&quot;)
+private int minWordsPerAnswer;
+
+// At submit time:
+for (Answer answer : answers) {
+    if (answer.getWordCount() &lt; minWordsPerAnswer) {
+        throw new ValidationException(&quot;Answer to question '&quot; + answer.getQuestionText() +
+            &quot;' must contain at least &quot; + minWordsPerAnswer + &quot; words.&quot;);
+    }
+}
+</code></pre>
+<h3 id="55-real-time-ui-feedback">5.5 Real-Time UI Feedback</h3>
+<p>The <code>QuestionCard</code> component renders a two-column layout:</p>
+<pre><code>┌─────────────────────────────────┬──────────────────────────────────┐
+│         RichTextEditor           │       LiveFeedbackPanel           │
+│  ┌───────────────────────────┐  │  ┌────────────────────────────┐  │
+│  │ [Auto-resize textarea]    │  │  │ Grammar    ████████░░  8.2 │  │
+│  │                           │  │  │ Clarity    ██████░░░░  6.0 │  │
+│  │                           │  │  │ Completeness ████████░  8.5│  │
+│  └───────────────────────────┘  │  │ Relevance  █████████░  9.1 │  │
+│  Word count: 142 / 500 [green]  │  ├────────────────────────────┤  │
+│                                 │  │ ✓ Strengths: ...           │  │
+│  [PlagiarismWarning chip]       │  │ ⚠ Improvements: ...        │  │
+│  MEDIUM  72% similarity         │  │ → Suggestions: ...         │  │
+└─────────────────────────────────┴──────────────────────────────────┘
+</code></pre>
+<p>The word count bar colour changes dynamically:
+- Green: word count ≥ 80% of target
+- Amber: 40–80% of target
+- Red: &lt; 40% of target</p>
+<hr />
+<h2 id="6-ai-feedback-engine">6. AI Feedback Engine</h2>
+<h3 id="61-architecture">6.1 Architecture</h3>
+<p>The Feedback Service is a <strong>stateless</strong> Spring Boot application. It:</p>
+<ol>
+<li>Receives a <code>POST /api/feedback/live</code> request with <code>{ questionText, answerText, studentId }</code></li>
+<li>Performs gibberish detection</li>
+<li>Constructs a structured LLM prompt</li>
+<li>Calls the HuggingFace Inference API (Featherless routing to Zephyr-7B-Beta)</li>
+<li>Parses and validates the LLM response</li>
+<li>Returns a structured <code>LiveFeedbackResponse</code></li>
+</ol>
+<p>No database writes occur in this service. Persistence of feedback scores is handled by the Submission Management Service via <code>PATCH /api/submissions/{id}/answers/{qId}/analysis</code>.</p>
+<h3 id="62-gibberish-detection">6.2 Gibberish Detection</h3>
+<p>Before invoking the LLM, the service checks whether the answer is meaningful:</p>
+<pre><code class="language-java">private boolean isGibberish(String text) {
+    if (text == null || text.trim().length() &lt; 10) return true;
+
+    String[] words = text.toLowerCase().split(&quot;\\s+&quot;);
+    int flaggedCount = 0;
+
+    for (String word : words) {
+        // Flag words with excessive consecutive consonants (&gt; 4)
+        if (word.matches(&quot;.*[^aeiou]{5,}.*&quot;)) flaggedCount++;
+        // Flag words with excessive consecutive vowels (&gt; 3)
+        if (word.matches(&quot;.*[aeiou]{4,}.*&quot;)) flaggedCount++;
+        // Flag very short non-words (&lt; 2 chars)
+        if (word.length() &lt; 2 &amp;&amp; !word.matches(&quot;[ai]&quot;)) flaggedCount++;
+    }
+
+    // If more than 40% of words are flagged, consider it gibberish
+    return (double) flaggedCount / words.length &gt; 0.40;
+}
+</code></pre>
+<p>If gibberish is detected, the service returns a fixed response indicating the answer requires revision.</p>
+<h3 id="63-prompt-engineering">6.3 Prompt Engineering</h3>
+<p>The service uses different prompt templates for short and long answers:</p>
+<p><strong>Short answer prompt (&lt; 100 words):</strong></p>
+<pre><code>You are an educational assessment assistant. Evaluate this student answer briefly.
+
+Question: {questionText}
+Student Answer: {answerText}
+
+Rate ONLY these 4 dimensions (0.0-10.0 scale, one decimal):
+- GRAMMAR: spelling, punctuation, sentence structure
+- CLARITY: how clear and well-expressed the answer is
+- COMPLETENESS: how thoroughly the question is answered
+- RELEVANCE: how on-topic and accurate the answer is
+
+Then provide:
+- STRENGTHS: 2 brief bullet points (start each with &quot;- &quot;)
+- IMPROVEMENTS: 2 brief bullet points (start each with &quot;- &quot;)
+- SUGGESTIONS: 1 specific actionable suggestion (start with &quot;- &quot;)
+
+Format EXACTLY:
+GRAMMAR: X.X
+CLARITY: X.X
+COMPLETENESS: X.X
+RELEVANCE: X.X
+STRENGTHS:
+- point1
+- point2
+IMPROVEMENTS:
+- point1
+- point2
+SUGGESTIONS:
+- suggestion1
+</code></pre>
+<p><strong>Long answer prompt (≥ 100 words):</strong> Adds context about expected depth and nuance, and requests 3 bullets per category.</p>
+<h3 id="64-response-parsing">6.4 Response Parsing</h3>
+<p>The LLM response is parsed using regex patterns for each field:</p>
+<pre><code class="language-java">private static final Pattern GRAMMAR_PATTERN = Pattern.compile(&quot;GRAMMAR:\\s*([0-9](?:\\.[0-9])?)&quot;);
+private static final Pattern CLARITY_PATTERN = Pattern.compile(&quot;CLARITY:\\s*([0-9](?:\\.[0-9])?)&quot;);
+// etc.
+
+private Double extractScore(String response, Pattern pattern) {
+    Matcher m = pattern.matcher(response);
+    if (m.find()) {
+        double val = Double.parseDouble(m.group(1));
+        return Math.max(0.0, Math.min(10.0, val)); // Clamp to [0, 10]
+    }
+    return null; // Signal that this score was not found
+}
+</code></pre>
+<p>Bullet points are extracted by splitting on newlines and filtering for lines that start with <code>-</code>.</p>
+<h3 id="65-consistency-enforcement">6.5 Consistency Enforcement</h3>
+<p>After parsing, three consistency rules are applied to eliminate internal contradictions in the LLM output:</p>
+<p><strong>Rule A — High score / negative language mismatch:</strong>
+If a score ≥ 8.0 but the corresponding bullet point contains highly negative words (e.g., "incorrect", "wrong", "poor", "missing"), the score is capped at 7.5 and a note is added to improvements.</p>
+<p><strong>Rule B — Low score / positive language mismatch:</strong>
+If a score ≤ 3.0 but all bullet points for that dimension are positive (contain "good", "well", "clear", "excellent"), the score is raised to 4.0 minimum.</p>
+<p><strong>Rule C — Dimension agreement:</strong>
+If grammar score and clarity score differ by more than 4.0 points, the gap is reduced by averaging toward the mean. Extreme divergence typically indicates a parsing artefact.</p>
+<pre><code class="language-java">private static final List&lt;String&gt; POSITIVE_SIGNAL_WORDS = List.of(
+    &quot;excellent&quot;, &quot;good&quot;, &quot;well&quot;, &quot;clear&quot;, &quot;strong&quot;, &quot;effective&quot;, &quot;thorough&quot;,
+    &quot;accurate&quot;, &quot;precise&quot;, &quot;detailed&quot;, &quot;logical&quot;, &quot;organized&quot;, &quot;coherent&quot;
+);
+
+private void applyConsistencyRules(LiveFeedbackResponse response) {
+    // Rule A
+    if (response.getGrammarScore() &gt;= 8.0 &amp;&amp; containsNegativeSignals(response.getImprovements())) {
+        response.setGrammarScore(Math.min(response.getGrammarScore(), 7.5));
+    }
+    // Rule B, Rule C ...
+}
+</code></pre>
+<h3 id="66-asynchronous-processing">6.6 Asynchronous Processing</h3>
+<p>The live feedback endpoint is decorated with <code>@Async("feedbackTaskExecutor")</code>, allowing multiple concurrent feedback requests without blocking Tomcat worker threads:</p>
+<pre><code class="language-java">@Bean(&quot;feedbackTaskExecutor&quot;)
+public Executor feedbackTaskExecutor() {
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(5);
+    executor.setMaxPoolSize(20);
+    executor.setQueueCapacity(50);
+    executor.setThreadNamePrefix(&quot;FeedbackAsync-&quot;);
+    executor.initialize();
+    return executor;
+}
+</code></pre>
+<p>The controller returns <code>CompletableFuture&lt;ResponseEntity&lt;ApiResponse&lt;LiveFeedbackResponse&gt;&gt;&gt;</code>, which Spring MVC handles as a deferred result, freeing the thread immediately.</p>
+<h3 id="67-caching">6.7 Caching</h3>
+<p>Feedback for identical <code>(questionText, answerText)</code> pairs is cached for 10 minutes using Caffeine:</p>
+<pre><code class="language-java">@Cacheable(value = &quot;feedbackCache&quot;, key = &quot;#request.questionText + ':' + #request.answerText.hashCode()&quot;)
+public CompletableFuture&lt;ApiResponse&lt;LiveFeedbackResponse&gt;&gt; generateLiveFeedback(LiveFeedbackRequest request) { ... }
+</code></pre>
+<p>This significantly reduces LLM API calls for students who pause and resume typing on the same content.</p>
+<hr />
+<h2 id="7-plagiarism-detection-system">7. Plagiarism Detection System</h2>
+<h3 id="71-detection-modes">7.1 Detection Modes</h3>
+<p>The system operates in two modes triggered at different points in the workflow:</p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Trigger</th>
+<th>Algorithms</th>
+<th>Scope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Real-time</strong></td>
+<td>Auto-save debounce (3s)</td>
+<td>Peer (4 algos) + Internet</td>
+<td>Current assignment's answers</td>
+</tr>
+<tr>
+<td><strong>Batch</strong></td>
+<td>Lecturer-triggered recheck</td>
+<td>Peer (4 algos) + Internet</td>
+<td>All submissions in assignment</td>
+</tr>
+<tr>
+<td><strong>Scheduled</strong></td>
+<td>Nightly sweep (configurable)</td>
+<td>Peer (4 algos)</td>
+<td>All active assignments</td>
+</tr>
+</tbody>
+</table>
+<h3 id="72-text-similarity-algorithms">7.2 Text Similarity Algorithms</h3>
+<p>The service implements four distinct text similarity algorithms. For each pair of texts being compared, all four are computed and the maximum is taken as the final similarity score.</p>
+<h4 id="algorithm-1-tf-idf-cosine-similarity">Algorithm 1: TF-IDF Cosine Similarity</h4>
+<p>TF-IDF (Term Frequency–Inverse Document Frequency) weighs terms by how often they appear in the document relative to the entire corpus, then computes the cosine of the angle between the two resulting vectors.</p>
+<p><strong>Term Frequency:</strong></p>
+<pre><code>TF(t, d) = count(t in d) / total_terms(d)
+</code></pre>
+<p><strong>Inverse Document Frequency:</strong></p>
+<pre><code>IDF(t, D) = log(|D| / |{d ∈ D : t ∈ d}|)
+</code></pre>
+<p><strong>TF-IDF weight:</strong></p>
+<pre><code>TFIDF(t, d, D) = TF(t, d) × IDF(t, D)
+</code></pre>
+<p><strong>Cosine similarity:</strong></p>
+<pre><code>cosine(A, B) = (A · B) / (||A|| × ||B||)
+</code></pre>
+<p><strong>Implementation using Apache Commons Math:</strong></p>
+<pre><code class="language-java">private double tfidfCosineSimilarity(String text1, String text2) {
+    Map&lt;String, Double&gt; tfidf1 = computeTfIdf(text1, Arrays.asList(text1, text2));
+    Map&lt;String, Double&gt; tfidf2 = computeTfIdf(text2, Arrays.asList(text1, text2));
+    Set&lt;String&gt; vocab = new HashSet&lt;&gt;(tfidf1.keySet());
+    vocab.addAll(tfidf2.keySet());
+
+    double[] v1 = vocab.stream().mapToDouble(t -&gt; tfidf1.getOrDefault(t, 0.0)).toArray();
+    double[] v2 = vocab.stream().mapToDouble(t -&gt; tfidf2.getOrDefault(t, 0.0)).toArray();
+
+    ArrayRealVector vec1 = new ArrayRealVector(v1);
+    ArrayRealVector vec2 = new ArrayRealVector(v2);
+    double norm = vec1.getNorm() * vec2.getNorm();
+    return norm == 0 ? 0.0 : vec1.dotProduct(vec2) / norm;
+}
+</code></pre>
+<h4 id="algorithm-2-jaccard-similarity">Algorithm 2: Jaccard Similarity</h4>
+<p>Jaccard similarity measures the overlap of unique word sets between two documents:</p>
+<pre><code>Jaccard(A, B) = |A ∩ B| / |A ∪ B|
+</code></pre>
+<p>Where A and B are the sets of unique words in each text (after stop-word removal).</p>
+<pre><code class="language-java">private double jaccardSimilarity(String text1, String text2) {
+    Set&lt;String&gt; set1 = tokenize(text1);
+    Set&lt;String&gt; set2 = tokenize(text2);
+    Set&lt;String&gt; intersection = new HashSet&lt;&gt;(set1);
+    intersection.retainAll(set2);
+    Set&lt;String&gt; union = new HashSet&lt;&gt;(set1);
+    union.addAll(set2);
+    return union.isEmpty() ? 0.0 : (double) intersection.size() / union.size();
+}
+</code></pre>
+<h4 id="algorithm-3-4-n-gram-dice-similarity-n3-n5">Algorithm 3 &amp; 4: N-gram Dice Similarity (n=3, n=5)</h4>
+<p>N-gram Dice similarity computes the overlap of character n-gram sets using the Sørensen–Dice coefficient:</p>
+<pre><code>Dice(A, B) = 2 × |ngrams(A) ∩ ngrams(B)| / (|ngrams(A)| + |ngrams(B)|)
+</code></pre>
+<p>N-grams of size 3 catch short phrase similarities; n-grams of size 5 catch longer phrase similarities. Using both reduces sensitivity to parameter choice.</p>
+<pre><code class="language-java">private double ngramDiceSimilarity(String text1, String text2, int n) {
+    Set&lt;String&gt; ngrams1 = extractNgrams(text1, n);
+    Set&lt;String&gt; ngrams2 = extractNgrams(text2, n);
+    Set&lt;String&gt; intersection = new HashSet&lt;&gt;(ngrams1);
+    intersection.retainAll(ngrams2);
+    int total = ngrams1.size() + ngrams2.size();
+    return total == 0 ? 0.0 : (2.0 * intersection.size()) / total;
+}
+</code></pre>
+<h4 id="ensemble-strategy">Ensemble Strategy</h4>
+<pre><code class="language-java">public double calculateBestSimilarity(String text1, String text2) {
+    double tfidf   = tfidfCosineSimilarity(text1, text2);
+    double jaccard = jaccardSimilarity(text1, text2);
+    double dice3   = ngramDiceSimilarity(text1, text2, 3);
+    double dice5   = ngramDiceSimilarity(text1, text2, 5);
+    return Math.max(Math.max(tfidf, jaccard), Math.max(dice3, dice5));
+}
+</code></pre>
+<p>Taking the maximum rather than the average ensures the system catches plagiarism detected by any one of the four methods, even if others disagree.</p>
+<h3 id="73-internet-similarity">7.3 Internet Similarity</h3>
+<p>For internet similarity, the service uses a <strong>corpus concatenation</strong> strategy:</p>
+<ol>
+<li>Send the answer text as a search query to SerpAPI (Google Search API)</li>
+<li>Retrieve up to 3 search results</li>
+<li>Concatenate all result snippets into a single "internet corpus" string</li>
+<li>Run TF-IDF cosine similarity between the answer and the corpus</li>
+</ol>
+<pre><code class="language-java">public double calculateInternetSimilarity(String answerText) {
+    List&lt;SearchResult&gt; results = serpApiService.search(answerText, 3);
+    if (results.isEmpty()) return 0.0;
+
+    String corpus = results.stream()
+        .map(r -&gt; r.getSnippet() + &quot; &quot; + r.getTitle())
+        .collect(Collectors.joining(&quot; &quot;));
+
+    return tfidfCosineSimilarity(answerText, corpus);
+}
+</code></pre>
+<p>This approach is more robust than per-snippet comparison because it avoids false positives from short snippets that may coincidentally share common vocabulary.</p>
+<h3 id="74-risk-score-calculation">7.4 Risk Score Calculation</h3>
+<p>After similarity scores are computed, a risk score is calculated:</p>
+<pre><code class="language-java">double riskScore = maxPeerSimilarity * 100 + Math.min(numHighMatches * 5, 20);
+</code></pre>
+<p>Where <code>numHighMatches</code> is the count of peer answers with similarity &gt; 0.45.</p>
+<p>The risk score maps to severity buckets:</p>
+<table>
+<thead>
+<tr>
+<th>Risk Score</th>
+<th>Severity</th>
+<th>Flagged</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>&lt; 30</td>
+<td>LOW</td>
+<td>false</td>
+</tr>
+<tr>
+<td>30–60</td>
+<td>MEDIUM</td>
+<td>true</td>
+</tr>
+<tr>
+<td>&gt; 60</td>
+<td>HIGH</td>
+<td>true</td>
+</tr>
+</tbody>
+</table>
+<h3 id="75-peer-comparison-scope">7.5 Peer Comparison Scope</h3>
+<p>For efficiency, peer comparison queries at most 200 recent answers for the same question, ordered by <code>last_modified DESC</code>:</p>
+<pre><code class="language-java">List&lt;Answer&gt; peers = answerRepository.findByQuestionIdOrderByLastModifiedDesc(questionId)
+    .stream()
+    .filter(a -&gt; !a.getStudentId().equals(currentStudentId)) // Exclude self
+    .limit(200)
+    .collect(Collectors.toList());
+</code></pre>
+<p>The student's own answers (across all submissions and versions) are excluded via the <code>student_id</code> column on <code>Answer</code>.</p>
+<h3 id="76-websocket-notifications">7.6 WebSocket Notifications</h3>
+<p>When a real-time check produces a HIGH severity result, the service pushes an immediate WebSocket notification to the student's browser:</p>
+<pre><code class="language-java">messagingTemplate.convertAndSend(
+    &quot;/topic/plagiarism-warnings/&quot; + sessionId,
+    PlagiarismWarningMessage.builder()
+        .severity(&quot;HIGH&quot;)
+        .similarityScore(riskScore)
+        .message(&quot;High similarity detected. Please revise your answer.&quot;)
+        .build()
+);
+</code></pre>
+<p>The student frontend subscribes to this topic when the answer page loads.</p>
+<h3 id="77-severity-display-in-the-ui">7.7 Severity Display in the UI</h3>
+<p>The <code>PlagiarismWarning</code> component renders a severity chip below each answer editor:</p>
+<ul>
+<li><strong>LOW</strong> (&lt; 30): Grey chip, no warning text</li>
+<li><strong>MEDIUM</strong> (30–60): Amber chip with "Moderate similarity detected"</li>
+<li><strong>HIGH</strong> (&gt; 60): Red chip with "High similarity — please revise"</li>
+</ul>
+<hr />
+<h2 id="8-grading-system">8. Grading System</h2>
+<h3 id="81-grading-architecture">8.1 Grading Architecture</h3>
+<p>Grading is a two-stage process:</p>
+<ol>
+<li><strong>AI-suggested mark</strong> (computed at submit time, immutable)</li>
+<li><strong>Lecturer mark</strong> (set after deadline, overrides AI suggestion)</li>
+</ol>
+<p>Both are stored per-question in the <code>answers</code> table, giving full traceability.</p>
+<h3 id="82-ai-mark-computation">8.2 AI Mark Computation</h3>
+<p>At submit time, for each answer that has AI feedback scores, a weighted mark is computed:</p>
+<pre><code>ai_generated_mark = (relevanceScore × 0.40 +
+                     completenessScore × 0.30 +
+                     clarityScore × 0.15 +
+                     grammarScore × 0.15) × (maxPoints / 10.0)
+</code></pre>
+<p>Where <code>maxPoints</code> defaults to 10 but can be configured per-assignment.</p>
+<p><strong>Handling missing scores:</strong></p>
+<p>If some dimensions are null (AI feedback never ran for this answer), the formula is renormalized using only the available dimensions:</p>
+<pre><code class="language-java">double totalWeight = 0.0, weightedSum = 0.0;
+if (relevance != null) { weightedSum += relevance * 0.40; totalWeight += 0.40; }
+if (completeness != null) { weightedSum += completeness * 0.30; totalWeight += 0.30; }
+if (clarity != null) { weightedSum += clarity * 0.15; totalWeight += 0.15; }
+if (grammar != null) { weightedSum += grammar * 0.15; totalWeight += 0.15; }
+
+double aiMark = (totalWeight &gt; 0) ? (weightedSum / totalWeight) * (maxPoints / 10.0) : null;
+</code></pre>
+<p><strong>Worked Example:</strong></p>
+<p>Given: grammar=7.2, clarity=6.5, completeness=8.1, relevance=9.0, maxPoints=10</p>
+<pre><code>ai_mark = (9.0×0.40 + 8.1×0.30 + 6.5×0.15 + 7.2×0.15) × (10/10)
+        = (3.60 + 2.43 + 0.975 + 1.08) × 1.0
+        = 8.085
+        ≈ 8.1/10
+</code></pre>
+<h3 id="83-aggregate-submission-score">8.3 Aggregate Submission Score</h3>
+<p>After per-question AI marks are computed, an aggregate submission-level AI score is calculated:</p>
+<pre><code class="language-java">double totalMark = answers.stream()
+    .filter(a -&gt; a.getAiGeneratedMark() != null)
+    .mapToDouble(Answer::getAiGeneratedMark)
+    .sum();
+
+double maxPossible = answers.size() * maxPointsPerQuestion;
+double aiScore = (maxPossible &gt; 0) ? (totalMark / maxPossible) * 100.0 : null;
+submission.setAiScore(aiScore); // 0–100 scale
+</code></pre>
+<h3 id="84-lecturer-grading-workflow">8.4 Lecturer Grading Workflow</h3>
+<p>After the submission deadline:</p>
+<ol>
+<li>Lecturer opens the grading page at <code>/submissions/lecturer/grading/{submissionId}</code></li>
+<li>The page loads all questions with the student's answer text and the AI-suggested mark pre-populated</li>
+<li>The lecturer can override the mark and add feedback text per question</li>
+<li>On save, <code>PATCH /api/submissions/{id}/answers/{qId}/analysis</code> is called with <code>{ lecturerMark, lecturerFeedbackText }</code></li>
+<li>After all questions are graded, the lecturer sets a final grade via <code>POST /api/submissions/{id}/grade</code></li>
+<li>The submission status transitions to GRADED</li>
+</ol>
+<h3 id="85-dual-path-grade-persistence">8.5 Dual-Path Grade Persistence</h3>
+<p>Lecturer marks are written to two locations for completeness:</p>
+<ol>
+<li><strong>Working copy</strong> (<code>answers</code> table): <code>lecturer_mark</code>, <code>lecturer_feedback_text</code>, <code>lecturer_updated_at</code>, <code>lecturer_updated_by</code></li>
+<li><strong>Latest version snapshot</strong> (<code>submission_versions</code> table): The <code>answers_snapshot_json</code> is updated for the most recent version to include lecturer marks alongside the answer text</li>
+</ol>
+<p>This ensures both the live answers view and historical version reports show consistent grading.</p>
+<hr />
+<h2 id="9-version-control-system">9. Version Control System</h2>
+<h3 id="91-versioning-strategy">9.1 Versioning Strategy</h3>
+<p>Each time a student formally submits an assignment, an immutable version snapshot is created. This enables:</p>
+<ul>
+<li>Tracking improvement across resubmissions (if allowed)</li>
+<li>Detecting post-deadline edits (snapshots are immutable)</li>
+<li>Generating version-specific plagiarism and feedback reports</li>
+<li>Displaying a visual diff between any two versions</li>
+</ul>
+<h3 id="92-snapshot-creation">9.2 Snapshot Creation</h3>
+<p>Version snapshots are created within the same <code>@Transactional</code> context as the submission state change:</p>
+<pre><code class="language-java">@Transactional
+public Submission submitAssignment(Long submissionId, String studentId) {
+    Submission submission = getSubmission(submissionId);
+    validateDeadline(submission);
+    computeAiMarks(submission);
+
+    submission.setStatus(&quot;SUBMITTED&quot;);
+    submission.setSubmittedAt(LocalDateTime.now());
+    Submission saved = submissionRepository.save(submission);
+
+    // Atomic snapshot within same transaction
+    createVersionSnapshot(saved);
+
+    return saved;
+}
+
+private void createVersionSnapshot(Submission submission) {
+    int nextVersion = versionRepository
+        .findMaxVersionNumberBySubmissionId(submission.getId())
+        .map(v -&gt; v + 1)
+        .orElse(1);
+
+    // Idempotency guard
+    if (versionRepository.existsBySubmissionIdAndVersionNumber(submission.getId(), nextVersion)) {
+        return; // Already created (retry/duplicate call)
+    }
+
+    List&lt;Answer&gt; answers = answerRepository.findBySubmissionId(submission.getId());
+    String snapshot = objectMapper.writeValueAsString(answers);
+
+    SubmissionVersion version = SubmissionVersion.builder()
+        .submissionId(submission.getId())
+        .versionNumber(nextVersion)
+        .answersSnapshotJson(snapshot)
+        .totalWordCount(answers.stream().mapToInt(a -&gt; a.getWordCount() != null ? a.getWordCount() : 0).sum())
+        .aiScoreSnapshot(submission.getAiScore())
+        .build();
+
+    versionRepository.save(version);
+}
+</code></pre>
+<h3 id="93-diff-algorithm">9.3 Diff Algorithm</h3>
+<p>The <code>DiffViewer</code> frontend component implements a line-level diff algorithm:</p>
+<ol>
+<li>Split both version's answer texts into lines</li>
+<li>Compute the Longest Common Subsequence (LCS) using dynamic programming</li>
+<li>Mark lines as <code>ADDED</code> (only in new), <code>REMOVED</code> (only in old), or <code>UNCHANGED</code></li>
+<li>Render with colour coding: green for added, red for removed, grey for unchanged</li>
+</ol>
+<p>Long unchanged blocks are collapsible to focus attention on changes.</p>
+<h3 id="94-version-timeline-ui">9.4 Version Timeline UI</h3>
+<p>The <code>VersionTimeline</code> component renders a vertical timeline:</p>
+<pre><code>● Version 3 — Submitted 15 Mar 2026, 14:22  [AI Score: 81%]
+│   [Compare] checkbox
+│
+● Version 2 — Submitted 12 Mar 2026, 09:11  [AI Score: 74%]
+│   [Compare] checkbox ← select two to diff
+│
+● Version 1 — Submitted 10 Mar 2026, 16:45  [AI Score: 68%]
+    [Compare] checkbox
+</code></pre>
+<p>When two checkboxes are selected, a "Compare Versions" button appears, navigating to the diff view.</p>
+<hr />
+<h2 id="10-deadline-enforcement">10. Deadline Enforcement</h2>
+<h3 id="101-enforcement-points">10.1 Enforcement Points</h3>
+<p>Deadline enforcement is applied at the service layer (not the database layer or frontend) to ensure it cannot be bypassed by direct API calls:</p>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Deadline Check</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Formal submission</td>
+<td>Submission must be BEFORE deadline</td>
+</tr>
+<tr>
+<td>Answer auto-save</td>
+<td>PERMITTED after deadline (student can still save drafts locally)</td>
+</tr>
+<tr>
+<td>AI feedback call</td>
+<td>PERMITTED after deadline (stateless, no DB write)</td>
+</tr>
+<tr>
+<td>Plagiarism check</td>
+<td>PERMITTED after deadline (read-only analysis)</td>
+</tr>
+<tr>
+<td>Lecturer grading</td>
+<td>ONLY permitted after deadline</td>
+</tr>
+</tbody>
+</table>
+<p>Note: The submission service does NOT prevent auto-saves after the deadline. This is intentional — it prevents data loss if a student's browser is still open when the deadline passes. However, the "Submit" action is blocked.</p>
+<h3 id="102-deadline-validation-logic">10.2 Deadline Validation Logic</h3>
+<pre><code class="language-java">private void validateDeadline(Submission submission) {
+    if (submission.getDeadline() == null) return; // No deadline set = always open
+
+    LocalDateTime now = LocalDateTime.now();
+    if (now.isAfter(submission.getDeadline())) {
+        throw new DeadlinePassedException(
+            &quot;Submission deadline was &quot; + submission.getDeadline() +
+            &quot;. Current time: &quot; + now
+        );
+    }
+}
+</code></pre>
+<h3 id="103-frontend-deadline-countdown">10.3 Frontend Deadline Countdown</h3>
+<p>The student answer page displays a live countdown timer using <code>setInterval</code>:</p>
+<pre><code class="language-typescript">// DeadlineCountdown component
+const [timeLeft, setTimeLeft] = useState&lt;string&gt;('');
+useEffect(() =&gt; {
+    const interval = setInterval(() =&gt; {
+        const diff = deadline.getTime() - Date.now();
+        if (diff &lt;= 0) { setTimeLeft('Deadline passed'); clearInterval(interval); return; }
+        const h = Math.floor(diff / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        setTimeLeft(`${h}h ${m}m ${s}s remaining`);
+    }, 1000);
+    return () =&gt; clearInterval(interval);
+}, [deadline]);
+</code></pre>
+<p>The colour of the countdown changes:
+- Green: &gt; 1 hour remaining
+- Amber: 15 minutes to 1 hour remaining
+- Red: &lt; 15 minutes remaining</p>
+<hr />
+<h2 id="11-instructor-features">11. Instructor Features</h2>
+<h3 id="111-submission-management-dashboard">11.1 Submission Management Dashboard</h3>
+<p>The lecturer's submissions page (<code>/submissions/lecturer/submissions</code>) provides:</p>
+<ul>
+<li><strong>Submission table</strong>: All submissions for the lecturer's assignments, with status badges (DRAFT / SUBMITTED / GRADED), student name, submission time, AI score, and plagiarism score</li>
+<li><strong>Filter controls</strong>: By assignment, status, and date range</li>
+<li><strong>Sort options</strong>: By submission time, AI score, plagiarism score, student name</li>
+<li><strong>Bulk re-check</strong>: Select multiple submissions and trigger batch plagiarism recheck</li>
+<li><strong>Quick grade access</strong>: Click any submission to open the grading view</li>
+</ul>
+<h3 id="112-grading-interface">11.2 Grading Interface</h3>
+<p>The grading page (<code>/submissions/lecturer/grading/{submissionId}</code>) shows:</p>
+<p>For each question:
+1. Question text (from snapshot)
+2. Student's answer text (full, scrollable)
+3. AI-suggested mark (pre-populated, greyed out) with breakdown tooltip
+4. AI feedback bullets (strengths / improvements / suggestions)
+5. Plagiarism severity chip
+6. Input: Lecturer mark (numeric, 0–maxPoints)
+7. Textarea: Lecturer feedback text
+8. "Save Question" button</p>
+<p>At the bottom:
+- Summary of all question marks
+- Final grade input (can differ from sum of question marks for holistic adjustment)
+- "Finalize Grade" button → transitions submission to GRADED</p>
+<h3 id="113-plagiarism-dashboard">11.3 Plagiarism Dashboard</h3>
+<p>The plagiarism dashboard (<code>/submissions/lecturer/plagiarism</code>) shows:</p>
+<ul>
+<li><strong>Assignment-level statistics</strong>: Total submissions, flagged count, percentage flagged, score distribution histogram</li>
+<li><strong>Flagged submissions list</strong>: Sorted by risk score (highest first)</li>
+<li><strong>Per-submission card</strong>: Student name, AI score, similarity score, severity badge, internet match URLs, peer match table</li>
+<li><strong>Recheck controls</strong>: Per-submission recheck button and bulk "Recheck All" button</li>
+</ul>
+<h3 id="114-bulk-plagiarism-recheck">11.4 Bulk Plagiarism Recheck</h3>
+<p>The bulk recheck feature processes submissions sequentially (not in parallel) to avoid overwhelming the SerpAPI rate limits:</p>
+<pre><code class="language-typescript">// Sequential to avoid thundering-herd on SerpAPI
+for (const submissionId of selectedSubmissionIds) {
+    await recheckPlagiarism(submissionId);
+    setProgress(prev =&gt; prev + 1);
+}
+</code></pre>
+<p>Progress is displayed in a modal with a progress bar.</p>
+<h3 id="115-analytics-overview">11.5 Analytics Overview</h3>
+<p>The module overview page shows aggregate statistics:</p>
+<ul>
+<li>Total submissions this period</li>
+<li>Submissions requiring grading</li>
+<li>Flagged plagiarism count (loaded from <code>GET /api/integrity/checks/flagged</code>)</li>
+<li>Grade distribution chart</li>
+<li>Recent activity feed</li>
+</ul>
+<hr />
+<h2 id="12-pdf-report-generation">12. PDF Report Generation</h2>
+<h3 id="121-available-reports">12.1 Available Reports</h3>
+<p>Two PDF reports can be generated:</p>
+<table>
+<thead>
+<tr>
+<th>Report</th>
+<th>Endpoint</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Feedback Report</td>
+<td><code>GET /api/integrity/reports/{submissionId}/feedback</code></td>
+<td>All questions, answers, AI scores, per-dimension breakdowns, strengths/improvements/suggestions</td>
+</tr>
+<tr>
+<td>Plagiarism Report</td>
+<td><code>GET /api/integrity/reports/{submissionId}/plagiarism</code></td>
+<td>Similarity scores, peer matches (anonymized), internet matches with URLs, risk score, severity</td>
+</tr>
+</tbody>
+</table>
+<h3 id="122-generation-architecture">12.2 Generation Architecture</h3>
+<p>PDF generation is asynchronous. When the endpoint is called:</p>
+<ol>
+<li>A generation job is queued</li>
+<li>The API returns <code>202 Accepted</code> with a job ID</li>
+<li>The client polls <code>GET /api/integrity/reports/status/{jobId}</code> every 2 seconds</li>
+<li>When complete, the API returns <code>200 OK</code> with a download URL</li>
+<li>The frontend redirects to the download URL</li>
+</ol>
+<h3 id="123-report-technology">12.3 Report Technology</h3>
+<p>Reports are generated using iText/JasperReports with:
+- Smart LMS branding header
+- Structured table layouts for score breakdowns
+- Colour-coded severity indicators
+- QR code linking to the online submission view
+- Digital timestamp and check ID for audit purposes</p>
+<hr />
+<h2 id="13-complete-data-flows-workflows">13. Complete Data Flows &amp; Workflows</h2>
+<h3 id="131-student-submission-workflow">13.1 Student Submission Workflow</h3>
+<pre><code>1. Student navigates to /submissions/student/answer/{assignmentId}
+2. Frontend decodes JWT → extracts studentId
+3. Frontend calls GET /api/projects-and-tasks/project/{id} → loads questions
+4. Frontend calls GET /api/submissions/student/{studentId}?assignmentId={id}&amp;status=DRAFT
+   → finds existing draft OR calls POST /api/submissions to create new DRAFT
+5. Frontend loads existing answers: GET /api/submissions/{submissionId}/answers
+6. Student types answer for Question 1
+
+   [3 seconds of inactivity]
+
+7. AI Feedback: POST http://localhost:8083/api/feedback/live
+   → { grammarScore, clarityScore, completenessScore, relevanceScore, strengths, improvements, suggestions }
+   → Frontend renders scores in LiveFeedbackPanel
+
+8. Plagiarism (peer + internet): POST http://localhost:8084/api/integrity/checks/realtime
+   → { similarityScore, severity, flagged }
+   → Frontend renders PlagiarismWarning chip below editor
+
+   [2 more seconds of inactivity (total 5s)]
+
+9. Auto-save: PUT /api/submissions/{id}/answers/{questionId}
+   → { answerText, questionText, wordCount, characterCount, studentId }
+   → Returns AnswerResponse
+
+10. PATCH /api/submissions/{id}/answers/{questionId}/analysis
+    → Persists AI scores + plagiarism result to answers table
+
+11. Student clicks &quot;Submit Assignment&quot;
+12. Frontend validates: all questions have answers with ≥ min word count
+13. POST /api/submissions/{id}/submit
+    → Service validates deadline
+    → Service computes ai_generated_mark per question
+    → Service computes aggregate aiScore
+    → Service transitions status to SUBMITTED
+    → Service creates version snapshot (same @Transactional)
+14. Frontend navigates to /submissions/student/my-submissions
+</code></pre>
+<h3 id="132-instructor-grading-workflow">13.2 Instructor Grading Workflow</h3>
+<pre><code>1. After deadline passes, lecturer opens /submissions/lecturer/submissions
+2. Page loads: GET /api/submissions?assignmentId={id}&amp;status=SUBMITTED
+3. Lecturer clicks &quot;Grade&quot; for a submission
+4. Grading page loads:
+   a. GET /api/submissions/{submissionId}
+   b. GET /api/submissions/{submissionId}/answers → all answers with AI scores
+   c. GET /api/integrity/checks/submission/{submissionId} → plagiarism check
+5. For each question:
+   a. Lecturer reviews student answer
+   b. Sees AI-suggested mark (pre-populated)
+   c. Enters lecturer mark + feedback text
+   d. Clicks &quot;Save Question&quot;
+   e. PATCH /api/submissions/{id}/answers/{qId}/analysis
+      → { lecturerMark, lecturerFeedbackText }
+6. Lecturer clicks &quot;Finalize Grade&quot;
+7. POST /api/submissions/{id}/grade
+   → { finalGrade, generalFeedback, questionMarksJson }
+   → Status → GRADED
+8. Student can now view feedback at /submissions/student/feedback/{id}
+</code></pre>
+<h3 id="133-real-time-analysis-pipeline">13.3 Real-Time Analysis Pipeline</h3>
+<pre><code>User keystroke
+    │
+    ├─ [Every keystroke] Reset all timers
+    │
+    ├─ [3s after last keystroke] AI Feedback Timer fires
+    │       POST /api/feedback/live
+    │       ├─ Gibberish check
+    │       ├─ Build prompt
+    │       ├─ Call HuggingFace API (Zephyr-7B)
+    │       ├─ Parse response
+    │       ├─ Apply consistency rules
+    │       └─ Return LiveFeedbackResponse
+    │       Update LiveFeedbackPanel with animated bar fills
+    │
+    ├─ [3s after last keystroke] Plagiarism Timer fires
+    │       POST /api/integrity/checks/realtime
+    │       ├─ Peer comparison (up to 200 answers, 4 algorithms)
+    │       ├─ Internet search (SerpAPI, 3 results)
+    │       ├─ Risk score calculation
+    │       ├─ Severity bucketing
+    │       └─ WebSocket push if HIGH
+    │       Update PlagiarismWarning chip
+    │
+    └─ [5s after last keystroke] Auto-save Timer fires
+            PUT /api/submissions/{id}/answers/{qId}
+            → Upsert answer to DB
+            PATCH /api/submissions/{id}/answers/{qId}/analysis
+            → Persist AI + plagiarism scores
+            Update save status: &quot;Saved ✓&quot;
+</code></pre>
+<h3 id="134-versioning-workflow">13.4 Versioning Workflow</h3>
+<pre><code>Student clicks &quot;Submit&quot;
+    │
+    POST /api/submissions/{id}/submit
+    │
+    @Transactional begins
+    │
+    ├─ Validate deadline (throws if past)
+    ├─ Load all answers
+    ├─ Compute ai_generated_mark per answer
+    ├─ Compute aggregate aiScore for submission
+    ├─ Update submission: status=SUBMITTED, submittedAt=now
+    ├─ Create version snapshot:
+    │       ├─ Find max existing version number
+    │       ├─ Idempotency check (existsBySubmissionIdAndVersionNumber)
+    │       ├─ Serialize all answers to JSON
+    │       └─ Insert SubmissionVersion record
+    │
+    @Transactional commits (all-or-nothing)
+    │
+    Return updated Submission
+</code></pre>
+<hr />
+<h2 id="14-performance-scalability-security">14. Performance, Scalability &amp; Security</h2>
+<h3 id="141-performance-optimizations">14.1 Performance Optimizations</h3>
+<table>
+<thead>
+<tr>
+<th>Optimization</th>
+<th>Implementation</th>
+<th>Impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Debounced API calls</td>
+<td>3s/5s timers in <code>useAnswerEditor</code></td>
+<td>~95% reduction in live API calls vs. per-keystroke</td>
+</tr>
+<tr>
+<td>LLM response caching</td>
+<td>Caffeine cache (10 min TTL, key = question+answer hash)</td>
+<td>Eliminates redundant LLM calls for same content</td>
+</tr>
+<tr>
+<td>Async AI feedback</td>
+<td><code>@Async("feedbackTaskExecutor")</code> thread pool</td>
+<td>Non-blocking Tomcat threads, supports concurrent users</td>
+</tr>
+<tr>
+<td>Indexed DB queries</td>
+<td>Composite indexes on <code>(submission_id, question_id)</code> and <code>(question_id, last_modified)</code></td>
+<td>O(log n) upsert and peer lookup</td>
+</tr>
+<tr>
+<td>Peer comparison cap</td>
+<td>Top 200 answers by recency</td>
+<td>Bounded O(n) comparison regardless of class size</td>
+</tr>
+<tr>
+<td>Sequential bulk recheck</td>
+<td><code>for...of</code> + <code>await</code></td>
+<td>Prevents SerpAPI rate limit violations</td>
+</tr>
+</tbody>
+</table>
+<h3 id="142-scalability-considerations">14.2 Scalability Considerations</h3>
+<p>The current architecture supports a single-node deployment. Key bottlenecks and their mitigations:</p>
+<table>
+<thead>
+<tr>
+<th>Bottleneck</th>
+<th>Current State</th>
+<th>Mitigation Approach</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HuggingFace API rate limit</td>
+<td>Thread pool of 20 concurrent requests</td>
+<td>Add request queue with backpressure; multiple API keys</td>
+</tr>
+<tr>
+<td>SerpAPI quota</td>
+<td>Sequential processing</td>
+<td>Cache internet results by answer content hash</td>
+</tr>
+<tr>
+<td>PostgreSQL connection pool</td>
+<td>Default HikariCP (10 connections)</td>
+<td>Increase pool size; add read replica</td>
+</tr>
+<tr>
+<td>WebSocket connections</td>
+<td>In-memory session map</td>
+<td>Move to Redis-backed session store</td>
+</tr>
+</tbody>
+</table>
+<h3 id="143-security">14.3 Security</h3>
+<h4 id="jwt-validation">JWT Validation</h4>
+<p>Every protected endpoint validates the JWT before processing:</p>
+<pre><code class="language-java">String token = request.getHeader(&quot;Authorization&quot;).replace(&quot;Bearer &quot;, &quot;&quot;);
+Map&lt;String, Object&gt; claims = jwtUtils.validateAndExtractClaims(token);
+String role = JwtUtils.extractRole(claims);
+if (!&quot;lecture&quot;.equals(role)) throw new UnauthorizedException(&quot;Lecturer role required&quot;);
+</code></pre>
+<h4 id="sql-injection-prevention">SQL Injection Prevention</h4>
+<p>All database queries use Spring Data JPA's JPQL with named parameters — no raw string SQL concatenation:</p>
+<pre><code class="language-java">@Query(&quot;SELECT a FROM Answer a WHERE a.submissionId = :submissionId AND a.questionId = :questionId&quot;)
+Optional&lt;Answer&gt; findBySubmissionIdAndQuestionId(
+    @Param(&quot;submissionId&quot;) Long submissionId,
+    @Param(&quot;questionId&quot;) String questionId
+);
+</code></pre>
+<h4 id="input-length-limits">Input Length Limits</h4>
+<ul>
+<li><code>answer_text</code>: <code>TEXT</code> (no DB limit, but LLM is called only for texts ≤ 10,000 characters)</li>
+<li><code>question_text</code>: <code>VARCHAR(2000)</code> — enforced at DB level</li>
+<li><code>plagiarism_severity</code>: <code>VARCHAR(10)</code> — prevents oversized strings</li>
+</ul>
+<h4 id="cors-configuration">CORS Configuration</h4>
+<p>All backend services configure CORS to allow requests only from <code>http://localhost:3000</code> in development, with environment-specific overrides for production deployments.</p>
+<hr />
+<h2 id="15-testing-strategy">15. Testing Strategy</h2>
+<h3 id="151-backend-testing">15.1 Backend Testing</h3>
+<h4 id="unit-tests">Unit Tests</h4>
+<p>Each service class has a corresponding <code>*Test.java</code> class:</p>
+<table>
+<thead>
+<tr>
+<th>Test Class</th>
+<th>Coverage Focus</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AnswerServiceTest</code></td>
+<td>Upsert logic, null handling, mark computation</td>
+</tr>
+<tr>
+<td><code>SubmissionServiceTest</code></td>
+<td>State machine, deadline enforcement, aggregate scoring</td>
+</tr>
+<tr>
+<td><code>LiveFeedbackServiceTest</code></td>
+<td>Gibberish detection, response parsing, consistency rules</td>
+</tr>
+<tr>
+<td><code>TextSimilarityServiceTest</code></td>
+<td>All 4 algorithm correctness with known inputs</td>
+</tr>
+<tr>
+<td><code>RealtimeCheckServiceTest</code></td>
+<td>Risk score computation, severity bucketing</td>
+</tr>
+</tbody>
+</table>
+<h4 id="integration-tests">Integration Tests</h4>
+<p>Integration tests start an embedded H2 database and test the full request-response cycle:</p>
+<pre><code class="language-java">@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestDatabase(replace = Replace.ANY)
+class AnswerControllerIntegrationTest {
+    @Test
+    void saveAndRetrieveAnswer_roundTrip() {
+        // POST /api/submissions/{id}/answers/{qId}
+        // GET /api/submissions/{id}/answers
+        // Assert: answer text preserved, timestamps set
+    }
+}
+</code></pre>
+<h4 id="consistency-rule-tests">Consistency Rule Tests</h4>
+<p>The scoring consistency tests use parameterized test cases:</p>
+<pre><code class="language-java">@ParameterizedTest
+@CsvSource({
+    &quot;9.5, false, 7.5&quot;,   // High score + negative language → capped at 7.5
+    &quot;2.0, true, 4.0&quot;,    // Low score + positive language → raised to 4.0
+    &quot;6.0, false, 6.0&quot;    // Normal case → unchanged
+})
+void applyConsistencyRules_correctsScores(double input, boolean positiveLanguage, double expected) { ... }
+</code></pre>
+<h3 id="152-frontend-testing">15.2 Frontend Testing</h3>
+<ul>
+<li><strong>Component tests</strong>: Vitest + React Testing Library for <code>QuestionCard</code>, <code>LiveFeedbackPanel</code>, <code>PlagiarismWarning</code></li>
+<li><strong>Hook tests</strong>: <code>useAnswerEditor</code> debounce timer behavior, state transitions</li>
+<li><strong>API mock tests</strong>: <code>msw</code> (Mock Service Worker) for testing error states and loading states</li>
+</ul>
+<h3 id="153-manual-testing-scenarios">15.3 Manual Testing Scenarios</h3>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Steps</th>
+<th>Expected Outcome</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Auto-save on keystroke</td>
+<td>Type in editor, wait 5s</td>
+<td>Answer saved, "Saved ✓" shown</td>
+</tr>
+<tr>
+<td>AI feedback triggers</td>
+<td>Type 10+ words, wait 3s</td>
+<td>LiveFeedbackPanel shows scores</td>
+</tr>
+<tr>
+<td>Plagiarism detected</td>
+<td>Paste peer answer, wait 3s</td>
+<td>MEDIUM/HIGH chip shown</td>
+</tr>
+<tr>
+<td>Deadline enforcement</td>
+<td>Submit after deadline</td>
+<td>Error: "Deadline passed"</td>
+</tr>
+<tr>
+<td>Version on resubmit</td>
+<td>Submit twice</td>
+<td>Two versions in timeline</td>
+</tr>
+<tr>
+<td>Lecturer grade override</td>
+<td>Enter lecturer mark</td>
+<td>AI mark preserved, lecturer mark shown separately</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="16-system-integrations">16. System Integrations</h2>
+<h3 id="161-projects-tasks-service-teammate-integration">16.1 Projects &amp; Tasks Service (Teammate Integration)</h3>
+<p>The submission component integrates with the Projects &amp; Tasks service to load assignment questions:</p>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Data Mapped</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /api/projects-and-tasks/project/{id}</code></td>
+<td><code>mainTasks[]</code> → <code>Question[]</code> (each title = question text)</td>
+</tr>
+<tr>
+<td><code>GET /api/projects-and-tasks/task/{id}</code></td>
+<td><code>subtasks[]</code> → <code>Question[]</code> (each title = question text)</td>
+</tr>
+</tbody>
+</table>
+<p>Assignment type is preserved: <code>'project'</code> for project-based assignments, <code>'task'</code> for task-based assignments.</p>
+<h3 id="162-huggingface-inference-api">16.2 HuggingFace Inference API</h3>
+<ul>
+<li><strong>Model</strong>: <code>HuggingFaceH4/zephyr-7b-beta</code> via Featherless AI routing</li>
+<li><strong>Call pattern</strong>: POST to HuggingFace text-generation endpoint</li>
+<li><strong>Timeout</strong>: 120 seconds (configurable)</li>
+<li><strong>Max tokens</strong>: 500 per response (configurable)</li>
+<li><strong>Error handling</strong>: On timeout or API error → return a fixed "feedback unavailable" response (silent failure in real-time mode)</li>
+</ul>
+<h3 id="163-serpapi-google-search">16.3 SerpAPI (Google Search)</h3>
+<ul>
+<li><strong>Purpose</strong>: Retrieve internet content for plagiarism comparison</li>
+<li><strong>Queries</strong>: 3 results per answer text query</li>
+<li><strong>Rate limit handling</strong>: Sequential processing, configurable delay between batch checks</li>
+<li><strong>Error handling</strong>: If SerpAPI call fails → internet similarity = 0.0, peer comparison still runs</li>
+</ul>
+<h3 id="164-postgresql">16.4 PostgreSQL</h3>
+<ul>
+<li><strong>Version</strong>: PostgreSQL 15 (via Docker)</li>
+<li><strong>Connection</strong>: HikariCP connection pool</li>
+<li><strong>Schema management</strong>: Hibernate <code>ddl-auto=update</code> (creates/alters tables on startup)</li>
+<li><strong>Schema isolation</strong>: <code>submission_schema</code> and <code>integrity_schema</code> namespaces prevent cross-service table conflicts</li>
+</ul>
+<hr />
+<h2 id="17-technical-challenges-innovations">17. Technical Challenges &amp; Innovations</h2>
+<h3 id="171-challenge-llm-output-consistency">17.1 Challenge: LLM Output Consistency</h3>
+<p><strong>Problem</strong>: The Zephyr-7B model occasionally returns scores that contradict its own narrative feedback. For example, giving grammar a score of 9.2 while simultaneously listing "Poor sentence structure" as an improvement point.</p>
+<p><strong>Solution</strong>: The three-rule consistency enforcement system (Section 6.5) post-processes all LLM outputs to detect and correct internal contradictions using simple keyword matching and score range heuristics. This required careful calibration to avoid over-correcting genuinely nuanced assessments.</p>
+<h3 id="172-challenge-hibernate-ddl-migration-on-non-empty-tables">17.2 Challenge: Hibernate DDL Migration on Non-Empty Tables</h3>
+<p><strong>Problem</strong>: When new columns with <code>NOT NULL</code> constraints are added to an entity class, Hibernate's <code>ddl-auto=update</code> generates <code>ALTER TABLE ADD COLUMN ... NOT NULL</code> SQL, which PostgreSQL rejects when rows already exist (no DEFAULT value).</p>
+<p><strong>Solution</strong>: New columns that are semantically optional (like <code>created_at</code>) are declared without <code>nullable = false</code>, allowing the migration to add a nullable column. The <code>@CreationTimestamp</code> annotation still populates the column correctly for all new rows.</p>
+<h3 id="173-challenge-atomic-version-snapshotting">17.3 Challenge: Atomic Version Snapshotting</h3>
+<p><strong>Problem</strong>: Version snapshots must be created at exactly the same instant as the submission state change. If snapshots are created in a separate transaction (or a separate service), a crash between the two operations leaves the system in an inconsistent state (submission is SUBMITTED but has no version).</p>
+<p><strong>Solution</strong>: The version snapshot creation is performed within the same <code>@Transactional</code> method as the submission state change. If snapshot creation fails, the entire transaction rolls back and the submission remains in DRAFT state — no partial state is ever committed.</p>
+<h3 id="174-innovation-ensemble-plagiarism-detection">17.4 Innovation: Ensemble Plagiarism Detection</h3>
+<p>Rather than relying on a single similarity algorithm, the system runs four distinct algorithms in parallel and takes the maximum score. This ensemble approach:</p>
+<ul>
+<li>Catches phrase-level plagiarism (N-gram Dice) missed by term-frequency methods</li>
+<li>Catches structural reordering (TF-IDF cosine) missed by exact-match methods</li>
+<li>Reduces false negatives compared to any single algorithm</li>
+<li>Maintains bounded performance by running on a capped peer set (200 answers)</li>
+</ul>
+<h3 id="175-innovation-live-projected-grade-pill">17.5 Innovation: Live Projected Grade Pill</h3>
+<p>As the student types, a "projected grade" pill is displayed in the editor header, computed from the current AI feedback scores using the weighted formula:</p>
+<pre><code class="language-typescript">const projectedGrade = liveFeedback
+    ? Math.round(
+        (liveFeedback.relevanceScore * 0.40 +
+         liveFeedback.completenessScore * 0.30 +
+         liveFeedback.clarityScore * 0.15 +
+         liveFeedback.grammarScore * 0.15) * maxPoints / 10.0
+      )
+    : null;
+</code></pre>
+<p>This gives students a real-time indication of their standing before submission, incentivizing improvement rather than mere completion.</p>
+<hr />
+<h2 id="18-limitations-future-work">18. Limitations &amp; Future Work</h2>
+<h3 id="181-current-limitations">18.1 Current Limitations</h3>
+<table>
+<thead>
+<tr>
+<th>Limitation</th>
+<th>Description</th>
+<th>Impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Single-node deployment</td>
+<td>No horizontal scaling</td>
+<td>Limited concurrent user capacity</td>
+</tr>
+<tr>
+<td>Synchronous inter-service calls</td>
+<td>RestTemplate blocking calls</td>
+<td>Service failures cascade</td>
+</tr>
+<tr>
+<td>LLM dependency</td>
+<td>Requires HuggingFace API availability</td>
+<td>Feedback unavailable during outages</td>
+</tr>
+<tr>
+<td>SerpAPI quota</td>
+<td>Limited Google searches per day</td>
+<td>Internet plagiarism checking may be rate-limited</td>
+</tr>
+<tr>
+<td>No real-time collaboration</td>
+<td>Single-editor model</td>
+<td>Cannot support group submissions natively</td>
+</tr>
+<tr>
+<td>In-memory WebSocket sessions</td>
+<td>Not Redis-backed</td>
+<td>WebSocket state lost on service restart</td>
+</tr>
+<tr>
+<td>File submission not analysed</td>
+<td>Only text answers get AI/plagiarism treatment</td>
+<td>Students can bypass analysis via file upload</td>
+</tr>
+</tbody>
+</table>
+<h3 id="182-planned-improvements">18.2 Planned Improvements</h3>
+<ol>
+<li>
+<p><strong>Event-driven architecture</strong>: Replace synchronous RestTemplate calls with Apache Kafka topics for AI feedback and plagiarism results, improving fault isolation.</p>
+</li>
+<li>
+<p><strong>Horizontal scaling</strong>: Containerise all services for Kubernetes deployment with HPA (Horizontal Pod Autoscaling) based on request queue depth.</p>
+</li>
+<li>
+<p><strong>Feedback personalisation</strong>: Track student's improvement trajectory across submissions and tailor feedback to specifically address recurring weaknesses.</p>
+</li>
+<li>
+<p><strong>Code submission analysis</strong>: Extend the plagiarism engine to support code submissions using Abstract Syntax Tree (AST) comparison via JPlag.</p>
+</li>
+<li>
+<p><strong>Offline draft support</strong>: Implement Service Worker-based local caching so students can write answers without an internet connection, syncing when reconnected.</p>
+</li>
+<li>
+<p><strong>Multi-language support</strong>: Extend AI feedback to support non-English submissions by switching to a multilingual LLM.</p>
+</li>
+<li>
+<p><strong>Redis-backed WebSocket sessions</strong>: Move WebSocket session state to Redis for multi-node WebSocket support.</p>
+</li>
+</ol>
+<hr />
+<h2 id="19-technology-stack">19. Technology Stack</h2>
+<h3 id="191-backend">19.1 Backend</h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Technology</th>
+<th>Version</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Application Framework</td>
+<td>Spring Boot</td>
+<td>3.x</td>
+<td>REST APIs, DI, lifecycle</td>
+</tr>
+<tr>
+<td>ORM</td>
+<td>Spring Data JPA / Hibernate</td>
+<td>6.x</td>
+<td>Database access</td>
+</tr>
+<tr>
+<td>Database Driver</td>
+<td>PostgreSQL JDBC</td>
+<td>42.x</td>
+<td>PostgreSQL connectivity</td>
+</tr>
+<tr>
+<td>Connection Pool</td>
+<td>HikariCP</td>
+<td>5.x</td>
+<td>DB connection management</td>
+</tr>
+<tr>
+<td>Async Processing</td>
+<td>Spring <code>@Async</code></td>
+<td>6.x</td>
+<td>Non-blocking AI calls</td>
+</tr>
+<tr>
+<td>Caching</td>
+<td>Caffeine</td>
+<td>3.x</td>
+<td>In-memory LRU cache</td>
+</tr>
+<tr>
+<td>WebSocket</td>
+<td>Spring WebSocket (STOMP)</td>
+<td>6.x</td>
+<td>Real-time notifications</td>
+</tr>
+<tr>
+<td>Math Library</td>
+<td>Apache Commons Math</td>
+<td>3.x</td>
+<td>TF-IDF vector operations</td>
+</tr>
+<tr>
+<td>HTTP Client</td>
+<td>Spring RestTemplate</td>
+<td>6.x</td>
+<td>Inter-service calls</td>
+</tr>
+<tr>
+<td>PDF Generation</td>
+<td>iText / JasperReports</td>
+<td>7.x</td>
+<td>Report generation</td>
+</tr>
+<tr>
+<td>Code Reduction</td>
+<td>Lombok</td>
+<td>1.18.x</td>
+<td>Boilerplate elimination</td>
+</tr>
+<tr>
+<td>Build Tool</td>
+<td>Maven</td>
+<td>3.9.x</td>
+<td>Dependency management</td>
+</tr>
+<tr>
+<td>Container</td>
+<td>Docker</td>
+<td>25.x</td>
+<td>Deployment</td>
+</tr>
+</tbody>
+</table>
+<h3 id="192-frontend">19.2 Frontend</h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Technology</th>
+<th>Version</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Framework</td>
+<td>Next.js</td>
+<td>16</td>
+<td>SSR + routing</td>
+</tr>
+<tr>
+<td>UI Library</td>
+<td>React</td>
+<td>19</td>
+<td>Component model</td>
+</tr>
+<tr>
+<td>Language</td>
+<td>TypeScript</td>
+<td>5.x</td>
+<td>Type safety</td>
+</tr>
+<tr>
+<td>Styling</td>
+<td>Tailwind CSS</td>
+<td>4</td>
+<td>Utility-first CSS</td>
+</tr>
+<tr>
+<td>Icons</td>
+<td>Lucide React</td>
+<td>Latest</td>
+<td>Consistent icon set</td>
+</tr>
+<tr>
+<td>HTTP</td>
+<td>Browser Fetch API</td>
+<td>—</td>
+<td>API calls</td>
+</tr>
+<tr>
+<td>State</td>
+<td>React Hooks</td>
+<td>—</td>
+<td>Local state management</td>
+</tr>
+<tr>
+<td>Build</td>
+<td>Turbopack (Next.js)</td>
+<td>—</td>
+<td>Fast dev builds</td>
+</tr>
+</tbody>
+</table>
+<h3 id="193-infrastructure">19.3 Infrastructure</h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Technology</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Database</td>
+<td>PostgreSQL 15</td>
+<td>Primary data store</td>
+</tr>
+<tr>
+<td>Cache</td>
+<td>Redis</td>
+<td>Session store, queue (planned)</td>
+</tr>
+<tr>
+<td>Container Orchestration</td>
+<td>Docker Compose</td>
+<td>Local multi-service setup</td>
+</tr>
+<tr>
+<td>Search API</td>
+<td>SerpAPI</td>
+<td>Internet similarity queries</td>
+</tr>
+<tr>
+<td>LLM API</td>
+<td>HuggingFace Inference / Featherless</td>
+<td>AI feedback generation</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="20-api-reference">20. API Reference</h2>
+<h3 id="201-submission-management-service-port-8081">20.1 Submission Management Service (Port 8081)</h3>
+<h4 id="submissions">Submissions</h4>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Request Body</th>
+<th>Response</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/api/submissions</code></td>
+<td><code>{ assignmentId, studentId, submissionType }</code></td>
+<td><code>Submission</code></td>
+<td>Create draft submission</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/submissions/{id}</code></td>
+<td>—</td>
+<td><code>Submission</code></td>
+<td>Get submission by ID</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/submissions/student/{studentId}</code></td>
+<td>—</td>
+<td><code>Submission[]</code></td>
+<td>Get student's submissions</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/submissions/{id}/submit</code></td>
+<td>—</td>
+<td><code>Submission</code></td>
+<td>Formally submit (DRAFT → SUBMITTED)</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/submissions/{id}/grade</code></td>
+<td><code>{ finalGrade, feedback, questionMarksJson }</code></td>
+<td><code>Submission</code></td>
+<td>Set final grade (SUBMITTED → GRADED)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="answers">Answers</h4>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Request Body</th>
+<th>Response</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PUT</td>
+<td><code>/api/submissions/{id}/answers/{questionId}</code></td>
+<td><code>SaveAnswerRequest</code></td>
+<td><code>AnswerResponse</code></td>
+<td>Upsert answer text</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/submissions/{id}/answers</code></td>
+<td>—</td>
+<td><code>AnswerResponse[]</code></td>
+<td>Get all answers for a submission</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/submissions/{id}/answers/{questionId}</code></td>
+<td>—</td>
+<td><code>AnswerResponse</code></td>
+<td>Get single answer</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td><code>/api/submissions/{id}/answers/{questionId}/analysis</code></td>
+<td><code>SaveAnswerAnalysisRequest</code></td>
+<td><code>AnswerResponse</code></td>
+<td>Persist AI scores + plagiarism + lecturer marks</td>
+</tr>
+</tbody>
+</table>
+<h4 id="versions">Versions</h4>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Response</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/submissions/{id}/versions</code></td>
+<td><code>SubmissionVersion[]</code></td>
+<td>Get all versions</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/submissions/{id}/versions/{versionNumber}</code></td>
+<td><code>SubmissionVersion</code></td>
+<td>Get specific version</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/submissions/{id}/versions/compare</code></td>
+<td><code>VersionDiff</code></td>
+<td>Diff two versions</td>
+</tr>
+</tbody>
+</table>
+<h3 id="202-feedback-service-port-8083">20.2 Feedback Service (Port 8083)</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Request Body</th>
+<th>Response</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/api/feedback/live</code></td>
+<td><code>LiveFeedbackRequest</code></td>
+<td><code>LiveFeedbackResponse</code></td>
+<td>Generate real-time AI feedback</td>
+</tr>
+</tbody>
+</table>
+<p><strong>LiveFeedbackRequest:</strong></p>
+<pre><code class="language-json">{
+  &quot;questionText&quot;: &quot;string&quot;,
+  &quot;answerText&quot;: &quot;string&quot;,
+  &quot;studentId&quot;: &quot;string&quot;
+}
+</code></pre>
+<p><strong>LiveFeedbackResponse:</strong></p>
+<pre><code class="language-json">{
+  &quot;grammarScore&quot;: 8.2,
+  &quot;clarityScore&quot;: 7.5,
+  &quot;completenessScore&quot;: 9.0,
+  &quot;relevanceScore&quot;: 8.8,
+  &quot;strengths&quot;: [&quot;string&quot;],
+  &quot;improvements&quot;: [&quot;string&quot;],
+  &quot;suggestions&quot;: [&quot;string&quot;],
+  &quot;processingTimeMs&quot;: 2840
+}
+</code></pre>
+<h3 id="203-integrity-monitoring-service-port-8084">20.3 Integrity Monitoring Service (Port 8084)</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Request Body</th>
+<th>Response</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/api/integrity/checks</code></td>
+<td><code>IntegrityCheckRequest</code></td>
+<td><code>PlagiarismCheck</code></td>
+<td>Run plagiarism check</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/integrity/checks/realtime</code></td>
+<td><code>RealtimeCheckRequest</code></td>
+<td><code>RealtimeCheckResponse</code></td>
+<td>Real-time check (live feedback)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/integrity/checks/{id}</code></td>
+<td>—</td>
+<td><code>PlagiarismCheck</code></td>
+<td>Get check by ID</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/integrity/checks/flagged</code></td>
+<td>—</td>
+<td><code>PlagiarismCheck[]</code></td>
+<td>Get all flagged checks</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/integrity/checks/assignment/{id}</code></td>
+<td>—</td>
+<td><code>PlagiarismCheck[]</code></td>
+<td>Get checks for assignment</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/integrity/checks/submission/{id}</code></td>
+<td>—</td>
+<td><code>PlagiarismCheck</code></td>
+<td>Get check for submission</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/integrity/reports/{submissionId}/plagiarism</code></td>
+<td>—</td>
+<td>PDF (async)</td>
+<td>Download plagiarism report</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/integrity/reports/{submissionId}/feedback</code></td>
+<td>—</td>
+<td>PDF (async)</td>
+<td>Download combined feedback report</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><em>End of Documentation</em></p>
+<hr />
+<p><strong>Document Information:</strong>
+- Total Sections: 20
+- Component: Smart LMS Submission Management (IT22586766)
+- Last Updated: April 2026
+- Classification: Technical Reference / Research Documentation</p>
+</body>
+</html>

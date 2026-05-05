@@ -6,8 +6,10 @@ import com.smartlms.submission_management_service.dto.response.AnswerResponse;
 import com.smartlms.submission_management_service.dto.response.ApiResponse;
 import com.smartlms.submission_management_service.model.Answer;
 import com.smartlms.submission_management_service.repository.AnswerRepository;
+import com.smartlms.submission_management_service.util.AnswerScoreUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,15 +37,16 @@ public class AnswerService {
     /**
      * Save or update a student's typed answer for one question.
      *
-     * @param submissionId  ID of the parent submission (as a string)
-     * @param questionId    ID of the question being answered
-     * @param request       Payload containing the answer text + metadata
+     * @param submissionIdStr  ID of the parent submission (path variable — parsed to Long)
+     * @param questionId       ID of the question being answered
+     * @param request          Payload containing the answer text + metadata
      * @return ApiResponse containing the saved AnswerResponse
      */
     @Transactional
-    public ApiResponse<AnswerResponse> saveAnswer(String submissionId,
+    public ApiResponse<AnswerResponse> saveAnswer(String submissionIdStr,
                                                    String questionId,
                                                    SaveAnswerRequest request) {
+        String submissionId = submissionIdStr;
         int textLen = request.getAnswerText() != null ? request.getAnswerText().length() : 0;
         log.info("[AnswerService] saveAnswer — submissionId={} questionId={} wordCount={} chars={}",
                 submissionId, questionId, request.getWordCount(), textLen);
@@ -66,12 +69,16 @@ public class AnswerService {
             log.debug("[AnswerService] Existing answer found id={} — UPDATE", answer.getId());
         }
 
-        // Update mutable fields regardless of whether this is an INSERT or UPDATE
+        // Update mutable fields regardless of whether this is an INSERT or UPDATE.
+        // Word count is recomputed server-side from answerText so that a client sending
+        // an inflated wordCount cannot bypass minimum-word-count enforcement at submit time.
+        String answerText = request.getAnswerText();
         answer.setQuestionText(request.getQuestionText());
-        answer.setAnswerText(request.getAnswerText());
-        answer.setWordCount(request.getWordCount());
-        answer.setCharacterCount(request.getCharacterCount());
+        answer.setAnswerText(answerText);
+        answer.setWordCount(countWords(answerText));
+        answer.setCharacterCount(answerText != null ? answerText.length() : 0);
         if (request.getStudentId() != null) answer.setStudentId(request.getStudentId());
+        if (request.getMaxPoints() != null) answer.setMaxPoints(request.getMaxPoints());
 
         Answer saved = answerRepository.save(answer);
         log.info("[AnswerService] saveAnswer DONE — answerId={} submissionId={} questionId={} wordCount={}",
@@ -83,11 +90,12 @@ public class AnswerService {
     /**
      * Retrieve all answers for a submission, in question-ID order.
      *
-     * @param submissionId  ID of the submission whose answers to retrieve
+     * @param submissionIdStr  ID of the submission (path variable — parsed to Long)
      * @return ApiResponse containing the list of AnswerResponse DTOs
      */
     @Transactional(readOnly = true)
-    public ApiResponse<List<AnswerResponse>> getAnswers(String submissionId) {
+    public ApiResponse<List<AnswerResponse>> getAnswers(String submissionIdStr) {
+        String submissionId = submissionIdStr;
         log.info("[AnswerService] getAnswers — submissionId={}", submissionId);
 
         List<Answer> answers = answerRepository.findBySubmissionIdOrderByQuestionId(submissionId);
@@ -114,9 +122,10 @@ public class AnswerService {
      * @return ApiResponse containing the updated AnswerResponse
      */
     @Transactional
-    public ApiResponse<AnswerResponse> saveAnalysis(String submissionId,
+    public ApiResponse<AnswerResponse> saveAnalysis(String submissionIdStr,
                                                      String questionId,
                                                      SaveAnswerAnalysisRequest request) {
+        String submissionId = submissionIdStr;
         log.info("[AnswerService] saveAnalysis — submissionId={} questionId={}", submissionId, questionId);
 
         // If the answer row doesn't exist yet (feedback fired before the 5s auto-save),
@@ -164,9 +173,24 @@ public class AnswerService {
             if (request.getSimilarityScore()   != null) answer.setSimilarityScore(request.getSimilarityScore());
             if (request.getPlagiarismSeverity() != null) answer.setPlagiarismSeverity(request.getPlagiarismSeverity());
             if (request.getPlagiarismFlagged()  != null) answer.setPlagiarismFlagged(request.getPlagiarismFlagged());
+            if (request.getPlagiarismSources()  != null) answer.setPlagiarismSources(request.getPlagiarismSources());
             answer.setPlagiarismCheckedAt(LocalDateTime.now());
             log.info("[AnswerService] saveAnalysis — plagiarism saved for questionId={} score={} severity={} flagged={}",
                     questionId, request.getSimilarityScore(), request.getPlagiarismSeverity(), request.getPlagiarismFlagged());
+        }
+
+        // ── AI-generated content detection ───────────────────────────────────
+        if (request.getAiDetectionScore() != null) {
+            answer.setAiDetectionScore(request.getAiDetectionScore());
+            if (request.getAiDetectionLabel() != null) answer.setAiDetectionLabel(request.getAiDetectionLabel());
+            log.info("[AnswerService] saveAnalysis — aiDetectionScore={} label={} for questionId={}",
+                    request.getAiDetectionScore(), request.getAiDetectionLabel(), questionId);
+        }
+
+        // ── AI earned mark ────────────────────────────────────────────────────
+        if (request.getAiGeneratedMark() != null) {
+            answer.setAiGeneratedMark(request.getAiGeneratedMark());
+            log.info("[AnswerService] saveAnalysis — aiGeneratedMark={} saved for questionId={}", request.getAiGeneratedMark(), questionId);
         }
 
         // ── Lecturer per-question marks ───────────────────────────────────────
@@ -206,17 +230,25 @@ public class AnswerService {
         log.info("[AnswerService] getAnswersByQuestion — questionId={} excludeStudentId={} excludeSubmissionId={}",
                 questionId, excludeStudentId, excludeSubmissionId);
 
-        List<Answer> answers = answerRepository.findByQuestionId(questionId);
+        // Cap at 200 most-recent peer answers — enough for meaningful plagiarism
+        // comparison without loading the full table as student count grows.
+        final int PEER_COMPARISON_LIMIT = 200;
+        List<Answer> answers = answerRepository.findByQuestionId(
+                questionId, PageRequest.of(0, PEER_COMPARISON_LIMIT));
 
         List<AnswerResponse> responses = answers.stream()
-                // Exclude by studentId (covers all submission versions)
-                .filter(a -> excludeStudentId == null
-                        || a.getStudentId() == null  // old rows without studentId → fall through to submissionId check
-                        || !excludeStudentId.equals(a.getStudentId()))
-                // Exclude by submissionId (fallback for rows where studentId is not yet stored)
-                .filter(a -> excludeSubmissionId == null
-                        || a.getStudentId() != null  // already handled by studentId filter above
-                        || !excludeSubmissionId.equals(a.getSubmissionId()))
+                .filter(a -> {
+                    // Exclude answers that definitely belong to the same student.
+                    if (excludeStudentId != null && excludeStudentId.equals(a.getStudentId())) return false;
+                    // Exclude answers from the same submission (catches the exact submission being checked).
+                    if (excludeSubmissionId != null && excludeSubmissionId.equals(a.getSubmissionId())) return false;
+                    // Exclude old rows where studentId was never stored when a student context is
+                    // available: we cannot confirm these rows belong to a different student, so
+                    // including them risks false plagiarism positives against the same student's
+                    // earlier drafts that happened to have a different submissionId.
+                    if (a.getStudentId() == null && excludeStudentId != null) return false;
+                    return true;
+                })
                 .map(this::toResponse)
                 .collect(Collectors.toList());
 
@@ -252,7 +284,12 @@ public class AnswerService {
                 .plagiarismSeverity(a.getPlagiarismSeverity())
                 .plagiarismFlagged(a.getPlagiarismFlagged())
                 .plagiarismCheckedAt(a.getPlagiarismCheckedAt() != null ? a.getPlagiarismCheckedAt().toString() : null)
+                .plagiarismSources(a.getPlagiarismSources())
+                // AI-generated content detection
+                .aiDetectionScore(a.getAiDetectionScore())
+                .aiDetectionLabel(a.getAiDetectionLabel())
                 // Lecturer per-question grading (post-deadline overrides)
+                .maxPoints(a.getMaxPoints())
                 .aiGeneratedMark(a.getAiGeneratedMark())
                 .lecturerMark(a.getLecturerMark())
                 .lecturerFeedbackText(a.getLecturerFeedbackText())
@@ -261,9 +298,16 @@ public class AnswerService {
                 .build();
     }
 
-    /** Splits a "||"-delimited string back into a List, or returns null if blank. */
     private List<String> splitPipe(String value) {
-        if (value == null || value.isBlank()) return null;
-        return List.of(value.split("\\|\\|"));
+        return AnswerScoreUtils.splitPipe(value);
+    }
+
+    /**
+     * Count words in a plain-text string by splitting on whitespace.
+     * Returns 0 for null or blank input.
+     */
+    static int countWords(String text) {
+        if (text == null || text.isBlank()) return 0;
+        return text.trim().split("\\s+").length;
     }
 }

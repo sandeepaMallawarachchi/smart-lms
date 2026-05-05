@@ -1,8 +1,8 @@
 package com.smartlms.feedback_service.service;
 
 import com.smartlms.feedback_service.dto.response.FeedbackResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -13,11 +13,12 @@ import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.TimeUnit;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class FeedbackCacheService {
 
-    private final RedisTemplate<String, Object> redisTemplate;
+    /** Null when Redis is unavailable or ai.feedback.cache-enabled=false. */
+    @Autowired(required = false)
+    private RedisTemplate<String, Object> redisTemplate;
 
     @Value("${ai.feedback.cache-enabled:true}")
     private boolean cacheEnabled;
@@ -54,7 +55,7 @@ public class FeedbackCacheService {
      * Get cached feedback
      */
     public FeedbackResponse getCachedFeedback(String cacheKey) {
-        if (!cacheEnabled) {
+        if (!cacheEnabled || redisTemplate == null) {
             return null;
         }
 
@@ -75,7 +76,7 @@ public class FeedbackCacheService {
      * Cache feedback response
      */
     public void cacheFeedback(String cacheKey, FeedbackResponse feedback) {
-        if (!cacheEnabled) {
+        if (!cacheEnabled || redisTemplate == null) {
             return;
         }
 
@@ -96,6 +97,7 @@ public class FeedbackCacheService {
      * Clear cache for specific key
      */
     public void clearCache(String cacheKey) {
+        if (redisTemplate == null) return;
         try {
             redisTemplate.delete(cacheKey);
             log.debug("Cleared cache for key: {}", cacheKey);
@@ -108,6 +110,7 @@ public class FeedbackCacheService {
      * Clear all feedback cache
      */
     public void clearAllCache() {
+        if (redisTemplate == null) return;
         try {
             var keys = redisTemplate.keys(CACHE_PREFIX + "*");
             if (keys != null && !keys.isEmpty()) {

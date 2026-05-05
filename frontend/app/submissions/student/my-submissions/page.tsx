@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Calendar, FileText, GitBranch, Shield, AlertCircle,
-    RefreshCw, Clock, ChevronRight, X, Download,
+    RefreshCw, Clock, ChevronRight, ChevronLeft, X, Download,
 } from 'lucide-react';
 import { useAssignments, useSubmissions } from '@/hooks/useSubmissions';
-import { useVersions } from '@/hooks/useVersions';
+import { useVersions, useLatestVersion } from '@/hooks/useVersions';
 import { useSelectedCourse } from '@/hooks/useSelectedCourse';
 import { versionService } from '@/lib/api/submission-services';
 import { downloadSubmissionPdf } from '@/lib/generate-submission-pdf';
@@ -123,20 +123,20 @@ function formatDue(iso: string): { label: string; color: string } {
 
 function CardSkeleton() {
     return (
-        <div className="bg-white rounded-xl border border-gray-200 p-5 animate-pulse">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse">
             <div className="flex gap-4">
-                <div className="h-11 w-11 bg-gray-200 rounded-lg shrink-0" />
-                <div className="flex-1 space-y-2.5 min-w-0">
+                <div className="h-13 w-13 bg-gray-200 rounded-xl shrink-0" />
+                <div className="flex-1 space-y-3 min-w-0">
                     <div className="flex gap-2 flex-wrap">
-                        <div className="h-5 bg-gray-200 rounded w-52" />
-                        <div className="h-5 bg-gray-100 rounded w-16" />
-                        <div className="h-5 bg-gray-100 rounded w-20" />
+                        <div className="h-6 bg-gray-200 rounded w-52" />
+                        <div className="h-6 bg-gray-100 rounded w-16" />
+                        <div className="h-6 bg-gray-100 rounded w-20" />
                     </div>
-                    <div className="h-3.5 bg-gray-100 rounded w-40" />
-                    <div className="h-3.5 bg-gray-100 rounded w-28" />
+                    <div className="h-4 bg-gray-100 rounded w-40" />
+                    <div className="h-4 bg-gray-100 rounded w-28" />
                 </div>
                 <div className="shrink-0 flex flex-col gap-2 items-end">
-                    <div className="h-8 w-32 bg-gray-200 rounded-lg" />
+                    <div className="h-9 w-36 bg-gray-200 rounded-lg" />
                     <div className="h-6 w-40 bg-gray-100 rounded" />
                 </div>
             </div>
@@ -172,6 +172,10 @@ function AssignmentCard({
     const sub  = item.submission;
     const due  = item.dueDate ? formatDue(item.dueDate) : null;
 
+    // Fetch latest version to get the authoritative AI score (backend sub.aiScore is stale)
+    const { data: latestVersion } = useLatestVersion(sub?.id ?? null);
+    const displayAiScore = latestVersion?.aiScore ?? sub?.aiScore;
+
     async function handleDownloadPdf() {
         if (!sub?.id || downloading) return;
         setDownloading(true);
@@ -194,7 +198,7 @@ function AssignmentCard({
     // Score chips — shown when there is a submitted/graded submission
     const hasScores = sub && (
         sub.grade != null || sub.plagiarismScore != null ||
-        sub.aiScore != null || (sub.wordCount != null && sub.wordCount > 0)
+        displayAiScore != null || (sub.wordCount != null && sub.wordCount > 0)
     );
 
     // Card border colour depends on status
@@ -206,54 +210,54 @@ function AssignmentCard({
                                      'border-gray-200  bg-white';
 
     return (
-        <div className={`rounded-xl border p-5 transition-shadow hover:shadow-md ${cardBorder}`}>
+        <div className={`rounded-xl border p-6 transition-shadow hover:shadow-md ${cardBorder}`}>
             <div className="flex flex-wrap gap-4">
 
                 {/* ── Icon ─────────────────────────────────────── */}
-                <div className={`h-11 w-11 shrink-0 rounded-lg flex items-center justify-center ${cfg.bgColor}`}>
-                    <Calendar size={20} className={cfg.textColor} />
+                <div className={`h-13 w-13 shrink-0 rounded-xl flex items-center justify-center ${cfg.bgColor}`}>
+                    <Calendar size={24} className={cfg.textColor} />
                 </div>
 
                 {/* ── Info ─────────────────────────────────────── */}
                 <div className="flex-1 min-w-0">
 
                     {/* Title + type + status badges */}
-                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                        <h3 className="text-sm font-bold text-gray-900 leading-tight">
+                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                        <h3 className="text-base font-bold text-gray-900 leading-tight">
                             {item.title}
                         </h3>
                         {item.assignmentType === 'project' && (
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">
                                 Project
                             </span>
                         )}
                         {item.assignmentType === 'task' && (
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">
+                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-teal-100 text-teal-700">
                                 Task
                             </span>
                         )}
                         {/* Status badge */}
-                        <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.bgColor} ${cfg.textColor}`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${cfg.dotColor}`} />
+                        <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.bgColor} ${cfg.textColor}`}>
+                            <span className={`h-2 w-2 rounded-full ${cfg.dotColor}`} />
                             {cfg.label}
                         </span>
                         {/* Extra "editing" indicator when student opened a draft on top of a submitted one */}
                         {item.hasDraft && item.status === 'submitted' && (
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
                                 Edit draft open
                             </span>
                         )}
                     </div>
 
                     {/* Module */}
-                    <p className="text-xs text-gray-500 mb-1">
+                    <p className="text-sm text-gray-500 mb-1.5">
                         {item.moduleName ?? item.moduleCode}
                     </p>
 
                     {/* Due date */}
                     {due && item.dueDate && (
-                        <div className="flex items-center gap-1.5 text-xs mb-2">
-                            <Clock size={11} className={due.color} />
+                        <div className="flex items-center gap-1.5 text-sm mb-2">
+                            <Clock size={14} className={due.color} />
                             <span className="text-gray-400">
                                 {new Date(item.dueDate).toLocaleDateString('en-US', {
                                     day: 'numeric', month: 'short', year: 'numeric',
@@ -281,9 +285,9 @@ function AssignmentCard({
                                     Plagiarism {sub!.plagiarismScore}%
                                 </span>
                             )}
-                            {sub!.aiScore != null && (
+                            {displayAiScore != null && (
                                 <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">
-                                    AI Score {sub!.aiScore}
+                                    AI Score {displayAiScore.toFixed(1)}%
                                 </span>
                             )}
                             {sub!.wordCount != null && sub!.wordCount > 0 && (
@@ -300,8 +304,9 @@ function AssignmentCard({
                 <div className="flex flex-col items-end gap-2 shrink-0 justify-center">
 
                     {/* Primary action button */}
-                    {item.status === 'overdue' && !sub && !item.hasDraft ? (
-                        <span className="text-xs text-red-500 font-medium px-3 py-1.5 rounded-lg bg-red-100">
+                    {item.isOverdue && !sub ? (
+                        /* Deadline passed — no terminal submission (draft or nothing) */
+                        <span className="text-sm text-red-500 font-medium px-4 py-2 rounded-lg bg-red-100">
                             Deadline passed
                         </span>
                     ) : item.status === 'not_started' ? (
@@ -326,7 +331,7 @@ function AssignmentCard({
                             Edit / Resubmit <ChevronRight size={14} />
                         </button>
                     ) : (
-                        /* Graded, overdue-submitted, or late — read-only view */
+                        /* Graded, overdue-submitted, or late — read-only */
                         <button
                             onClick={() => sub && router.push(`/submissions/student/feedback/${sub.id}`)}
                             disabled={!sub}
@@ -365,11 +370,84 @@ function AssignmentCard({
     );
 }
 
+// ─── Pagination ───────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 10;
+
+function PaginationBar({
+    page,
+    totalPages,
+    totalItems,
+    onPage,
+}: {
+    page: number;
+    totalPages: number;
+    totalItems: number;
+    onPage: (p: number) => void;
+}) {
+    if (totalPages <= 1) return null;
+    const from = page * PAGE_SIZE + 1;
+    const to   = Math.min((page + 1) * PAGE_SIZE, totalItems);
+
+    const pages: (number | '…')[] = [];
+    if (totalPages <= 7) {
+        for (let i = 0; i < totalPages; i++) pages.push(i);
+    } else {
+        pages.push(0);
+        if (page > 2)              pages.push('…');
+        for (let i = Math.max(1, page - 1); i <= Math.min(totalPages - 2, page + 1); i++) pages.push(i);
+        if (page < totalPages - 3) pages.push('…');
+        pages.push(totalPages - 1);
+    }
+
+    return (
+        <div className="flex items-center justify-between mt-5 px-1">
+            <span className="text-xs text-gray-500">
+                {from}–{to} of {totalItems} assignments
+            </span>
+            <div className="flex items-center gap-1">
+                <button
+                    onClick={() => onPage(page - 1)}
+                    disabled={page === 0}
+                    className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                >
+                    <ChevronLeft size={14} />
+                </button>
+                {pages.map((p, i) =>
+                    p === '…' ? (
+                        <span key={`el-${i}`} className="px-1 text-gray-400 text-xs select-none">…</span>
+                    ) : (
+                        <button
+                            key={p}
+                            onClick={() => onPage(p as number)}
+                            className={`min-w-[28px] h-7 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                                p === page
+                                    ? 'bg-purple-600 border-purple-600 text-white'
+                                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                            }`}
+                        >
+                            {(p as number) + 1}
+                        </button>
+                    )
+                )}
+                <button
+                    onClick={() => onPage(page + 1)}
+                    disabled={page >= totalPages - 1}
+                    className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                >
+                    <ChevronRight size={14} />
+                </button>
+            </div>
+        </div>
+    );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function MySubmissionsPage() {
     const router = useRouter();
     const [filter, setFilter] = useState<FilterKey>('all');
+    const [page, setPage] = useState(0);
 
     const [studentId] = useState<string | null>(getStudentId);
 
@@ -503,6 +581,12 @@ export default function MySubmissionsPage() {
         overdue:     courseFiltered.filter(i => i.status === 'overdue').length,
     }), [courseFiltered]);
 
+    // Reset to page 0 whenever the visible list changes
+    useEffect(() => { setPage(0); }, [filter, selectedCourse]);
+
+    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+    const paginated  = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
     // ─────────────────────────────────────────────────────────
     return (
         <div>
@@ -535,9 +619,9 @@ export default function MySubmissionsPage() {
                         { label: 'Not Started', value: counts.not_started, cls: 'text-gray-600   bg-gray-50     border-gray-200'   },
                         { label: 'Overdue',     value: counts.overdue,     cls: 'text-red-700    bg-red-50      border-red-200'    },
                     ].filter(s => s.value > 0).map(s => (
-                        <div key={s.label} className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm ${s.cls}`}>
-                            <span className="font-bold text-base">{s.value}</span>
-                            <span className="text-xs opacity-70">{s.label}</span>
+                        <div key={s.label} className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm ${s.cls}`}>
+                            <span className="font-bold text-lg">{s.value}</span>
+                            <span className="text-sm opacity-80">{s.label}</span>
                         </div>
                     ))}
                 </div>
@@ -553,7 +637,7 @@ export default function MySubmissionsPage() {
                         <button
                             key={f.key}
                             onClick={() => setFilter(f.key)}
-                            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer border ${
+                            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer border ${
                                 filter === f.key
                                     ? 'bg-purple-600 text-white border-transparent shadow-sm'
                                     : 'bg-white text-gray-600 border-gray-300 hover:border-purple-300 hover:text-purple-700'
@@ -616,11 +700,19 @@ export default function MySubmissionsPage() {
                     {[1, 2, 3, 4].map(i => <CardSkeleton key={i} />)}
                 </div>
             ) : filtered.length > 0 ? (
-                <div className="space-y-3">
-                    {filtered.map(item => (
-                        <AssignmentCard key={item.assignmentId} item={item} router={router} />
-                    ))}
-                </div>
+                <>
+                    <div className="space-y-3">
+                        {paginated.map(item => (
+                            <AssignmentCard key={item.assignmentId} item={item} router={router} />
+                        ))}
+                    </div>
+                    <PaginationBar
+                        page={page}
+                        totalPages={totalPages}
+                        totalItems={filtered.length}
+                        onPage={(p) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    />
+                </>
             ) : (
                 <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
                     <FileText size={48} className="mx-auto text-gray-300 mb-4" />

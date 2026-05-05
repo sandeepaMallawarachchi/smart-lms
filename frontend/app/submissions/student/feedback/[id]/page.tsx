@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useSubmission } from '@/hooks/useSubmissions';
 import { useLatestVersion, useVersion, useVersions } from '@/hooks/useVersions';
-import { plagiarismService } from '@/lib/api/submission-services';
+import { plagiarismService, scoreToLetterGrade } from '@/lib/api/submission-services';
 import type { SubmissionVersion, VersionAnswer, VersionPlagiarismSource } from '@/types/submission.types';
 import LecturerAnnotatedText from '@/components/submissions/LecturerAnnotatedText';
 
@@ -57,7 +57,11 @@ function ScoreBar({ label, value }: { label: string; value?: number | null }) {
 
 // ─── QuestionAnswerBlock ──────────────────────────────────────
 
-function QuestionAnswerBlock({ answer, index, submissionId, versionId }: { answer: VersionAnswer; index: number; submissionId: string; versionId: string }) {
+function QuestionAnswerBlock({ answer, index, submissionId, versionId }: { answer: VersionAnswer; index: number; submissionId: string; versionId: string; }) {
+    // aiGeneratedMark is the actual earned mark in the question's own scale (e.g. 15.5 out of 20)
+    const aiEarnedMark = answer.aiGeneratedMark != null
+        ? Math.round(answer.aiGeneratedMark * 10) / 10
+        : null;
     const [showAnswer, setShowAnswer] = useState(false);
     const [showSources, setShowSources] = useState(false);
 
@@ -113,8 +117,8 @@ function QuestionAnswerBlock({ answer, index, submissionId, versionId }: { answe
                 <div>
                     <p className="text-xs text-gray-500">AI Mark</p>
                     <p className="text-xl font-bold text-purple-600">
-                        {answer.aiGeneratedMark != null ? (
-                            <>{answer.aiGeneratedMark.toFixed(1)}<span className="text-sm font-normal text-gray-400"> / 10</span></>
+                        {aiEarnedMark != null ? (
+                            <>{aiEarnedMark.toFixed(1)}{answer.maxPoints != null && <span className="text-sm font-normal text-gray-400"> / {answer.maxPoints}</span>}</>
                         ) : '—'}
                     </p>
                 </div>
@@ -122,7 +126,7 @@ function QuestionAnswerBlock({ answer, index, submissionId, versionId }: { answe
                     <div>
                         <p className="text-xs text-blue-600 font-semibold">Lecturer Mark</p>
                         <p className="text-xl font-bold text-blue-600">
-                            {answer.lecturerMark.toFixed(1)}<span className="text-sm font-normal text-blue-300"> / 10</span>
+                            {answer.lecturerMark.toFixed(1)}{answer.maxPoints != null && <span className="text-sm font-normal text-blue-300"> / {answer.maxPoints}</span>}
                         </p>
                     </div>
                 )}
@@ -353,48 +357,72 @@ export default function FeedbackPage({ params }: { params: Promise<{ id: string 
     const loading = versionIdParam ? specificLoading : latestLoading;
     const error   = versionIdParam ? specificError   : latestError;
 
-    // ── Enrich answers with plagiarism sources from integrity service ─────
-    // When version answers have plagiarism scores but no saved sources,
-    // try to fetch them from the integrity monitoring service.
+    // ── Enrich answers with plagiarism sources ────────────────────────────────
+    // The realtime plagiarism check (checkLiveSimilarity) returns internetMatches
+    // but they are never persisted — only the score is saved.  When the feedback
+    // page loads and finds answers with a score but no saved sources, re-run the
+    // check on each answer's stored text so sources can be displayed.
     const [enrichedSources, setEnrichedSources] = useState<Record<string, VersionPlagiarismSource[]>>({});
 
     useEffect(() => {
         if (!version?.answers || !id) return;
         const needsEnrichment = version.answers.filter(
-            a => (a.similarityScore ?? 0) > 0 && (!a.plagiarismSources || a.plagiarismSources.length === 0)
+            a => (a.similarityScore ?? 0) > 0 &&
+                 a.answerText &&
+                 a.answerText.length >= 10 &&
+                 (!a.plagiarismSources || a.plagiarismSources.length === 0)
         );
         if (needsEnrichment.length === 0) return;
 
         let cancelled = false;
         (async () => {
-            try {
-                const report = await plagiarismService.getReport(id);
-                if (cancelled || !report?.topMatches?.length) return;
-                // Map top-level plagiarism matches to VersionPlagiarismSource format
-                const mapped: VersionPlagiarismSource[] = report.topMatches.map((m, i) => ({
-                    id: `enriched-${i}`,
-                    sourceUrl: m.url ?? '',
-                    sourceTitle: m.source ?? m.description ?? 'Unknown source',
-                    sourceSnippet: m.description ?? undefined,
-                    matchedText: undefined,
-                    similarityPercentage: m.percentage ?? 0,
-                }));
-                if (mapped.length > 0) {
-                    // Apply to all answers that need enrichment
-                    const result: Record<string, VersionPlagiarismSource[]> = {};
-                    for (const a of needsEnrichment) {
-                        result[a.questionId] = mapped;
+            const result: Record<string, VersionPlagiarismSource[]> = {};
+            for (const a of needsEnrichment) {
+                if (cancelled) break;
+                try {
+                    const plagResult = await plagiarismService.checkLiveSimilarity({
+                        sessionId:    `fb-${id}-${a.questionId}`,
+                        studentId:    version.studentId ?? '',
+                        questionId:   a.questionId,
+                        textContent:  a.answerText!,
+                        questionText: a.questionText ?? undefined,
+                        submissionId: id,
+                    });
+                    const matches = plagResult.internetMatches ?? [];
+                    if (matches.length > 0) {
+                        result[a.questionId] = matches.map((m, i) => {
+                            const raw = m as unknown as Record<string, unknown>;
+                            const rawScore = raw.similarityScore as number | undefined;
+                            return {
+                                id:                   `live-${i}`,
+                                sourceUrl:            (raw.url as string)  ?? '',
+                                sourceTitle:          (raw.title as string) ?? (raw.sourceDomain as string) ?? 'Internet source',
+                                sourceSnippet:        (raw.snippet as string) ?? undefined,
+                                matchedText:          (raw.matchedStudentText as string) ?? undefined,
+                                similarityPercentage: rawScore != null
+                                    ? Math.round((rawScore <= 1 ? rawScore * 100 : rawScore) * 10) / 10
+                                    : 0,
+                            };
+                        });
                     }
-                    if (!cancelled) setEnrichedSources(result);
+                } catch {
+                    // Silent — keep going for other answers
                 }
-            } catch {
-                // No report available — that's OK
+            }
+            if (!cancelled && Object.keys(result).length > 0) {
+                setEnrichedSources(result);
             }
         })();
         return () => { cancelled = true; };
     }, [version, id]);
 
     // Merge enriched sources into answers
+    console.log('[feedback] maxPoints debug — raw answers from API:', (version?.answers ?? []).map(a => ({
+        questionId: a.questionId,
+        questionText: a.questionText?.slice(0, 60),
+        maxPoints: a.maxPoints,
+        maxPointsType: typeof a.maxPoints,
+    })));
     const answers: VersionAnswer[] = (version?.answers ?? []).map(a => {
         if (a.plagiarismSources && a.plagiarismSources.length > 0) return a;
         const extra = enrichedSources[a.questionId];
@@ -499,12 +527,16 @@ export default function FeedbackPage({ params }: { params: Promise<{ id: string 
                                     {version.hasLecturerOverride ? 'Final Grade' : 'AI Grade'}
                                 </span>
                             </div>
-                            <p className="text-2xl font-bold text-green-600">
-                                {version.finalGrade != null ? version.finalGrade : version.aiGrade != null ? version.aiGrade : '—'}
-                                {version.maxGrade != null && (
-                                    <span className="text-base font-normal text-gray-400"> / {version.maxGrade}</span>
-                                )}
+                            <p className="text-3xl font-bold text-green-600">
+                                {(() => {
+                                    const score = version.aiScore;
+                                    if (score == null) return '—';
+                                    return scoreToLetterGrade(score);
+                                })()}
                             </p>
+                            {version.aiScore != null && (
+                                <p className="text-xs text-gray-400 mt-0.5">{version.aiScore.toFixed(1)}%</p>
+                            )}
                         </div>
 
                         <div className="bg-red-50 border border-red-200 rounded-lg p-5">

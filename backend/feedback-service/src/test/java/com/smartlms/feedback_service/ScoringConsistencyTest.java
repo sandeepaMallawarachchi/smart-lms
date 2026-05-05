@@ -3,8 +3,12 @@ package com.smartlms.feedback_service;
 import com.smartlms.feedback_service.dto.request.LiveFeedbackRequest;
 import com.smartlms.feedback_service.dto.response.ApiResponse;
 import com.smartlms.feedback_service.dto.response.LiveFeedbackResponse;
+import com.smartlms.feedback_service.model.AnswerType;
+import com.smartlms.feedback_service.model.TypeDetectionResult;
+import com.smartlms.feedback_service.service.AnswerTypeDetector;
 import com.smartlms.feedback_service.service.HuggingFaceService;
 import com.smartlms.feedback_service.service.LiveFeedbackService;
+import com.smartlms.feedback_service.service.TypeSpecificPromptBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -15,7 +19,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -29,6 +34,8 @@ import static org.mockito.Mockito.when;
  *  - Malformed / zero-filled LLM output is corrected where strengths say otherwise.
  *
  * HuggingFaceService is mocked so tests run without a real API key or network.
+ * AnswerTypeDetector and TypeSpecificPromptBuilder are mocked so the generic
+ * prompt path is used throughout — keeping these tests focused on consistency rules.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Scoring Consistency — LiveFeedbackService")
@@ -37,8 +44,29 @@ class ScoringConsistencyTest {
     @Mock
     private HuggingFaceService huggingFaceService;
 
+    @Mock
+    private AnswerTypeDetector answerTypeDetector;
+
+    @Mock
+    private TypeSpecificPromptBuilder typeSpecificPromptBuilder;
+
     @InjectMocks
     private LiveFeedbackService service;
+
+    /**
+     * Default stub: low-confidence UNKNOWN so the service always uses the generic
+     * prompt path.  Declared lenient so tests whose answer is gibberish (and thus
+     * never reach the detector) do not fail with UnnecessaryStubbingException.
+     */
+    @BeforeEach
+    void setUp() {
+        lenient().when(answerTypeDetector.detect(anyString(), anyString(), any(), anyInt()))
+                .thenReturn(TypeDetectionResult.builder()
+                        .type(AnswerType.UNKNOWN)
+                        .confidence(0.30)
+                        .reasoning("test stub — low confidence, uses generic prompt")
+                        .build());
+    }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -120,7 +148,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    shortRequest(question, answer));
+                    shortRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getRelevanceScore())
@@ -158,7 +186,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    shortRequest(question, answer));
+                    shortRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getRelevanceScore())
@@ -169,7 +197,7 @@ class ScoringConsistencyTest {
         /**
          * Scenario:
          *   Question: "Name a type of SQL attack"
-         *   Answer:   "SQL injection"
+         *   Answer:   "SQL injection attack"
          *
          * Answer shares keyword "SQL" with question — keyword floor should trigger.
          * LLM returns all zeros with no positive strength.
@@ -194,7 +222,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    shortRequest(question, answer));
+                    shortRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getRelevanceScore())
@@ -235,7 +263,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer));
+                    longRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getRelevanceScore())
@@ -270,7 +298,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer));
+                    longRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getRelevanceScore())
@@ -279,17 +307,21 @@ class ScoringConsistencyTest {
         }
 
         /**
-         * LLM gives RELEVANCE: 8 and STRENGTH: "None detected". Scores should not be
-         * inflated by the consistency rule when strengths are negative.
-         * Expected: scores remain as parsed (no upward correction when "None detected").
+         * LLM writes "None detected" in both strengths and scores relevance 1.
+         * The answer is deliberate but off-topic — scores should NOT be boosted.
+         *
+         * The answer avoids question keywords ("network", "segmentation") so the
+         * short-answer keyword floor does not apply.
+         *
+         * Expected: relevance stays < 5.0 because no positive signal was found.
          */
         @Test
-        @DisplayName("'None detected' strength with high relevance: scores unchanged")
+        @DisplayName("'None detected' strength with low relevance: scores not boosted upward")
         void noneDetectedStrength_scoresUnchanged() {
             String question = "What is network segmentation?";
-            String answer   = "asdf lkjh qwer zxcv";  // gibberish-like but passes filter
+            // Deliberate but off-topic answer — no mention of "network" or "segmentation"
+            String answer   = "The process relies on hardware components that transform the input";
 
-            // Simulate a case where LLM somehow gave high scores for a poor answer
             when(huggingFaceService.generateCompletion(anyString())).thenReturn(
                 llmResponse(
                     2, 2, 1, 1,
@@ -303,10 +335,9 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer));
+                    longRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
-            // No positive language → no upward correction should occur
             assertThat(fb.getRelevanceScore())
                     .as("'None detected' strength should not trigger upward correction")
                     .isLessThan(5.0);
@@ -324,7 +355,7 @@ class ScoringConsistencyTest {
         /**
          * Scenario:
          *   Question: "What is SQL injection?"
-         *   Answer:   "SQL injection is a SQL injection attack"
+         *   Answer:   "SQL injection is SQL injection"
          *
          * The answer adds no new information — it just repeats "SQL injection" twice.
          * Expected: completeness capped at ≤ 3 regardless of LLM score.
@@ -348,7 +379,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    shortRequest(question, answer));
+                    shortRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getCompletenessScore())
@@ -359,7 +390,7 @@ class ScoringConsistencyTest {
         /**
          * Scenario:
          *   Question: "What is a denial-of-service attack?"
-         *   Answer:   "A denial-of-service attack is a denial of service"
+         *   Answer:   "A denial-of-service attack is a denial of service attack that denies service"
          *
          * Similar repetition, LLM gives completeness 9.
          * Expected: capped at ≤ 3.
@@ -383,7 +414,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    shortRequest(question, answer));
+                    shortRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getCompletenessScore())
@@ -394,7 +425,7 @@ class ScoringConsistencyTest {
         /**
          * A genuine answer that uses different words from the question must NOT be penalised.
          * Question: "What is SQL injection?"
-         * Answer:   "It is a technique where malicious code is inserted into a database query"
+         * Answer:   "It is a technique where attackers insert malicious code into database queries..."
          *
          * Expected: completeness NOT capped (answer adds genuine information).
          */
@@ -418,10 +449,9 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    shortRequest(question, answer));
+                    shortRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
-            // A genuine 7/10 completeness from the LLM should NOT be penalised
             assertThat(fb.getCompletenessScore())
                     .as("Genuine answer that adds information should not be penalised for repetition")
                     .isGreaterThan(3.0);
@@ -463,7 +493,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer));
+                    longRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getRelevanceScore())
@@ -472,7 +502,6 @@ class ScoringConsistencyTest {
             assertThat(fb.getCompletenessScore())
                     .as("Completeness must be corrected upward from zero")
                     .isGreaterThanOrEqualTo(4.0);
-            // Verify at least one score is non-zero overall
             double scoreSum = fb.getGrammarScore() + fb.getClarityScore()
                     + fb.getCompletenessScore() + fb.getRelevanceScore();
             assertThat(scoreSum)
@@ -481,7 +510,7 @@ class ScoringConsistencyTest {
         }
 
         /**
-         * LLM format is almost correct but one field is missing (RELEVANCE not output).
+         * LLM format is almost correct but RELEVANCE is omitted.
          * The parser returns 0.0 for the missing field.
          * But the strengths say "correct and accurate" — consistency rule must still apply.
          *
@@ -494,7 +523,6 @@ class ScoringConsistencyTest {
             String answer   = "Two-factor authentication requires users to verify identity "
                     + "using two different methods such as a password and a one-time code";
 
-            // LLM forgets to output the RELEVANCE line
             String malformedResponse =
                     "GRAMMAR: 8\n"
                     + "CLARITY: 7\n"
@@ -510,7 +538,7 @@ class ScoringConsistencyTest {
             when(huggingFaceService.generateCompletion(anyString())).thenReturn(malformedResponse);
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer));
+                    longRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getRelevanceScore())
@@ -548,7 +576,7 @@ class ScoringConsistencyTest {
             when(huggingFaceService.generateCompletion(anyString())).thenReturn(responseWithInstWrapper);
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer));
+                    longRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getGrammarScore()).as("Grammar parsed correctly despite [INST] wrapper").isEqualTo(8.0);
@@ -574,7 +602,7 @@ class ScoringConsistencyTest {
 
             // HuggingFaceService should NOT be called for gibberish
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    shortRequest(question, answer));
+                    shortRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getGrammarScore()).isEqualTo(0.0);
@@ -600,10 +628,9 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    shortRequest(question, answer));
+                    shortRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
-            // Must reach the AI (not rejected as gibberish), so some scores > 0
             double scoreSum = fb.getGrammarScore() + fb.getClarityScore()
                     + fb.getCompletenessScore() + fb.getRelevanceScore();
             assertThat(scoreSum).isGreaterThan(0.0);
@@ -640,7 +667,7 @@ class ScoringConsistencyTest {
             when(huggingFaceService.generateCompletion(anyString())).thenReturn(overshotResponse);
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer));
+                    longRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getGrammarScore()).isLessThanOrEqualTo(10.0);
@@ -667,7 +694,7 @@ class ScoringConsistencyTest {
             );
 
             ApiResponse<LiveFeedbackResponse> result = service.generateLiveFeedback(
-                    longRequest(question, answer));
+                    longRequest(question, answer)).join();
 
             LiveFeedbackResponse fb = result.getData();
             assertThat(fb.getGrammarScore()).isGreaterThanOrEqualTo(0.0);

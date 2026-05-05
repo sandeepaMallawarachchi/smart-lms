@@ -5,15 +5,21 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartlms.submission_management_service.dto.request.GradeRequest;
 import com.smartlms.submission_management_service.dto.request.SubmissionRequest;
 import com.smartlms.submission_management_service.dto.response.SubmissionResponse;
+import com.smartlms.submission_management_service.exception.AccessDeniedException;
 import com.smartlms.submission_management_service.exception.DeadlineNotPassedException;
 import com.smartlms.submission_management_service.exception.ResourceNotFoundException;
 import com.smartlms.submission_management_service.model.Answer;
 import com.smartlms.submission_management_service.model.Submission;
 import com.smartlms.submission_management_service.model.SubmissionStatus;
+import com.smartlms.submission_management_service.model.SubmissionType;
 import com.smartlms.submission_management_service.repository.AnswerRepository;
 import com.smartlms.submission_management_service.repository.SubmissionRepository;
+import com.smartlms.submission_management_service.util.AnswerScoreUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,7 +48,11 @@ public class SubmissionService {
     private final SubmissionRepository submissionRepository;
     private final AnswerRepository answerRepository;
     private final VersionService versionService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final VersionSyncService versionSyncService;
+
+    @Value("${submission.min-words-per-answer:10}")
+    private int minWordsPerAnswer;
+    private final ObjectMapper objectMapper;
 
     // ─────────────────────────────────────────────────────────────────────────
     // CRUD
@@ -51,6 +61,17 @@ public class SubmissionService {
     @Transactional
     public SubmissionResponse createSubmission(SubmissionRequest request) {
         log.info("Creating submission for student: {}", request.getStudentId());
+
+        // Return the existing draft instead of creating a duplicate.
+        if (request.getStudentId() != null && request.getAssignmentId() != null) {
+            Optional<Submission> existing = submissionRepository
+                    .findDraftByStudentIdAndAssignmentId(request.getStudentId(), request.getAssignmentId());
+            if (existing.isPresent()) {
+                log.info("Draft already exists (id={}) for student={} assignment={} — returning existing draft",
+                        existing.get().getId(), request.getStudentId(), request.getAssignmentId());
+                return convertToResponse(existing.get());
+            }
+        }
 
         Submission submission = Submission.builder()
                 .title(request.getTitle())
@@ -63,7 +84,9 @@ public class SubmissionService {
                 .assignmentTitle(request.getAssignmentTitle())
                 .moduleCode(request.getModuleCode())
                 .moduleName(request.getModuleName())
-                .submissionType(request.getSubmissionType())
+                .submissionType(request.getSubmissionType() != null
+                        ? request.getSubmissionType()
+                        : SubmissionType.TEXT_ANSWER)
                 .status(SubmissionStatus.DRAFT)
                 .dueDate(request.getDueDate())
                 .maxGrade(request.getMaxGrade())
@@ -83,10 +106,9 @@ public class SubmissionService {
     }
 
     @Transactional(readOnly = true)
-    public List<SubmissionResponse> getAllSubmissions() {
-        return submissionRepository.findAll().stream()
-                .map(this::convertToResponse)
-                .collect(Collectors.toList());
+    public Page<SubmissionResponse> getAllSubmissions(Pageable pageable) {
+        return submissionRepository.findAll(pageable)
+                .map(this::convertToResponse);
     }
 
     @Transactional(readOnly = true)
@@ -111,9 +133,19 @@ public class SubmissionService {
     }
 
     @Transactional
-    public SubmissionResponse updateSubmission(Long id, SubmissionRequest request) {
+    public SubmissionResponse updateSubmission(Long id, SubmissionRequest request, String callerId) {
         Submission submission = submissionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found with ID: " + id));
+
+        if (!submission.getStudentId().equals(callerId)) {
+            throw new AccessDeniedException("You do not have permission to update submission " + id);
+        }
+
+        if (submission.getStatus() != SubmissionStatus.DRAFT) {
+            throw new IllegalStateException(
+                    "Cannot update submission " + id + " — only DRAFT submissions may be edited (current status: "
+                    + submission.getStatus() + ")");
+        }
 
         submission.setTitle(request.getTitle());
         submission.setDescription(request.getDescription());
@@ -126,9 +158,11 @@ public class SubmissionService {
     }
 
     @Transactional
-    public void deleteSubmission(Long id) {
-        if (!submissionRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Submission not found with ID: " + id);
+    public void deleteSubmission(Long id, String callerId) {
+        Submission submission = submissionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Submission not found with ID: " + id));
+        if (!submission.getStudentId().equals(callerId)) {
+            throw new AccessDeniedException("You do not have permission to delete submission " + id);
         }
         submissionRepository.deleteById(id);
     }
@@ -151,18 +185,43 @@ public class SubmissionService {
      *   7. versionService.createVersionSnapshot() — same transaction, rolls back together
      */
     @Transactional
-    public SubmissionResponse submitSubmission(Long id) {
+    public SubmissionResponse submitSubmission(Long id, String callerId) {
         log.info("Submitting submission with ID: {}", id);
 
         Submission submission = submissionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found with ID: " + id));
 
-        // ── Validate: at least one answer with content ────────────────────────
+        if (!submission.getStudentId().equals(callerId)) {
+            throw new AccessDeniedException("You do not have permission to submit submission " + id);
+        }
+
+        // ── Validate answers ──────────────────────────────────────────────────
         List<Answer> answers = answerRepository.findBySubmissionIdOrderByQuestionId(String.valueOf(id));
-        boolean hasAnswers = answers.stream()
-                .anyMatch(a -> a.getWordCount() != null && a.getWordCount() >= 1);
-        if (!hasAnswers) {
+        if (answers.isEmpty()) {
             throw new IllegalStateException("Cannot submit without text answers");
+        }
+
+        // Recount words server-side from stored answerText as the authoritative check.
+        // This is a second layer of defence: AnswerService already stores the server-
+        // recomputed value, but we recount here to guard against any historical rows
+        // that were saved before that fix was deployed.
+        List<String> violations = new ArrayList<>();
+        for (Answer a : answers) {
+            int actual = AnswerService.countWords(a.getAnswerText());
+            if (actual != (a.getWordCount() != null ? a.getWordCount() : 0)) {
+                log.info("[submitSubmission] Correcting stale wordCount for questionId={}: stored={} actual={}",
+                        a.getQuestionId(), a.getWordCount(), actual);
+                a.setWordCount(actual);
+            }
+            if (actual < minWordsPerAnswer) {
+                violations.add(String.format("question %s (%d/%d words)",
+                        a.getQuestionId(), actual, minWordsPerAnswer));
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new IllegalStateException(
+                    "Each answer must be at least " + minWordsPerAnswer + " words. "
+                    + "The following answers are too short: " + String.join("; ", violations));
         }
 
         // ── Block post-deadline resubmission ──────────────────────────────────
@@ -183,12 +242,8 @@ public class SubmissionService {
                     .filter(a -> a.getGrammarScore() != null || a.getClarityScore() != null
                             || a.getCompletenessScore() != null || a.getRelevanceScore() != null)
                     .mapToDouble(a -> {
-                        double sum = 0; int cnt = 0;
-                        if (a.getGrammarScore()      != null) { sum += a.getGrammarScore();      cnt++; }
-                        if (a.getClarityScore()      != null) { sum += a.getClarityScore();      cnt++; }
-                        if (a.getCompletenessScore() != null) { sum += a.getCompletenessScore(); cnt++; }
-                        if (a.getRelevanceScore()    != null) { sum += a.getRelevanceScore();    cnt++; }
-                        return cnt > 0 ? (sum / cnt) * 10.0 : 0;
+                        Double mark = computeWeightedMark(a);
+                        return mark != null ? mark * 10.0 : 0.0;
                     })
                     .average().orElse(0);
             submission.setAiScore(Math.round(totalAi * 10.0) / 10.0);
@@ -213,14 +268,18 @@ public class SubmissionService {
             // aiGeneratedMark per answer — set only once; never overwritten on resubmit.
             // Weighted formula: relevance (40%) + completeness (30%) + clarity (15%) + grammar (15%).
             // This prioritises concept correctness over surface-level writing quality.
+            List<Answer> toUpdate = new ArrayList<>();
             for (Answer a : answers) {
                 if (a.getAiGeneratedMark() == null) {
                     Double mark = computeWeightedMark(a);
                     if (mark != null) {
                         a.setAiGeneratedMark(mark);
-                        answerRepository.save(a);
+                        toUpdate.add(a);
                     }
                 }
+            }
+            if (!toUpdate.isEmpty()) {
+                answerRepository.saveAll(toUpdate);
             }
         }
 
@@ -233,8 +292,13 @@ public class SubmissionService {
                 id, submitted.getStatus(), submitted.getVersionNumber(),
                 submitted.getAiScore(), submitted.getPlagiarismScore());
 
-        // ── Snapshot — same @Transactional context: fails together or succeeds together ──
+        // ── Internal snapshot — same @Transactional: rolls back together ──────────
         versionService.createVersionSnapshot(submitted, answers);
+
+        // ── Async replication to version-control-service (fire-and-forget) ───────
+        // Runs in a background thread AFTER this transaction commits.
+        // Failure never affects the student's submit response.
+        versionSyncService.syncTextSnapshot(submitted, answers);
 
         return convertToResponse(submitted);
     }
@@ -374,28 +438,6 @@ public class SubmissionService {
      * Only dimensions that have a non-null score contribute; if none exist, returns null.
      */
     private Double computeWeightedMark(Answer a) {
-        // weights must sum to 1.0
-        final double W_RELEVANCE    = 0.40;
-        final double W_COMPLETENESS = 0.30;
-        final double W_CLARITY      = 0.15;
-        final double W_GRAMMAR      = 0.15;
-
-        boolean hasAny = a.getRelevanceScore() != null
-                || a.getCompletenessScore() != null
-                || a.getClarityScore()      != null
-                || a.getGrammarScore()      != null;
-        if (!hasAny) return null;
-
-        double weightedSum   = 0.0;
-        double appliedWeight = 0.0;
-
-        if (a.getRelevanceScore()    != null) { weightedSum += W_RELEVANCE    * a.getRelevanceScore();    appliedWeight += W_RELEVANCE;    }
-        if (a.getCompletenessScore() != null) { weightedSum += W_COMPLETENESS * a.getCompletenessScore(); appliedWeight += W_COMPLETENESS; }
-        if (a.getClarityScore()      != null) { weightedSum += W_CLARITY      * a.getClarityScore();      appliedWeight += W_CLARITY;      }
-        if (a.getGrammarScore()      != null) { weightedSum += W_GRAMMAR      * a.getGrammarScore();      appliedWeight += W_GRAMMAR;      }
-
-        // Normalise in case some dimensions are missing (so the result stays on 0–10)
-        double mark = appliedWeight > 0 ? weightedSum / appliedWeight : 0.0;
-        return Math.round(mark * 100.0) / 100.0;
+        return AnswerScoreUtils.computeWeightedMark(a);
     }
 }

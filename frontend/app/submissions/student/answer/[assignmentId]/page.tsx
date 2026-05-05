@@ -31,11 +31,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
     submissionService,
     versionService,
-    plagiarismService,
     getAssignmentWithFallback,
 } from '@/lib/api/submission-services';
 import { QuestionCard } from '@/components/submissions/QuestionCard';
-import type { AssignmentWithQuestions, TextAnswer, LiveFeedback, LivePlagiarismResult } from '@/types/submission.types';
+import type { AssignmentWithQuestions, TextAnswer, LiveFeedback, LivePlagiarismResult, TextSnapshotPayload } from '@/types/submission.types';
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -67,9 +66,9 @@ function getStudentName(): string {
 }
 
 /** Returns a human-friendly due-date label and whether it's overdue. */
-function dueDateLabel(dueDateStr: string): { label: string; overdue: boolean } {
-    const now = Date.now();
+function dueDateLabel(dueDateStr: string, nowMs: number): { label: string; overdue: boolean } {
     const due = new Date(dueDateStr).getTime();
+    const now = nowMs;
     const diffMs = due - now;
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
@@ -175,6 +174,13 @@ export default function AnswerPage({
     const [submitDone, setSubmitDone]         = useState<boolean>(false);
     const [showConfirm, setShowConfirm]       = useState<boolean>(false);
 
+    // ── Real-time clock for deadline countdown ────────────────
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        const id = setInterval(() => setNow(Date.now()), 60_000);
+        return () => clearInterval(id);
+    }, []);
+
     console.debug('[AnswerPage] assignmentId:', assignmentId, '| submissionId:', submissionId);
 
     // ── Load data on mount ────────────────────────────────────
@@ -201,18 +207,18 @@ export default function AnswerPage({
                 if (asg.dueDate) {
                     const deadlineMs = new Date(asg.dueDate).getTime();
                     if (deadlineMs < Date.now()) {
-                        // Check whether the student already submitted this assignment
+                        // Only allow access if the student already submitted (read-only view).
+                        // Drafts are not accepted after deadline — redirect to my-submissions.
                         let hasSubmitted = false;
                         try {
-                            const allSubs = await submissionService.getStudentSubmissions(sid);
-                            hasSubmitted = allSubs.some(
-                                (s) => s.assignmentId === assignmentId &&
-                                       (s.status === 'SUBMITTED' || s.status === 'GRADED')
+                            const subs = await submissionService.getStudentSubmissionsForAssignment(sid, assignmentId);
+                            hasSubmitted = subs.some(
+                                (s) => s.status === 'SUBMITTED' || s.status === 'LATE' || s.status === 'GRADED'
                             );
                         } catch { /* non-fatal — default to redirect */ }
 
                         if (!hasSubmitted) {
-                            console.debug('[AnswerPage] Deadline passed & no submission — redirecting (404 equivalent)');
+                            console.debug('[AnswerPage] Deadline passed & no terminal submission — redirecting');
                             router.replace('/submissions/student/my-submissions');
                             return;
                         }
@@ -313,6 +319,17 @@ export default function AnswerPage({
         0
     );
 
+    /** Running projected grade totals across all questions that have AI feedback. */
+    const projectedTotal = (() => {
+        const totalMax = questions.reduce((s, q) => s + (q.maxPoints ?? 10), 0);
+        const gradedQuestions = questions.filter(q => gradeMap[q.id] != null);
+        if (gradedQuestions.length === 0) return null;
+        const earned = gradedQuestions.reduce((s, q) => s + (gradeMap[q.id] ?? 0), 0);
+        // Scale to full assignment total only when all questions have feedback
+        const isComplete = gradedQuestions.length === questions.length;
+        return { earned: Math.round(earned * 10) / 10, max: totalMax, isComplete, gradedCount: gradedQuestions.length };
+    })();
+
     // ── Submit handler ────────────────────────────────────────
 
     async function handleSubmit() {
@@ -329,82 +346,87 @@ export default function AnswerPage({
             setShowConfirm(false);
             console.debug('[AnswerPage] Submit SUCCESS — submissionId:', submissionId, '| versionNumber:', versionNumber);
 
-            // The backend creates the version snapshot atomically in the same transaction
-            // as submitSubmission — no frontend fallback needed.
-            console.debug('[AnswerPage] Server-side snapshot created — v', versionNumber);
-
-            // ── Persist plagiarism sources to the new version ─────────────
-            // The realtime plagiarism checks stored internetMatches in plagiarismMap,
-            // but those aren't saved to the version snapshot automatically.
-            // If the student left the page and came back, internetMatches are lost — re-run
-            // a quick realtime check for those questions to get fresh sources.
+            // ── Send full text snapshot to version-control-service (fire-and-forget) ──
+            // All answer texts, AI scores, and plagiarism data (including internet
+            // matches) are embedded in the VCS snapshot JSONB in one shot.
+            // Failure is non-fatal and never affects the student's submit response.
             try {
-                const latestVersion = await versionService.getLatestVersion(submissionId);
-                if (latestVersion?.id) {
-                    const savedQuestionIds = new Set<string>();
-                    const savePromises: Promise<void>[] = [];
+                // Build per-question answer snapshots.
+                // projectedGrade is derived from gradeMap (the live earned mark shown
+                // in the dialog) rather than feedbackMap, so the stored value always
+                // matches exactly what the student saw before clicking Submit.
+                // gradeMap[q.id] is already in 0-maxPoints scale (actual earned marks).
+                const answerSnapshots = questions.map(q => {
+                    const text     = answerMap[q.id] ?? '';
+                    const fb       = feedbackMap[q.id];
+                    const plag     = plagiarismMap[q.id];
+                    const wc       = text.trim().split(/\s+/).filter(Boolean).length;
+                    const earnedMark = gradeMap[q.id];  // 0-maxPoints, null if no feedback
+                    const projectedGrade = earnedMark ?? null;  // actual earned mark, no conversion
 
-                    // 1. Save sources already in memory from the current session
-                    for (const [qId, pResult] of Object.entries(plagiarismMap)) {
-                        const matches = pResult?.internetMatches;
-                        if (matches && matches.length > 0) {
-                            savedQuestionIds.add(qId);
-                            console.debug('[AnswerPage] Saving', matches.length, 'plagiarism sources for questionId:', qId);
-                            savePromises.push(
-                                versionService.savePlagiarismSources(submissionId, latestVersion.id, qId, {
-                                    sources: matches.map(m => ({
-                                        sourceUrl: m.url,
-                                        sourceTitle: m.title,
-                                        sourceSnippet: m.snippet,
-                                        matchedText: m.matchedStudentText,
-                                        similarityPercentage: m.similarityScore,
-                                    })),
-                                })
-                            );
-                        }
-                    }
+                    return {
+                        questionId:             q.id,
+                        questionText:           q.text,
+                        answerText:             text,
+                        wordCount:              wc,
+                        grammarScore:           fb?.grammarScore      ?? null,
+                        clarityScore:           fb?.clarityScore      ?? null,
+                        completenessScore:      fb?.completenessScore ?? null,
+                        relevanceScore:         fb?.relevanceScore    ?? null,
+                        strengths:              fb?.strengths         ?? [],
+                        improvements:           fb?.improvements      ?? [],
+                        suggestions:            fb?.suggestions       ?? [],
+                        similarityScore:        plag?.similarityScore        ?? null,
+                        plagiarismSeverity:     plag?.severity               ?? null,
+                        internetSimilarityScore: plag?.internetSimilarityScore ?? null,
+                        peerSimilarityScore:    plag?.peerSimilarityScore    ?? null,
+                        riskScore:              plag?.riskScore              ?? null,
+                        riskLevel:              plag?.riskLevel              ?? null,
+                        internetMatches:        plag?.internetMatches?.map(m => ({
+                            title:             m.title,
+                            url:               m.url,
+                            snippet:           m.snippet,
+                            similarityScore:   m.similarityScore,
+                            sourceDomain:      m.sourceDomain,
+                            sourceCategory:    m.sourceCategory,
+                            confidenceLevel:   m.confidenceLevel,
+                            matchedStudentText: m.matchedStudentText,
+                        })) ?? [],
+                        projectedGrade,
+                        maxPoints: q.maxPoints,
+                    };
+                });
 
-                    // 2. For questions with plagiarism scores but no internetMatches in memory,
-                    //    re-run a quick realtime check to get fresh source details.
-                    for (const [qId, pResult] of Object.entries(plagiarismMap)) {
-                        if (savedQuestionIds.has(qId)) continue;
-                        if (!pResult || pResult.similarityScore <= 0) continue;
-                        const answerText = answerMap[qId];
-                        if (!answerText || answerText.trim().length === 0) continue;
+                // Overall AI score = sum(gradeMap earned marks) / sum(maxPoints) * 100.
+                // This mirrors the dialog total exactly, including 0 for ungraded questions.
+                const totalMaxPts = questions.reduce((s, q) => s + (q.maxPoints ?? 10), 0);
+                const totalEarnedPts = questions.reduce((s, q) => s + (gradeMap[q.id] ?? 0), 0);
+                const computedOverallGrade = totalMaxPts > 0
+                    ? Math.round((totalEarnedPts / totalMaxPts) * 1000) / 10
+                    : undefined;
 
-                        savePromises.push(
-                            plagiarismService.checkLiveSimilarity({
-                                sessionId: `submit-refresh-${submissionId}-${qId}`,
-                                studentId,
-                                questionId: qId,
-                                textContent: answerText,
-                                questionText: questions.find(q => q.id === qId)?.text,
-                                submissionId,
-                            }).then(freshResult => {
-                                const fm = freshResult.internetMatches;
-                                if (fm && fm.length > 0) {
-                                    console.debug('[AnswerPage] Re-fetched', fm.length, 'sources for questionId:', qId);
-                                    return versionService.savePlagiarismSources(submissionId, latestVersion.id, qId, {
-                                        sources: fm.map(m => ({
-                                            sourceUrl: m.url,
-                                            sourceTitle: m.title,
-                                            sourceSnippet: m.snippet,
-                                            matchedText: m.matchedStudentText,
-                                            similarityPercentage: m.similarityScore,
-                                        })),
-                                    });
-                                }
-                            }).catch(() => { /* non-fatal */ })
-                        );
-                    }
+                const revertKey = `smartlms_revert_source_${assignmentId}`;
+                const revertSourceVersion = sessionStorage.getItem(revertKey);
+                if (revertSourceVersion) sessionStorage.removeItem(revertKey);
 
-                    if (savePromises.length > 0) {
-                        await Promise.all(savePromises);
-                        console.debug('[AnswerPage] Plagiarism sources saved for', savePromises.length, 'questions');
-                    }
-                }
-            } catch (srcErr) {
-                console.warn('[AnswerPage] Failed to save plagiarism sources (non-fatal):', srcErr);
+                const snapshotPayload: TextSnapshotPayload = {
+                    submissionId,
+                    studentId,
+                    commitMessage: revertSourceVersion
+                        ? `Reverted from v${revertSourceVersion}`
+                        : `${assignment?.title ?? 'Assignment'} — v${versionNumber}`,
+                    totalWordCount: totalWords,
+                    overallGrade:  submittedResult?.grade ?? computedOverallGrade,
+                    maxGrade:      assignment?.totalMarks ?? undefined,
+                    answers:       answerSnapshots,
+                };
+                // Fire-and-forget — don't await, never block the UI
+                versionService.createTextSnapshot(snapshotPayload).catch(e =>
+                    console.warn('[AnswerPage] VCS snapshot failed (non-fatal):', e)
+                );
+                console.debug('[AnswerPage] VCS snapshot dispatched — v', versionNumber);
+            } catch (snapErr) {
+                console.warn('[AnswerPage] VCS snapshot build failed (non-fatal):', snapErr);
             }
 
             // ── Notify the lecturer about the new submission ─────────────
@@ -485,7 +507,7 @@ export default function AnswerPage({
         );
     }
 
-    const due = assignment?.dueDate ? dueDateLabel(assignment.dueDate) : null;
+    const due = assignment?.dueDate ? dueDateLabel(assignment.dueDate, now) : null;
 
     /** True when the deadline has passed — editing is locked. */
     const isDeadlinePassed = due?.overdue === true;
@@ -662,6 +684,38 @@ export default function AnswerPage({
                                 <span className="font-semibold text-gray-700">{totalWords.toLocaleString()}</span>
                                 <span className="ml-1 text-gray-400">words</span>
                             </div>
+
+                            {/* Live projected grade pill */}
+                            {projectedTotal ? (
+                                <div className={`hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-semibold ${
+                                    projectedTotal.isComplete
+                                        ? projectedTotal.earned / projectedTotal.max >= 0.75
+                                            ? 'bg-green-50 border-green-300 text-green-700'
+                                            : projectedTotal.earned / projectedTotal.max >= 0.50
+                                            ? 'bg-amber-50 border-amber-300 text-amber-700'
+                                            : 'bg-red-50 border-red-300 text-red-700'
+                                        : 'bg-purple-50 border-purple-200 text-purple-700'
+                                }`}>
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                            d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                    </svg>
+                                    AI projected: {projectedTotal.earned} / {projectedTotal.max}
+                                    {!projectedTotal.isComplete && (
+                                        <span className="font-normal text-purple-500">
+                                            ({projectedTotal.gradedCount}/{questions.length})
+                                        </span>
+                                    )}
+                                </div>
+                            ) : answeredCount > 0 ? (
+                                <span className="hidden sm:inline-flex items-center gap-1 text-xs text-gray-400">
+                                    <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                    AI grading…
+                                </span>
+                            ) : null}
                         </div>
 
                         {isDeadlinePassed ? (

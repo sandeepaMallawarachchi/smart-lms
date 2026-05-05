@@ -389,11 +389,12 @@ export default function LecturerGradingPage({
                 const maxMarks = q.maxPoints ?? 10;
                 const va = latestVersion.answers!.find(a => a.questionId === q.id);
 
-                // aiGeneratedMark is already on 0–10 scale; scale to maxMarks
+                // aiGeneratedMark is actual earned mark in 0-maxMarks scale (e.g. 15.5 out of 20)
                 let aiMark = 0;
                 if (va?.aiGeneratedMark != null) {
-                    aiMark = Math.round((va.aiGeneratedMark / 10) * maxMarks * 10) / 10;
+                    aiMark = Math.round(va.aiGeneratedMark * 10) / 10;
                 } else if (va) {
+                    // Fallback for old snapshots: raw AI quality scores (0-10) → scale to maxMarks
                     const comps = [va.grammarScore, va.clarityScore, va.completenessScore, va.relevanceScore]
                         .filter((s): s is number => s != null);
                     if (comps.length > 0) {
