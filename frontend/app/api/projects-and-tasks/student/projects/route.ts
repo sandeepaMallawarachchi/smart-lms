@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Student from '@/model/Student';
 import Course from '@/model/Course';
-import { Project } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
+import { Project, StudentProjectProgress } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
 import { successResponse, unauthorizedResponse, notFoundResponse, serverErrorResponse } from '@/lib/api-response';
 import { verifyToken } from '@/lib/jwt';
 
@@ -69,6 +69,18 @@ export async function GET(request: NextRequest) {
       .sort({ createdAt: -1 })
       .lean();
 
+    const projectIds = projects.map((project) => project._id.toString());
+    const projectProgressRows = projectIds.length
+      ? await StudentProjectProgress.find({
+          studentId: payload.userId,
+          projectId: { $in: projectIds },
+        }).lean()
+      : [];
+
+    const projectProgressMap = new Map(
+      projectProgressRows.map((progress) => [progress.projectId.toString(), progress])
+    );
+
     //Enrich projects with course information
     const courseMap = new Map(
       assignedCourses.map(course => [course._id.toString(), course])
@@ -77,6 +89,11 @@ export async function GET(request: NextRequest) {
     const enrichedProjects = projects.map(project => ({
       ...project,
       course: courseMap.get(project.courseId.toString()),
+      progress: projectProgressMap.get(project._id.toString()) || {
+        status: 'todo',
+        updatedAt: null,
+        mainTasks: [],
+      },
     }));
 
     return successResponse('Projects retrieved successfully', {

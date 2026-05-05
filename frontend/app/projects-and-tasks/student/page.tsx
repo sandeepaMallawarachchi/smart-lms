@@ -48,6 +48,7 @@ interface Project {
   deadlineTime?: string;
   course: Course;
   mainTasks?: MainTask[];
+  progress?: ProgressPayload;
 }
 
 interface Task {
@@ -57,6 +58,7 @@ interface Task {
   deadlineTime?: string;
   course: Course;
   subtasks?: Subtask[];
+  progress?: ProgressPayload;
 }
 
 type ItemStatus = 'todo' | 'inprogress' | 'done';
@@ -225,17 +227,7 @@ export default function StudentDashboard() {
         const [projectItems, taskItems] = await Promise.all([
           Promise.all(
             projects.map(async (project) => {
-              const response = await fetch(
-                `/api/projects-and-tasks/student/project-progress?projectId=${project._id}`,
-                { headers }
-              );
-
-              let progress: ProgressPayload = { status: 'todo', mainTasks: [] };
-              if (response.ok) {
-                const payload = await response.json();
-                progress = payload.data.progress || progress;
-              }
-
+              const progress: ProgressPayload = project.progress || { status: 'todo', mainTasks: [] };
               const completion = countProjectCompletion(
                 project.mainTasks || [],
                 progress.mainTasks || []
@@ -260,17 +252,7 @@ export default function StudentDashboard() {
           ),
           Promise.all(
             tasks.map(async (task) => {
-              const response = await fetch(
-                `/api/projects-and-tasks/student/task-progress?taskId=${task._id}`,
-                { headers }
-              );
-
-              let progress: ProgressPayload = { status: 'todo', subtasks: [] };
-              if (response.ok) {
-                const payload = await response.json();
-                progress = payload.data.progress || progress;
-              }
-
+              const progress: ProgressPayload = task.progress || { status: 'todo', subtasks: [] };
               const completion = countTaskCompletion(task.subtasks || [], progress.subtasks || []);
 
               return {

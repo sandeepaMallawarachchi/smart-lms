@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Student from '@/model/Student';
 import Course from '@/model/Course';
-import { Task } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
+import { Task, StudentTaskProgress } from '@/model/projects-and-tasks/lecturer/projectTaskModel';
 import { successResponse, unauthorizedResponse, notFoundResponse, serverErrorResponse } from '@/lib/api-response';
 import { verifyToken } from '@/lib/jwt';
 import mongoose from 'mongoose';
@@ -70,6 +70,18 @@ export async function GET(request: NextRequest) {
       .sort({ createdAt: -1 })
       .lean();
 
+    const taskIds = tasks.map((task) => task._id.toString());
+    const taskProgressRows = taskIds.length
+      ? await StudentTaskProgress.find({
+          studentId: payload.userId,
+          taskId: { $in: taskIds },
+        }).lean()
+      : [];
+
+    const taskProgressMap = new Map(
+      taskProgressRows.map((progress) => [progress.taskId.toString(), progress])
+    );
+
     // Enrich tasks with course information
     const courseMap = new Map(
       assignedCourses.map(course => [course._id.toString(), course])
@@ -78,6 +90,11 @@ export async function GET(request: NextRequest) {
     const enrichedTasks = tasks.map(task => ({
       ...task,
       course: courseMap.get(task.courseId.toString()),
+      progress: taskProgressMap.get(task._id.toString()) || {
+        status: 'todo',
+        updatedAt: null,
+        subtasks: [],
+      },
     }));
 
     return successResponse('Tasks retrieved successfully', {

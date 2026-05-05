@@ -59,6 +59,11 @@ interface Project {
     course: Course;
     createdAt: string;
     updatedAt: string;
+    progress?: {
+        status?: 'todo' | 'inprogress' | 'done';
+        updatedAt?: string;
+        mainTasks?: MainTask[];
+    };
 }
 
 interface Task {
@@ -75,6 +80,11 @@ interface Task {
     course: Course;
     createdAt: string;
     updatedAt: string;
+    progress?: {
+        status?: 'todo' | 'inprogress' | 'done';
+        updatedAt?: string;
+        subtasks?: Subtask[];
+    };
 }
 
 interface KanbanItem {
@@ -292,32 +302,8 @@ export default function StudentProjectsAndTasksPage() {
                 const taskItems: KanbanItem[] = [];
 
                 for (const project of projects) {
-                    const progressRes = await fetch(
-                        `/api/projects-and-tasks/student/project-progress?projectId=${project._id}`,
-                        {
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                                'Content-Type': 'application/json',
-                            },
-                        }
-                    );
-
-                    let status: 'todo' | 'inprogress' | 'done' = 'todo';
-                    if (progressRes.ok) {
-                        const progressData = await progressRes.json();
-                        status = progressData.data.progress.status;
-                        const progressUpdatedAt = progressData.data.progress.updatedAt;
-
-                        projectItems.push({
-                            _id: project._id,
-                            name: project.projectName,
-                            type: 'project',
-                            item: project,
-                            status,
-                            completedAt: status === 'done' ? progressUpdatedAt : undefined,
-                        });
-                        continue;
-                    }
+                    const status: 'todo' | 'inprogress' | 'done' = project.progress?.status || 'todo';
+                    const progressUpdatedAt = project.progress?.updatedAt;
 
                     projectItems.push({
                         _id: project._id,
@@ -325,37 +311,13 @@ export default function StudentProjectsAndTasksPage() {
                         type: 'project',
                         item: project,
                         status,
-                        completedAt: undefined,
+                        completedAt: status === 'done' ? progressUpdatedAt : undefined,
                     });
                 }
 
                 for (const task of tasks) {
-                    const progressRes = await fetch(
-                        `/api/projects-and-tasks/student/task-progress?taskId=${task._id}`,
-                        {
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                                'Content-Type': 'application/json',
-                            },
-                        }
-                    );
-
-                    let status: 'todo' | 'inprogress' | 'done' = 'todo';
-                    if (progressRes.ok) {
-                        const progressData = await progressRes.json();
-                        status = progressData.data.progress.status;
-                        const progressUpdatedAt = progressData.data.progress.updatedAt;
-
-                        taskItems.push({
-                            _id: task._id,
-                            name: task.taskName,
-                            type: 'task',
-                            item: task,
-                            status,
-                            completedAt: status === 'done' ? progressUpdatedAt : undefined,
-                        });
-                        continue;
-                    }
+                    const status: 'todo' | 'inprogress' | 'done' = task.progress?.status || 'todo';
+                    const progressUpdatedAt = task.progress?.updatedAt;
 
                     taskItems.push({
                         _id: task._id,
@@ -363,7 +325,7 @@ export default function StudentProjectsAndTasksPage() {
                         type: 'task',
                         item: task,
                         status,
-                        completedAt: undefined,
+                        completedAt: status === 'done' ? progressUpdatedAt : undefined,
                     });
                 }
 
