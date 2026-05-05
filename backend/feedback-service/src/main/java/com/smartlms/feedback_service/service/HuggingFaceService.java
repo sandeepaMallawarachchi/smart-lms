@@ -26,20 +26,25 @@ public class HuggingFaceService {
     private OkHttpClient client;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Value("${huggingface.api-key}")
-    private String apiKey;
+    // Groq — used for chat completions (feedback generation)
+    @Value("${groq.api-key}")
+    private String groqApiKey;
 
-    @Value("${huggingface.api-url}")
+    @Value("${groq.api-url}")
     private String apiUrl;
 
-    @Value("${huggingface.model}")
+    @Value("${groq.model}")
     private String model;
 
-    @Value("${huggingface.timeout:120}")
+    @Value("${groq.timeout:30}")
     private int timeout;
 
-    @Value("${huggingface.max-tokens:500}")
+    @Value("${groq.max-tokens:700}")
     private int maxTokens;
+
+    // HuggingFace — used for AI-generated content detection only
+    @Value("${huggingface.api-key}")
+    private String huggingFaceApiKey;
 
     @Value("${huggingface.detection-model:Hello-SimpleAI/chatgpt-detector-roberta}")
     private String detectionModel;
@@ -89,7 +94,7 @@ public class HuggingFaceService {
 
             Request request = new Request.Builder()
                     .url(url)
-                    .addHeader("Authorization", "Bearer " + apiKey)
+                    .addHeader("Authorization", "Bearer " + groqApiKey)
                     .addHeader("Content-Type", "application/json")
                     .post(RequestBody.create(jsonBody, MediaType.parse("application/json")))
                     .build();
@@ -174,7 +179,7 @@ public class HuggingFaceService {
 
             Request request = new Request.Builder()
                     .url(url)
-                    .addHeader("Authorization", "Bearer " + apiKey)
+                    .addHeader("Authorization", "Bearer " + huggingFaceApiKey)
                     .addHeader("Content-Type", "application/json")
                     // Tell HuggingFace to wait for the model to warm up instead of returning 503
                     .addHeader("X-Wait-For-Model", "true")

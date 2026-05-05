@@ -106,12 +106,12 @@ function BulletList({
 export function LiveFeedbackPanel({ feedback, loading }: LiveFeedbackPanelProps) {
 
     const panelState = !feedback && !loading ? 'ghost' : loading ? 'loading' : 'feedback';
-    console.debug('[LiveFeedbackPanel] render — state:', panelState,
-        '| grammar:', feedback?.grammarScore ?? 'n/a',
-        '| clarity:', feedback?.clarityScore ?? 'n/a',
-        '| completeness:', feedback?.completenessScore ?? 'n/a',
-        '| relevance:', feedback?.relevanceScore ?? 'n/a',
-        '| strengths:', feedback?.strengths?.length ?? 0);
+    // console.debug('[LiveFeedbackPanel] render — state:', panelState,
+    //     '| grammar:', feedback?.grammarScore ?? 'n/a',
+    //     '| clarity:', feedback?.clarityScore ?? 'n/a',
+    //     '| completeness:', feedback?.completenessScore ?? 'n/a',
+    //     '| relevance:', feedback?.relevanceScore ?? 'n/a',
+    //     '| strengths:', feedback?.strengths?.length ?? 0);
 
     // ── State 1: Empty / ghost ────────────────────────────────
     if (!feedback && !loading) {

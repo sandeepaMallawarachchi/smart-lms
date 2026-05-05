@@ -110,12 +110,6 @@ function VersionCard({
     const [expanded, setExpanded] = useState(false);
     const [downloadingReport, setDownloadingReport] = useState(false);
     const answers: VersionAnswer[] = version.answers ?? [];
-    console.log('[version-history] maxPoints debug — version', version.versionNumber, answers.map(a => ({
-        questionId: a.questionId,
-        questionText: a.questionText?.slice(0, 60),
-        maxPoints: a.maxPoints,
-        maxPointsType: typeof a.maxPoints,
-    })));
 
     const revertMatch = version.commitMessage?.match(/^Reverted from v(\d+)$/);
     const revertedFromVersion = revertMatch ? Number(revertMatch[1]) : null;

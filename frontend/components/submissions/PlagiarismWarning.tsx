@@ -242,12 +242,12 @@ function SourceList({ matches }: { matches: InternetMatch[] }) {
 
 export function PlagiarismWarning({ result, loading }: PlagiarismWarningProps) {
 
-    console.debug('[PlagiarismWarning] render — loading:', loading,
-        '| severity:', result?.severity ?? 'n/a',
-        '| score:', result?.similarityScore ?? 'n/a', '%',
-        '| riskLevel:', result?.riskLevel ?? 'n/a',
-        '| flagged:', result?.flagged ?? false,
-        '| matches:', result?.internetMatches?.length ?? 0);
+    // console.debug('[PlagiarismWarning] render — loading:', loading,
+    //     '| severity:', result?.severity ?? 'n/a',
+    //     '| score:', result?.similarityScore ?? 'n/a', '%',
+    //     '| riskLevel:', result?.riskLevel ?? 'n/a',
+    //     '| flagged:', result?.flagged ?? false,
+    //     '| matches:', result?.internetMatches?.length ?? 0);
 
     if (loading || !result) return null;
 
