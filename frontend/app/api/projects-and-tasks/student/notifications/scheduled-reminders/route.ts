@@ -172,9 +172,22 @@ async function backfillElapsedReminderNotifications(studentId: string) {
     const checkpoints = computeReminderScheduleTimesFromStart(start, deadline).filter(
       (point) => point.scheduledFor.getTime() <= now
     );
-    if (checkpoints.length === 0) return;
+    const remainingMs = deadline.getTime() - now;
+    const nearDeadlineCheckpoint =
+      remainingMs <= 24 * 60 * 60 * 1000
+        ? { percentage: 100 as const, scheduledFor: new Date() }
+        : remainingMs <= 48 * 60 * 60 * 1000
+          ? { percentage: 75 as const, scheduledFor: new Date() }
+          : null;
 
-    const latestCheckpoint = checkpoints[checkpoints.length - 1];
+    const latestElapsedCheckpoint = checkpoints.length > 0 ? checkpoints[checkpoints.length - 1] : null;
+    const latestCheckpoint =
+      nearDeadlineCheckpoint && (!latestElapsedCheckpoint || nearDeadlineCheckpoint.percentage > latestElapsedCheckpoint.percentage)
+        ? nearDeadlineCheckpoint
+        : latestElapsedCheckpoint;
+
+    if (!latestCheckpoint) return;
+
     const content = buildReminderContent({
       itemType,
       itemName,
