@@ -208,6 +208,7 @@ export function useAnswerEditor({
             return;
         }
         setFeedbackLoading(true);
+        const t0 = performance.now();
         try {
             const feedback = await feedbackService.generateLiveFeedback({
                 questionId,
@@ -219,6 +220,8 @@ export function useAnswerEditor({
                 similarityScore: plagiarismResultRef.current?.similarityScore,
                 aiDetectionScore: aiDetectionResultRef.current?.aiScore ?? undefined,
             });
+            const latencyMs = Math.round(performance.now() - t0);
+            console.log(`[Feedback latency] questionId=${questionId} | ${latencyMs}ms`);
             setLiveFeedback(feedback);
             lastFeedbackTextRef.current = text;
             // Track latest feedback so auto-save can flush it if the row didn't exist yet
@@ -344,17 +347,11 @@ export function useAnswerEditor({
     const requestAiDetection = useCallback(async (text: string) => {
         if (!text || text.length < MIN_TEXT_LENGTH) return;
         if (text === lastAiDetectionTextRef.current && aiDetectionResultRef.current) {
-            console.log('[AI-Detection] Cache HIT — skipping API call for questionId:', questionId);
             return;
         }
-        console.log('[AI-Detection] Request fired — questionId:', questionId, '| textLen:', text.length);
         setAiDetectionLoading(true);
         try {
             const result = await feedbackService.detectAiContent(text);
-            console.log('[AI-Detection] Result — questionId:', questionId,
-                '| aiScore:', result.aiScore,
-                '| label:', result.label,
-                '| isAiGenerated:', result.isAiGenerated);
             setAiDetectionResult(result);
             lastAiDetectionTextRef.current = text;
             aiDetectionResultRef.current   = result;
@@ -377,9 +374,6 @@ export function useAnswerEditor({
                         aiDetectionScore: result.aiScore,
                     }).then(grade => {
                         setLiveFeedback(prev => prev ? { ...prev, ...grade } : null);
-                        console.log('[AI-Detection] Grade updated — questionId:', questionId,
-                            '| projectedGrade:', grade.projectedGrade,
-                            '| letterGrade:', grade.letterGrade);
                         if (grade.projectedGrade != null) {
                             submissionService.saveAnswerAnalysis(submissionId, questionId, {
                                 aiGeneratedMark:  grade.projectedGrade,
@@ -396,8 +390,8 @@ export function useAnswerEditor({
                     }).catch(() => {});
                 }
             }
-        } catch (err) {
-            console.warn('[AI-Detection] FAILED for questionId:', questionId, '—', err);
+        } catch {
+            // silent failure
         } finally {
             setAiDetectionLoading(false);
         }
@@ -564,7 +558,6 @@ export function useAnswerEditor({
         }
         // Fire AI detection on mount if there's pre-loaded text (always — no DB cache for this)
         if (initialText && initialText.length >= MIN_TEXT_LENGTH) {
-            console.log('[AI-Detection] Firing on mount — questionId:', questionId, '| textLen:', initialText.length);
             requestAiDetection(initialText);
         }
         // Run only once on mount; stable callbacks
