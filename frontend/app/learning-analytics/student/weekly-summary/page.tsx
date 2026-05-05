@@ -343,7 +343,7 @@ export default function WeeklySummaryPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="w-full">
       {/* Header */}
       <div className="mb-8">
         <button

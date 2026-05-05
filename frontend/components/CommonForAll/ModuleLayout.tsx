@@ -118,9 +118,7 @@ export default function ModuleLayout({ children, headerExtra }: ModuleLayoutProp
 
         {/* Page Content */}
         <main className="flex-1 overflow-auto bg-gray-50 p-8">
-          <div className="max-w-7xl mx-auto">
-            {children}
-          </div>
+          {children}
         </main>
       </div>
     </div>

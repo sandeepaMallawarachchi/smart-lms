@@ -141,7 +141,7 @@ function CreateProjectsAndTasksPageContent() {
         />
       </div>
 
-      <div className="relative max-w-7xl mx-auto px-4 py-8 -mt-8">
+      <div className="relative w-full px-4 py-8 -mt-8">
         {/* Header Section */}
         <motion.div
           initial="hidden"

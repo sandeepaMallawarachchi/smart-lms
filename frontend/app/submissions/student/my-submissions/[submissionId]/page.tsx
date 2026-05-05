@@ -150,7 +150,7 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ sub
     };
 
     return (
-        <div className="max-w-7xl mx-auto">
+        <div className="w-full">
             {/* Header */}
             <div className="mb-6">
                 <button

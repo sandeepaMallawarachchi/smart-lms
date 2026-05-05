@@ -504,7 +504,7 @@ export default function LecturerGradingPage({
 
     if ((subLoading || versionLoading) && !submission) {
         return (
-            <div className="max-w-7xl mx-auto animate-pulse space-y-4 py-8">
+            <div className="w-full animate-pulse space-y-4 py-8">
                 <div className="h-6 bg-gray-200 rounded w-36" />
                 <div className="h-32 bg-gray-100 rounded-lg" />
                 <div className="h-64 bg-gray-100 rounded-lg" />
@@ -515,7 +515,7 @@ export default function LecturerGradingPage({
     const sortedQuestions = apiQuestions ? [...apiQuestions].sort((a, b) => a.order - b.order) : [];
 
     return (
-        <div className="max-w-7xl mx-auto pb-40">
+        <div className="w-full pb-40">
             {/* Back */}
             <button
                 onClick={() => router.back()}
@@ -781,7 +781,7 @@ export default function LecturerGradingPage({
 
             {/* ── Sticky action bar ────────────────────────────────── */}
             <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-4 shadow-lg z-10">
-                <div className="max-w-7xl mx-auto flex gap-4">
+                <div className="w-full flex gap-4">
                     <button
                         onClick={() => router.back()}
                         className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium flex items-center gap-2 cursor-pointer"
