@@ -66,13 +66,27 @@ function bucketPending(value: number): string {
 }
 
 function scoreWorkload(input: {
+  assigned: number;
   pending: number;
   overdue: number;
   inProgress: number;
   completed: number;
 }): number {
-  const raw = input.pending * 10 + input.overdue * 20 + input.inProgress * 5 - input.completed * 3;
-  return Math.max(0, Math.min(100, raw));
+  if (input.assigned <= 0) return 0;
+
+  const assigned = Math.max(input.assigned, 1);
+  const pendingRatio = input.pending / assigned;
+  const overdueRatio = input.overdue / assigned;
+  const inProgressRatio = input.inProgress / assigned;
+  const backlogPressure = Math.min(input.pending / 8, 1);
+
+  const raw =
+    overdueRatio * 45 +
+    pendingRatio * 30 +
+    backlogPressure * 15 +
+    inProgressRatio * 10;
+
+  return Math.max(0, Math.min(100, Math.round(raw)));
 }
 
 export async function GET(request: NextRequest) {
@@ -253,11 +267,17 @@ export async function GET(request: NextRequest) {
           }
         });
 
-        const workloadScore = scoreWorkload({ pending, overdue, inProgress, completed });
+        const workloadScore = scoreWorkload({
+          assigned: studentAssignments.length,
+          pending,
+          overdue,
+          inProgress,
+          completed,
+        });
         const risk =
           workloadScore >= 70
             ? 'High'
-            : workloadScore < 30 && studentAssignments.length > 0
+            : workloadScore < 20 && studentAssignments.length > 0
             ? 'Low Activity'
             : 'Balanced';
 
