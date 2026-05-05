@@ -19,6 +19,17 @@ interface Position {
     y: number;
 }
 
+function clampPosition(position: Position, viewport: { width: number; height: number }): Position {
+    if (viewport.width <= 0 || viewport.height <= 0) {
+        return position;
+    }
+
+    return {
+        x: Math.max(0, Math.min(viewport.width - 60, position.x)),
+        y: Math.max(0, Math.min(viewport.height - 60, position.y)),
+    };
+}
+
 const FloatingNavMenu = () => {
     const router = useRouter();
     const pathname = usePathname();
@@ -130,6 +141,13 @@ const FloatingNavMenu = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    useEffect(() => {
+        setPosition((prev) => {
+            const clamped = clampPosition(prev, viewport);
+            return clamped.x === prev.x && clamped.y === prev.y ? prev : clamped;
+        });
+    }, [viewport]);
+
     // Save position when it changes
     useEffect(() => {
         if (!isDragging) {
@@ -181,9 +199,15 @@ const FloatingNavMenu = () => {
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
             if (isDragging) {
-                const newX = Math.max(0, Math.min(window.innerWidth - 60, e.clientX - dragOffset.x));
-                const newY = Math.max(0, Math.min(window.innerHeight - 60, e.clientY - dragOffset.y));
-                setPosition({ x: newX, y: newY });
+                setPosition(
+                    clampPosition(
+                        {
+                            x: e.clientX - dragOffset.x,
+                            y: e.clientY - dragOffset.y,
+                        },
+                        { width: window.innerWidth, height: window.innerHeight }
+                    )
+                );
             }
         };
 
