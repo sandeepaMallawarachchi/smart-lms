@@ -26,7 +26,7 @@ import java.util.List;
         name = "uq_submission_version_number",
         columnNames = {"submission_id", "version_number"}
     ),
-    indexes = @Index(name = "idx_sv_submission_id", columnList = "submission_id")
+    indexes = @Index(name = "idx_sv_submission_id_version_number", columnList = "submission_id, version_number")
 )
 @Data
 @NoArgsConstructor
@@ -81,6 +81,14 @@ public class SubmissionVersion {
     /** Maximum grade for the assignment. Copied from submission at snapshot time. */
     @Column(name = "max_grade")
     private Double maxGrade;
+
+    /**
+     * Lecturer-assigned overall grade for this version.
+     * Set when the lecturer submits a grade via GradeRequest.grade.
+     * Null until a lecturer override is saved.
+     */
+    @Column(name = "lecturer_grade")
+    private Double lecturerGrade;
 
     /** Human-readable label, e.g. "Java Assignment — v2". */
     @Column(name = "commit_message", length = 500)

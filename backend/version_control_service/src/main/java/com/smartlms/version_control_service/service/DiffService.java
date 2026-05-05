@@ -275,4 +275,129 @@ public class DiffService {
                 .findFirst()
                 .orElse(null);
     }
+
+    /**
+     * Generate a per-question text diff between two text-snapshot versions.
+     *
+     * Both versions must have been created via POST /api/versions/text-snapshot,
+     * so their metadata map contains an "answers" list. For each question present
+     * in the target snapshot, the method diffs the answer text line-by-line against
+     * the same question in the source snapshot (or treats it as fully added if new).
+     *
+     * The result reuses the same DiffResponse / FileDiff structure as file diffs,
+     * where each "filePath" is actually the questionId.
+     */
+    @Transactional(readOnly = true)
+    @SuppressWarnings("unchecked")
+    public DiffResponse generateTextDiff(DiffRequest request) {
+        log.info("Generating text diff between versions: {} and {}",
+                request.getSourceVersionId(), request.getTargetVersionId());
+
+        SubmissionVersion sourceVersion = versionRepository.findById(request.getSourceVersionId())
+                .orElseThrow(() -> new ResourceNotFoundException("Source version not found"));
+        SubmissionVersion targetVersion = versionRepository.findById(request.getTargetVersionId())
+                .orElseThrow(() -> new ResourceNotFoundException("Target version not found"));
+
+        List<java.util.Map<String, Object>> sourceAnswers = extractAnswers(sourceVersion);
+        List<java.util.Map<String, Object>> targetAnswers = extractAnswers(targetVersion);
+
+        // Index source answers by questionId for O(1) lookup
+        java.util.Map<String, String> sourceTexts = new java.util.HashMap<>();
+        for (java.util.Map<String, Object> a : sourceAnswers) {
+            String qId = String.valueOf(a.getOrDefault("questionId", ""));
+            String text = a.getOrDefault("answerText", "") instanceof String s ? s : "";
+            sourceTexts.put(qId, text);
+        }
+
+        List<FileDiff> fileDiffs = new ArrayList<>();
+        DiffSummary summary = DiffSummary.builder()
+                .totalFiles(0).filesAdded(0).filesModified(0).filesDeleted(0)
+                .totalLinesAdded(0).totalLinesDeleted(0).totalLinesModified(0)
+                .build();
+
+        for (java.util.Map<String, Object> targetAnswer : targetAnswers) {
+            String qId        = String.valueOf(targetAnswer.getOrDefault("questionId", "unknown"));
+            String targetText = targetAnswer.getOrDefault("answerText", "") instanceof String s ? s : "";
+            String sourceText = sourceTexts.getOrDefault(qId, "");
+
+            List<String> sourceLines = Arrays.asList(sourceText.split("\n"));
+            List<String> targetLines = Arrays.asList(targetText.split("\n"));
+
+            if (sourceText.isEmpty() && !targetText.isEmpty()) {
+                // Entirely new answer for this question
+                List<DiffLine> diffLines = new ArrayList<>();
+                for (int i = 0; i < targetLines.size(); i++) {
+                    diffLines.add(DiffLine.builder()
+                            .type(DiffLineType.ADDED).lineNumber(i + 1).content(targetLines.get(i)).build());
+                }
+                fileDiffs.add(FileDiff.builder()
+                        .filePath(qId).changeType(FileChangeType.ADDED)
+                        .diffLines(diffLines).linesAdded(targetLines.size())
+                        .linesDeleted(0).linesModified(0).build());
+                summary.setFilesAdded(summary.getFilesAdded() + 1);
+                summary.setTotalLinesAdded(summary.getTotalLinesAdded() + targetLines.size());
+            } else {
+                Patch<String> patch = DiffUtils.diff(sourceLines, targetLines);
+                if (patch.getDeltas().isEmpty()) continue; // unchanged — skip
+
+                int linesAdded = 0, linesDeleted = 0, linesModified = 0;
+                List<DiffLine> diffLines = new ArrayList<>();
+
+                for (AbstractDelta<String> delta : patch.getDeltas()) {
+                    switch (delta.getType()) {
+                        case INSERT -> {
+                            linesAdded += delta.getTarget().getLines().size();
+                            addDiffLines(diffLines, delta.getTarget().getLines(),
+                                    DiffLineType.ADDED, delta.getTarget().getPosition());
+                        }
+                        case DELETE -> {
+                            linesDeleted += delta.getSource().getLines().size();
+                            addDiffLines(diffLines, delta.getSource().getLines(),
+                                    DiffLineType.DELETED, delta.getSource().getPosition());
+                        }
+                        case CHANGE -> {
+                            linesModified += Math.max(delta.getSource().getLines().size(),
+                                    delta.getTarget().getLines().size());
+                            addDiffLines(diffLines, delta.getSource().getLines(),
+                                    DiffLineType.DELETED, delta.getSource().getPosition());
+                            addDiffLines(diffLines, delta.getTarget().getLines(),
+                                    DiffLineType.ADDED, delta.getTarget().getPosition());
+                        }
+                        case EQUAL -> { /* no change — skip */ }
+                    }
+                }
+
+                String unifiedDiff = generateUnifiedDiff(patch, sourceLines, targetLines);
+                fileDiffs.add(FileDiff.builder()
+                        .filePath(qId).changeType(FileChangeType.MODIFIED)
+                        .unifiedDiff(unifiedDiff).diffLines(diffLines)
+                        .linesAdded(linesAdded).linesDeleted(linesDeleted)
+                        .linesModified(linesModified).build());
+                summary.setFilesModified(summary.getFilesModified() + 1);
+                summary.setTotalLinesAdded(summary.getTotalLinesAdded() + linesAdded);
+                summary.setTotalLinesDeleted(summary.getTotalLinesDeleted() + linesDeleted);
+                summary.setTotalLinesModified(summary.getTotalLinesModified() + linesModified);
+            }
+        }
+
+        summary.setTotalFiles(fileDiffs.size());
+
+        return DiffResponse.builder()
+                .sourceVersionId(sourceVersion.getId())
+                .sourceVersionNumber(sourceVersion.getVersionNumber())
+                .targetVersionId(targetVersion.getId())
+                .targetVersionNumber(targetVersion.getVersionNumber())
+                .fileDiffs(fileDiffs)
+                .summary(summary)
+                .build();
+    }
+
+    private List<java.util.Map<String, Object>> extractAnswers(SubmissionVersion version) {
+        if (version.getMetadata() == null) return List.of();
+        Object answers = version.getMetadata().get("answers");
+        if (answers instanceof List<?> list) {
+            return (List<java.util.Map<String, Object>>) list;
+        }
+        return List.of();
+    }
 }

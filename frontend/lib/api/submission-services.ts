@@ -1,6 +1,10 @@
 // ============================================================
 // Submission System - API Services
-// Connects to all 4 Spring Boot microservices
+// Connects to 4 Spring Boot microservices:
+//   8081 submission-management-service (submissions, answers, grading)
+//   8082 version-control-service       (version history, diff, download)
+//   8083 feedback-service              (live AI feedback)
+//   8084 integrity-monitoring-service  (plagiarism detection)
 // ============================================================
 
 import type {
@@ -9,8 +13,9 @@ import type {
     UpdateSubmissionPayload,
     GradeSubmissionPayload,
     SubmissionVersion,
-    VersionAnswer,
-    SavePlagiarismSourcesPayload,
+    TextSnapshotPayload,
+    VcsDiffRequest,
+    VcsDiffResponse,
     Feedback,
     GenerateFeedbackPayload,
     PlagiarismReport,
@@ -25,12 +30,16 @@ import type {
     SaveAnswerAnalysisPayload,
     LiveFeedback,
     LivePlagiarismResult,
+    VcsAnswerSnapshot,
+    AiDetectionResult,
 } from '@/types/submission.types';
 
 // ─── Base URLs ────────────────────────────────────────────────
 
 const SUBMISSION_API =
     process.env.NEXT_PUBLIC_SUBMISSION_API_URL ?? 'http://localhost:8081';
+const VERSION_API =
+    process.env.NEXT_PUBLIC_VERSION_API_URL ?? 'http://localhost:8082';
 const FEEDBACK_API =
     process.env.NEXT_PUBLIC_FEEDBACK_API_URL ?? 'http://localhost:8083';
 const PLAGIARISM_API =
@@ -67,11 +76,7 @@ async function apiRequest<T>(
         headers['Content-Type'] = 'application/json';
     }
 
-    console.debug(`[apiRequest] ${method} ${url}`);
-
     const response = await fetch(url, { ...options, headers });
-
-    console.debug(`[apiRequest] ${method} ${url} → HTTP ${response.status}`);
 
     if (!response.ok) {
         let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
@@ -91,6 +96,23 @@ async function apiRequest<T>(
     return response.json() as Promise<T>;
 }
 
+// ─── Letter grade helper ──────────────────────────────────────
+
+export function scoreToLetterGrade(pct: number): string {
+    if (pct >= 90) return 'A+';
+    if (pct >= 80) return 'A';
+    if (pct >= 75) return 'A-';
+    if (pct >= 70) return 'B+';
+    if (pct >= 65) return 'B';
+    if (pct >= 60) return 'B-';
+    if (pct >= 55) return 'C+';
+    if (pct >= 45) return 'C';
+    if (pct >= 40) return 'C-';
+    if (pct >= 35) return 'D+';
+    if (pct >= 30) return 'D';
+    return 'E';
+}
+
 // ─── Submission Service (port 8081) ───────────────────────────
 
 export const submissionService = {
@@ -98,6 +120,17 @@ export const submissionService = {
     async getStudentSubmissions(studentId: string): Promise<Submission[]> {
         const res = await apiRequest<Submission[] | { data?: Submission[]; content?: Submission[] }>(
             `${SUBMISSION_API}/api/submissions?studentId=${encodeURIComponent(studentId)}`
+        );
+        if (Array.isArray(res)) return res;
+        return (res as { data?: Submission[]; content?: Submission[] }).data
+            ?? (res as { data?: Submission[]; content?: Submission[] }).content
+            ?? [];
+    },
+
+    /** Get submissions for a student scoped to a single assignment */
+    async getStudentSubmissionsForAssignment(studentId: string, assignmentId: string): Promise<Submission[]> {
+        const res = await apiRequest<Submission[] | { data?: Submission[]; content?: Submission[] }>(
+            `${SUBMISSION_API}/api/submissions?studentId=${encodeURIComponent(studentId)}&assignmentId=${encodeURIComponent(assignmentId)}`
         );
         if (Array.isArray(res)) return res;
         return (res as { data?: Submission[]; content?: Submission[] }).data
@@ -233,13 +266,10 @@ export const submissionService = {
         moduleCode?: string,
         moduleName?: string,
     ): Promise<Submission> {
-        console.debug('[submissionService] getOrCreateDraftSubmission — assignmentId:', assignmentId, '| studentId:', studentId);
-
         // Backend returns ApiResponse<Page<Submission>> → { data: { content: Submission[] } }
         const existing = await apiRequest<unknown>(
             `${SUBMISSION_API}/api/submissions?studentId=${encodeURIComponent(studentId)}&assignmentId=${encodeURIComponent(assignmentId)}`
         );
-        console.debug('[submissionService] getOrCreateDraftSubmission — raw response type:', typeof existing, '| isArray:', Array.isArray(existing));
 
         let list: Submission[] = [];
         if (Array.isArray(existing)) {
@@ -255,19 +285,13 @@ export const submissionService = {
             }
         }
 
-        console.debug('[submissionService] getOrCreateDraftSubmission — found', list.length, 'submissions; statuses:', list.map(s => s.status));
-
         // ONE submission row per student+assignment pair.
         // Return any existing submission as-is — regardless of status.
         // The working copy (Answer rows) is always editable; immutable snapshots are
         // created only when the student clicks Submit. Never reset to DRAFT.
         if (list.length > 0) {
-            const sub = list[0];
-            console.debug('[submissionService] getOrCreateDraftSubmission — reusing existing submission id:', sub.id, '| status:', sub.status);
-            return sub;
+            return list[0];
         }
-
-        console.debug('[submissionService] getOrCreateDraftSubmission — no submission found, creating new one');
 
         // Create new draft — backend returns ApiResponse<Submission> → { data: Submission }
         const created = await apiRequest<unknown>(`${SUBMISSION_API}/api/submissions`, {
@@ -284,19 +308,13 @@ export const submissionService = {
             }),
         });
 
-        console.debug('[submissionService] getOrCreateDraftSubmission — created raw type:', typeof created, '| keys:', created && typeof created === 'object' ? Object.keys(created as object) : '(none)');
-
         if (created && typeof created === 'object') {
             const obj = created as Record<string, unknown>;
             if (obj.data && typeof obj.data === 'object') {
-                const submission = obj.data as Submission;
-                console.debug('[submissionService] getOrCreateDraftSubmission — new submissionId (from .data):', submission.id);
-                return submission;
+                return obj.data as Submission;
             }
         }
-        const submission = created as Submission;
-        console.debug('[submissionService] getOrCreateDraftSubmission — new submissionId (direct):', submission?.id);
-        return submission;
+        return created as Submission;
     },
 
     /**
@@ -308,7 +326,6 @@ export const submissionService = {
         questionId: string,
         payload: SaveAnswerPayload,
     ): Promise<void> {
-        console.debug('[submissionService] saveAnswer — submissionId:', submissionId, '| questionId:', questionId, '| wordCount:', payload.wordCount, '| chars:', payload.characterCount);
         return apiRequest<void>(
             `${SUBMISSION_API}/api/submissions/${submissionId}/answers/${questionId}`,
             { method: 'PUT', body: JSON.stringify(payload) }
@@ -326,7 +343,6 @@ export const submissionService = {
         payload: SaveAnswerAnalysisPayload,
     ): Promise<void> {
         if (!submissionId) return Promise.resolve();
-        console.debug('[submissionService] saveAnswerAnalysis — submissionId:', submissionId, '| questionId:', questionId);
         return apiRequest<void>(
             `${SUBMISSION_API}/api/submissions/${submissionId}/answers/${questionId}/analysis`,
             { method: 'PATCH', body: JSON.stringify(payload) }
@@ -338,11 +354,9 @@ export const submissionService = {
      * GET /api/submissions/{submissionId}/answers
      */
     async getAnswers(submissionId: string): Promise<TextAnswer[]> {
-        console.debug('[submissionService] getAnswers — submissionId:', submissionId);
         const res = await apiRequest<unknown>(
             `${SUBMISSION_API}/api/submissions/${submissionId}/answers`
         );
-        console.debug('[submissionService] getAnswers — raw response type:', typeof res, '| isArray:', Array.isArray(res));
         let answers: TextAnswer[] = [];
         if (Array.isArray(res)) {
             answers = res as TextAnswer[];
@@ -350,7 +364,6 @@ export const submissionService = {
             const obj = res as Record<string, unknown>;
             if (Array.isArray(obj.data)) answers = obj.data as TextAnswer[];
         }
-        console.debug('[submissionService] getAnswers — returning', answers.length, 'answers; questionIds:', answers.map(a => a.questionId));
         return answers;
     },
 };
@@ -585,74 +598,212 @@ async function _probeTaskById(id: string): Promise<AssignmentWithQuestions> {
     return _mapTaskFull(res.data);
 }
 
-// ─── Version Service (new — port 8081, /api/submissions/{id}/versions) ────────
+// ─── VCS response normaliser ──────────────────────────────────
 //
-// All version endpoints now live inside submission-management-service (port 8081).
-// Snapshots are created server-side inside submitSubmission() — no client-side
-// createTextSnapshot() call needed any more.
+// The version-control-service returns VersionResponse (Java) wrapped in
+// ApiResponse<T> → { success, message, data }.  The metadata JSONB field
+// holds the full answer snapshots for text submissions.
+// This function maps the VCS shape to the shared SubmissionVersion type so
+// all existing hooks and components continue working unchanged.
 
-function unwrapData<T>(raw: unknown): T {
-    if (raw && typeof raw === 'object') {
-        const obj = raw as Record<string, unknown>;
-        if ('data' in obj) return obj.data as T;
-    }
-    return raw as T;
+interface VcsRaw {
+    id: number;
+    submissionId: number;
+    versionNumber: number;
+    commitHash?: string;
+    parentVersionId?: number;
+    commitMessage?: string;
+    triggerType?: 'SUBMISSION' | 'MANUAL' | 'AUTO_SAVE';
+    createdBy?: string;
+    metadata?: Record<string, unknown>;
+    changesSummary?: string;
+    totalFiles?: number;
+    totalSizeBytes?: number;
+    createdAt: string;
+    isSnapshot?: boolean;
+    files?: unknown[];
 }
+
+function normalizeVcsVersion(v: VcsRaw): SubmissionVersion {
+    const meta = v.metadata ?? {};
+    const answers = Array.isArray(meta.answers) ? meta.answers : [];
+    const avgSimilarity = answers.length
+        ? (answers as Array<{ similarityScore?: number | null }>)
+              .reduce((s, a) => s + (a.similarityScore ?? 0), 0) / answers.length
+        : undefined;
+
+    const mappedAnswers = (answers as VcsAnswerSnapshot[]).map((a, idx) => ({
+        id:                  `${v.id}-q${idx}`,
+        versionId:           String(v.id),
+        questionId:          a.questionId,
+        questionText:        a.questionText,
+        answerText:          a.answerText,
+        wordCount:           a.wordCount,
+        grammarScore:        a.grammarScore ?? null,
+        clarityScore:        a.clarityScore ?? null,
+        completenessScore:   a.completenessScore ?? null,
+        relevanceScore:      a.relevanceScore ?? null,
+        strengths:           a.strengths ?? null,
+        improvements:        a.improvements ?? null,
+        suggestions:         a.suggestions ?? null,
+        similarityScore:     a.similarityScore ?? null,
+        plagiarismSeverity:  (a.plagiarismSeverity as 'LOW' | 'MEDIUM' | 'HIGH' | null) ?? null,
+        aiGeneratedMark:     a.projectedGrade ?? null,
+        maxPoints:           a.maxPoints ?? null,
+        plagiarismSources:   (a.internetMatches ?? []).map((m, mi) => ({
+            id:                   `${v.id}-q${idx}-m${mi}`,
+            sourceUrl:            (m as Record<string, unknown>).url as string ?? '',
+            sourceTitle:          (m as Record<string, unknown>).title as string ?? (m as Record<string, unknown>).sourceDomain as string ?? 'Unknown source',
+            sourceSnippet:        (m as Record<string, unknown>).snippet as string ?? undefined,
+            matchedText:          (m as Record<string, unknown>).matchedStudentText as string ?? undefined,
+            similarityPercentage: (m as Record<string, unknown>).similarityScore as number ?? 0,
+        })),
+    }));
+
+    return {
+        id:            String(v.id),
+        submissionId:  String(v.submissionId),
+        versionNumber: v.versionNumber,
+        studentId:     v.createdBy,
+        submittedAt:   v.createdAt,
+        createdAt:     v.createdAt,
+        commitHash:    v.commitHash,
+        commitMessage: v.commitMessage,
+        changesSummary: v.changesSummary,
+        changes:       v.commitMessage,
+        triggerType:   v.triggerType,
+        createdBy:     v.createdBy,
+        isSnapshot:    v.isSnapshot,
+        isSubmitted:   v.triggerType === 'SUBMISSION',
+        metadata:      meta as SubmissionVersion['metadata'],
+        totalWordCount: typeof meta.totalWordCount === 'number' ? meta.totalWordCount : undefined,
+        wordCount:      typeof meta.totalWordCount === 'number' ? meta.totalWordCount : undefined,
+        // overallGrade is 0-100. Fallback: compute from per-question AI scores
+        // so old snapshots (where overallGrade was not stored) still show a value.
+        ...(() => {
+            const stored = typeof meta.overallGrade === 'number' ? meta.overallGrade : null;
+            const overallPct = stored ?? (() => {
+                // Use per-question aiGeneratedMark (actual earned marks) + maxPoints when available (new snapshots).
+                const rawAnswers = answers as VcsAnswerSnapshot[];
+                const hasProjected = mappedAnswers.some(a => a.aiGeneratedMark != null);
+                if (hasProjected) {
+                    const totalMax = rawAnswers.reduce((s, a) => s + (a.maxPoints ?? 10), 0);
+                    if (!totalMax) return null;
+                    // aiGeneratedMark is already actual earned marks (e.g. 15.5 out of 20) — sum directly
+                    const totalEarned = mappedAnswers.reduce((s, a) => {
+                        if (a.aiGeneratedMark == null) return s;
+                        return s + a.aiGeneratedMark;
+                    }, 0);
+                    return Math.round((totalEarned / totalMax) * 1000) / 10;
+                }
+                // Fallback for very old snapshots: avg AI quality scores over ALL
+                // questions (unanswered questions implicitly contribute 0).
+                if (!mappedAnswers.length) return null;
+                const sumScores = mappedAnswers.reduce((sum, a) => {
+                    const s = [a.grammarScore, a.clarityScore, a.completenessScore, a.relevanceScore]
+                        .filter((x): x is number => x != null);
+                    return sum + (s.length ? s.reduce((a, b) => a + b, 0) / s.length : 0);
+                }, 0);
+                return Math.round((sumScores / mappedAnswers.length) * 10);
+            })();
+            const maxGrade = typeof meta.maxGrade === 'number' ? meta.maxGrade : null;
+            const scaledGrade = overallPct != null && maxGrade != null
+                ? Math.round((overallPct / 100) * maxGrade * 10) / 10
+                : overallPct;
+            return {
+                aiScore:    overallPct  ?? undefined,
+                aiGrade:    scaledGrade ?? undefined,
+                finalGrade: scaledGrade ?? undefined,
+                maxGrade:   maxGrade    ?? undefined,
+            };
+        })(),
+        plagiarismScore: avgSimilarity != null ? Math.round(avgSimilarity * 10) / 10 : undefined,
+        answers:        mappedAnswers.length > 0 ? mappedAnswers : undefined,
+    };
+}
+
+// ─── Version Service (port 8082 — version-control-service) ───
 
 export const versionService = {
     /**
      * List all version headers for a submission (newest first).
-     * Answers are NOT included in the list response — use getVersion() for detail.
-     * GET /api/submissions/{submissionId}/versions
+     * GET /api/versions/submission/{submissionId}
      */
     async getVersions(submissionId: string): Promise<SubmissionVersion[]> {
-        const raw = await apiRequest<unknown>(
-            `${SUBMISSION_API}/api/submissions/${encodeURIComponent(submissionId)}/versions`
+        const raw = await apiRequest<{ success: boolean; data: VcsRaw[] }>(
+            `${VERSION_API}/api/versions/submission/${encodeURIComponent(submissionId)}`
         );
-        const list = unwrapData<SubmissionVersion[]>(raw);
-        return Array.isArray(list) ? list : [];
+        const list = (raw as { data?: VcsRaw[] }).data ?? [];
+        return (Array.isArray(list) ? list : []).map(normalizeVcsVersion);
     },
 
     /**
-     * Get the latest version with full answer+plagiarism detail.
-     * Used as the default report view.
-     * GET /api/submissions/{submissionId}/versions/latest
+     * Get the latest version with full metadata (answer snapshots).
+     * GET /api/versions/submission/{submissionId}/latest
      */
     async getLatestVersion(submissionId: string): Promise<SubmissionVersion> {
-        const raw = await apiRequest<unknown>(
-            `${SUBMISSION_API}/api/submissions/${encodeURIComponent(submissionId)}/versions/latest`
+        const raw = await apiRequest<{ success: boolean; data: VcsRaw }>(
+            `${VERSION_API}/api/versions/submission/${encodeURIComponent(submissionId)}/latest`
         );
-        return unwrapData<SubmissionVersion>(raw);
+        return normalizeVcsVersion((raw as { data: VcsRaw }).data);
     },
 
     /**
-     * Get a specific version with full answer+plagiarism detail.
-     * Used for historical version report pages.
-     * GET /api/submissions/{submissionId}/versions/{versionId}
+     * Get a specific version by its VCS id.
+     * submissionId is accepted for API compatibility but not sent to VCS
+     * (VCS uses a flat /api/versions/{id} endpoint).
+     * GET /api/versions/{versionId}
      */
-    async getVersion(submissionId: string, versionId: string): Promise<SubmissionVersion> {
-        const raw = await apiRequest<unknown>(
-            `${SUBMISSION_API}/api/submissions/${encodeURIComponent(submissionId)}/versions/${encodeURIComponent(versionId)}`
+    async getVersion(_submissionId: string, versionId: string): Promise<SubmissionVersion> {
+        const raw = await apiRequest<{ success: boolean; data: VcsRaw }>(
+            `${VERSION_API}/api/versions/${encodeURIComponent(versionId)}`
         );
-        return unwrapData<SubmissionVersion>(raw);
+        return normalizeVcsVersion((raw as { data: VcsRaw }).data);
     },
 
     /**
-     * Save detailed internet plagiarism sources for one answer in one version.
-     * Called immediately after a submit completes, once the plagiarism check
-     * result is received. Replaces any previously saved sources for the same answer.
-     * POST /api/submissions/{submissionId}/versions/{versionId}/answers/{questionId}/sources
+     * Create an immutable text snapshot in VCS immediately after submit.
+     * All answer content, AI scores, and plagiarism data are embedded in
+     * the version's JSONB metadata field — no separate save calls needed.
+     * POST /api/versions/text-snapshot
      */
-    savePlagiarismSources(
-        submissionId: string,
-        versionId: string,
-        questionId: string,
-        payload: SavePlagiarismSourcesPayload,
-    ): Promise<void> {
-        return apiRequest<void>(
-            `${SUBMISSION_API}/api/submissions/${encodeURIComponent(submissionId)}/versions/${encodeURIComponent(versionId)}/answers/${encodeURIComponent(questionId)}/sources`,
+    async createTextSnapshot(payload: TextSnapshotPayload): Promise<SubmissionVersion> {
+        const raw = await apiRequest<{ success: boolean; data: VcsRaw }>(
+            `${VERSION_API}/api/versions/text-snapshot`,
             { method: 'POST', body: JSON.stringify(payload) }
         );
+        return normalizeVcsVersion((raw as { data: VcsRaw }).data);
+    },
+
+    /**
+     * Download a version as JSON (text snapshots) or ZIP (file snapshots).
+     * Returns a Blob so the caller can trigger a browser download.
+     * GET /api/versions/{versionId}/download
+     */
+    async downloadVersion(versionId: string): Promise<{ blob: Blob; filename: string }> {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+        const res = await fetch(`${VERSION_API}/api/versions/${encodeURIComponent(versionId)}/download`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+        const disposition = res.headers.get('content-disposition') ?? '';
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        const filename = match?.[1] ?? `version-${versionId}.json`;
+        const blob = await res.blob();
+        return { blob, filename };
+    },
+
+    /**
+     * Generate a line-level diff between two versions.
+     * For text snapshots, each "filePath" in the result is a questionId.
+     * POST /api/versions/diff
+     */
+    async diffVersions(request: VcsDiffRequest): Promise<VcsDiffResponse> {
+        const raw = await apiRequest<{ success: boolean; data: VcsDiffResponse }>(
+            `${VERSION_API}/api/versions/diff`,
+            { method: 'POST', body: JSON.stringify(request) }
+        );
+        return (raw as { data: VcsDiffResponse }).data;
     },
 };
 
@@ -723,6 +874,8 @@ export const feedbackService = {
     /**
      * Generate real-time lightweight feedback while the student types.
      * Called ~3 seconds after typing stops. Not persisted to DB.
+     * The backend also returns projectedGrade/projectedGradePercent/letterGrade
+     * when maxPoints is supplied (grade formula runs server-side).
      * POST /api/feedback/live
      */
     async generateLiveFeedback(payload: {
@@ -731,16 +884,56 @@ export const feedbackService = {
         questionPrompt?: string;
         expectedWordCount?: number;
         maxPoints?: number;
+        /** Current plagiarism similarity score (0–100) — used by backend for grade penalty. */
+        similarityScore?: number;
+        /** AI-generated content probability (0.0–1.0) — used by backend for AI penalty. */
+        aiDetectionScore?: number;
     }): Promise<LiveFeedback> {
-        console.debug('[feedbackService] generateLiveFeedback — questionId:', payload.questionId, '| textLen:', payload.answerText.length, '| expectedWords:', payload.expectedWordCount ?? '(none)');
-        // Backend wraps in ApiResponse<LiveFeedbackResponse> → unwrap .data
         const res = await apiRequest<{ data: LiveFeedback }>(`${FEEDBACK_API}/api/feedback/live`, {
             method: 'POST',
             body: JSON.stringify(payload),
         });
-        const fb = res.data;
-        console.debug('[feedbackService] generateLiveFeedback — received scores: grammar=', fb?.grammarScore, '| clarity=', fb?.clarityScore, '| completeness=', fb?.completenessScore, '| relevance=', fb?.relevanceScore);
-        return fb;
+        return res.data;
+    },
+
+    /**
+     * Re-compute projected grade from existing AI scores + updated plagiarism score.
+     * Called when the plagiarism result arrives after live feedback has already been shown.
+     * POST /api/feedback/grade
+     */
+    async calculateGrade(payload: {
+        grammarScore: number;
+        clarityScore: number;
+        completenessScore: number;
+        relevanceScore: number;
+        maxPoints: number;
+        wordCount: number;
+        expectedWordCount?: number;
+        similarityScore?: number;
+        aiDetectionScore?: number;
+    }): Promise<{ projectedGrade: number; projectedGradePercent: number; letterGrade: string }> {
+        const res = await apiRequest<{ data: { projectedGrade: number; projectedGradePercent: number; letterGrade: string } }>(
+            `${FEEDBACK_API}/api/feedback/grade`,
+            { method: 'POST', body: JSON.stringify(payload) },
+        );
+        return res.data;
+    },
+
+    /**
+     * Classify answer text as AI-generated or human-written.
+     * POST /api/feedback/ai-detect
+     * Returns aiScore 0.0–1.0 (probability of AI authorship), or -1.0 if unavailable.
+     */
+    async detectAiContent(answerText: string): Promise<AiDetectionResult> {
+        console.log('[AI-Detection] POST /api/feedback/ai-detect — textLen:', answerText.length);
+        const res = await apiRequest<{ data: AiDetectionResult }>(
+            `${FEEDBACK_API}/api/feedback/ai-detect`,
+            { method: 'POST', body: JSON.stringify({ answerText }) },
+        );
+        console.log('[AI-Detection] Response — aiScore:', res.data?.aiScore,
+            '| label:', res.data?.label,
+            '| isAiGenerated:', res.data?.isAiGenerated);
+        return res.data;
     },
 };
 
@@ -851,7 +1044,6 @@ export const plagiarismService = {
         /** Actual integer submission ID — sent so the backend can exclude the student's own answer from peer comparison. */
         submissionId?: string;
     }): Promise<LivePlagiarismResult> {
-        console.debug('[plagiarismService] checkLiveSimilarity — questionId:', payload.questionId, '| textLen:', payload.textContent.length, '| sessionId:', payload.sessionId, '| submissionId:', payload.submissionId);
         // The backend questionId field is a Long — parse string to number
         const backendPayload = {
             sessionId: payload.sessionId,
@@ -923,8 +1115,24 @@ export const plagiarismService = {
             })),
         };
 
-        console.debug('[plagiarismService] checkLiveSimilarity — rawScore:', rawScore, '| normalised:', result.similarityScore, '%', '| severity:', severity, '| flagged:', result.flagged);
         return result;
+    },
+
+    async downloadReport(submissionId: string): Promise<Blob> {
+        const url = `${PLAGIARISM_API}/api/integrity/reports/${submissionId}`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to generate report: ${response.statusText}`);
+        return response.blob();
+    },
+
+    /** @deprecated use downloadReport */
+    async downloadPlagiarismReport(submissionId: string): Promise<Blob> {
+        return this.downloadReport(submissionId);
+    },
+
+    /** @deprecated use downloadReport */
+    async downloadFeedbackReport(submissionId: string): Promise<Blob> {
+        return this.downloadReport(submissionId);
     },
 };
 

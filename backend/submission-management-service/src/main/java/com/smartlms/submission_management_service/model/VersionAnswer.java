@@ -30,7 +30,7 @@ import java.util.List;
         name = "uq_version_answer_question",
         columnNames = {"version_id", "question_id"}
     ),
-    indexes = @Index(name = "idx_va_version_id", columnList = "version_id")
+    indexes = @Index(name = "idx_va_version_id_question_id", columnList = "version_id, question_id")
 )
 @Data
 @NoArgsConstructor
@@ -64,6 +64,10 @@ public class VersionAnswer {
     @Column(name = "character_count")
     private Integer characterCount;
 
+    /** Allocated marks for this question (copied from Answer at snapshot time). */
+    @Column(name = "max_points")
+    private Double maxPoints;
+
     // ── AI Feedback (frozen at submit time) ──────────────────────────────────
 
     @Column(name = "grammar_score")
@@ -92,7 +96,8 @@ public class VersionAnswer {
 
     /**
      * AI-suggested mark on the 0-10 scale.
-     * Computed as avg(grammarScore, clarityScore, completenessScore, relevanceScore).
+     * Computed as: relevance×0.40 + completeness×0.30 + clarity×0.15 + grammar×0.15
+     * (weights normalised when one or more dimensions are null).
      * Frozen at submit time; NEVER overwritten by lecturer or future submissions.
      */
     @Column(name = "ai_generated_mark")

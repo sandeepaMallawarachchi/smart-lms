@@ -7,20 +7,21 @@ import com.example.integrity_monitoring_service.exception.IntegrityCheckExceptio
 import com.example.integrity_monitoring_service.exception.ResourceNotFoundException;
 import com.example.integrity_monitoring_service.model.*;
 import com.example.integrity_monitoring_service.repository.PlagiarismCheckRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 
 /**
  * Main service for plagiarism checking
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class IntegrityCheckService {
 
@@ -30,6 +31,24 @@ public class IntegrityCheckService {
     private final JPlagService jplagService;
     private final GoogleSearchService googleSearch;
     private final SubmissionFetchService submissionFetch;
+    private final Executor plagiarismTaskExecutor;
+
+    public IntegrityCheckService(
+            PlagiarismCheckRepository checkRepository,
+            QuestionAnalyzerService questionAnalyzer,
+            TextSimilarityService textSimilarity,
+            JPlagService jplagService,
+            GoogleSearchService googleSearch,
+            SubmissionFetchService submissionFetch,
+            @Qualifier("plagiarismTaskExecutor") Executor plagiarismTaskExecutor) {
+        this.checkRepository         = checkRepository;
+        this.questionAnalyzer        = questionAnalyzer;
+        this.textSimilarity          = textSimilarity;
+        this.jplagService            = jplagService;
+        this.googleSearch            = googleSearch;
+        this.submissionFetch         = submissionFetch;
+        this.plagiarismTaskExecutor  = plagiarismTaskExecutor;
+    }
 
     @Value("${integrity.code-similarity-threshold:0.75}")
     private double codeSimilarityThreshold;
@@ -315,34 +334,44 @@ public class IntegrityCheckService {
     }
 
     /**
-     * Run combined check (students + internet)
+     * Run combined check (peer comparison + internet search) in parallel.
+     *
+     * The two legs are independent: peer comparison queries the DB and computes
+     * cosine similarity, while internet search calls SerpAPI over HTTP. They write
+     * to non-overlapping fields on {@code check} (studentSimilarityScore /
+     * similarityMatches vs internetSimilarityScore / internetMatches), so parallel
+     * execution is safe. The overall score and flagged flag are derived after both
+     * legs complete.
      */
     private void runCombinedCheck(PlagiarismCheck check, PlagiarismCheckRequest request) {
-        log.debug("Running combined plagiarism check");
+        log.debug("Running combined plagiarism check (peer + internet in parallel)");
 
-        // Determine if code or text
         boolean isCode = request.getCodeContent() != null && !request.getCodeContent().isEmpty();
 
-        if (isCode) {
-            runCodePlagiarismCheck(check, request);
-        } else {
-            runTextPlagiarismCheck(check, request);
-        }
+        // Fire both legs concurrently on the plagiarismTaskExecutor pool.
+        CompletableFuture<Void> peerFuture = CompletableFuture.runAsync(() -> {
+            if (isCode) {
+                runCodePlagiarismCheck(check, request);
+            } else {
+                runTextPlagiarismCheck(check, request);
+            }
+        }, plagiarismTaskExecutor);
 
-        // Always check internet
-        runInternetPlagiarismCheck(check, request);
+        CompletableFuture<Void> internetFuture = CompletableFuture.runAsync(
+                () -> runInternetPlagiarismCheck(check, request),
+                plagiarismTaskExecutor);
 
-        // Calculate overall score
-        double studentScore = check.getStudentSimilarityScore() != null ?
-                check.getStudentSimilarityScore() : 0.0;
-        double internetScore = check.getInternetSimilarityScore() != null ?
-                check.getInternetSimilarityScore() : 0.0;
+        // Wait for both; surface the first exception if either leg fails.
+        CompletableFuture.allOf(peerFuture, internetFuture).join();
+
+        // Derive overall score and flagged flag now that both legs have written their fields.
+        double studentScore  = check.getStudentSimilarityScore()  != null ? check.getStudentSimilarityScore()  : 0.0;
+        double internetScore = check.getInternetSimilarityScore() != null ? check.getInternetSimilarityScore() : 0.0;
 
         double overallScore = Math.max(studentScore, internetScore);
         check.setOverallSimilarityScore(overallScore);
         check.setMaxSimilarityScore(overallScore);
 
-        // Flag if either check found plagiarism
         check.setFlagged(studentScore > (isCode ? codeSimilarityThreshold : textSimilarityThreshold) ||
                 internetScore > internetSimilarityThreshold);
     }

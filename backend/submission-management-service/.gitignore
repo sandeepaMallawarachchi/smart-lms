@@ -36,3 +36,7 @@ misc.xml
 modules.xml
 submission-system.iml
 vcs.xml
+
+### Application Properties ###
+application.properties
+application-*.properties

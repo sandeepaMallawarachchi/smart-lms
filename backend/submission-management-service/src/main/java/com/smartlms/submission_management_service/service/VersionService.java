@@ -9,6 +9,7 @@ import com.smartlms.submission_management_service.exception.DeadlineNotPassedExc
 import com.smartlms.submission_management_service.exception.ResourceNotFoundException;
 import com.smartlms.submission_management_service.model.*;
 import com.smartlms.submission_management_service.repository.*;
+import com.smartlms.submission_management_service.util.AnswerScoreUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -94,6 +95,7 @@ public class VersionService {
                     .answerText(a.getAnswerText())
                     .wordCount(a.getWordCount())
                     .characterCount(a.getCharacterCount())
+                    .maxPoints(a.getMaxPoints())
                     // AI feedback snapshot
                     .grammarScore(a.getGrammarScore())
                     .clarityScore(a.getClarityScore())
@@ -260,6 +262,13 @@ public class VersionService {
                     });
         }
 
+        // Store the explicit overall grade on the version so toVersionResponse()
+        // can use it directly instead of re-deriving it from per-question marks.
+        if (request.getGrade() != null) {
+            latest.setLecturerGrade(request.getGrade());
+            versionRepository.save(latest);
+        }
+
         log.info("Lecturer grades written to latest version id={} for submissionId={} by={}",
                 latest.getId(), submissionId, lecturerId);
     }
@@ -271,6 +280,7 @@ public class VersionService {
     private VersionResponse toVersionResponse(SubmissionVersion v, boolean includeAnswers) {
         List<VersionAnswerResponse> answerResponses = null;
         boolean hasLecturerOverride = false;
+        boolean partiallyGraded = false;
         Double finalGrade = v.getAiGrade();
 
         if (includeAnswers) {
@@ -279,13 +289,24 @@ public class VersionService {
                     .map(this::toVersionAnswerResponse)
                     .collect(Collectors.toList());
 
-            // Compute finalGrade from lecturer marks if any are set
-            boolean anyLecturerMark = answers.stream().anyMatch(a -> a.getLecturerMark() != null);
-            if (anyLecturerMark) {
+            // Use the stored lecturer grade if available; fall back to per-question
+            // summation only when no explicit overall grade was set.
+            List<VersionAnswer> gradedAnswers = answers.stream()
+                    .filter(a -> a.getLecturerMark() != null)
+                    .collect(Collectors.toList());
+            boolean anyLecturerMark = !gradedAnswers.isEmpty();
+            partiallyGraded = anyLecturerMark && gradedAnswers.size() < answers.size();
+
+            if (v.getLecturerGrade() != null) {
                 hasLecturerOverride = true;
-                double maxMarksTotal = answers.size() * 10.0; // default 10 per question
-                double lecturerTotal = answers.stream()
-                        .mapToDouble(a -> a.getLecturerMark() != null ? a.getLecturerMark() : 0.0)
+                finalGrade = v.getLecturerGrade();
+            } else if (anyLecturerMark) {
+                hasLecturerOverride = true;
+                // Denominator covers only the graded questions so that ungraded questions
+                // do not silently count as 0 and drag down the student's grade.
+                double maxMarksTotal = gradedAnswers.size() * 10.0;
+                double lecturerTotal = gradedAnswers.stream()
+                        .mapToDouble(VersionAnswer::getLecturerMark)
                         .sum();
                 if (v.getMaxGrade() != null && v.getMaxGrade() > 0 && maxMarksTotal > 0) {
                     finalGrade = Math.round((lecturerTotal / maxMarksTotal) * v.getMaxGrade() * 10.0) / 10.0;
@@ -298,7 +319,7 @@ public class VersionService {
                 .submissionId(v.getSubmissionId())
                 .versionNumber(v.getVersionNumber())
                 .studentId(v.getStudentId())
-                .submittedAt(v.getSubmittedAt() != null ? v.getSubmittedAt().toString() : null)
+                .submittedAt(formatUtc(v.getSubmittedAt()))
                 .isLate(v.getIsLate())
                 .aiScore(v.getAiScore())
                 .plagiarismScore(v.getPlagiarismScore())
@@ -307,8 +328,9 @@ public class VersionService {
                 .maxGrade(v.getMaxGrade())
                 .finalGrade(finalGrade)
                 .hasLecturerOverride(hasLecturerOverride)
+                .partiallyGraded(partiallyGraded)
                 .commitMessage(v.getCommitMessage())
-                .createdAt(v.getCreatedAt() != null ? v.getCreatedAt().toString() : null)
+                .createdAt(formatUtc(v.getCreatedAt()))
                 .answers(answerResponses)
                 .build();
     }
@@ -324,7 +346,7 @@ public class VersionService {
                         .sourceSnippet(s.getSourceSnippet())
                         .matchedText(s.getMatchedText())
                         .similarityPercentage(s.getSimilarityPercentage())
-                        .detectedAt(s.getDetectedAt() != null ? s.getDetectedAt().toString() : null)
+                        .detectedAt(formatUtc(s.getDetectedAt()))
                         .build())
                 .collect(Collectors.toList());
 
@@ -336,6 +358,7 @@ public class VersionService {
                 .answerText(va.getAnswerText())
                 .wordCount(va.getWordCount())
                 .characterCount(va.getCharacterCount())
+                .maxPoints(va.getMaxPoints())
                 .grammarScore(va.getGrammarScore())
                 .clarityScore(va.getClarityScore())
                 .completenessScore(va.getCompletenessScore())
@@ -347,13 +370,13 @@ public class VersionService {
                 .similarityScore(va.getSimilarityScore())
                 .plagiarismSeverity(va.getPlagiarismSeverity())
                 .plagiarismFlagged(va.getPlagiarismFlagged())
-                .plagiarismCheckedAt(va.getPlagiarismCheckedAt() != null ? va.getPlagiarismCheckedAt().toString() : null)
+                .plagiarismCheckedAt(formatUtc(va.getPlagiarismCheckedAt()))
                 .plagiarismSources(sources)
                 .lecturerMark(va.getLecturerMark())
                 .lecturerFeedbackText(va.getLecturerFeedbackText())
-                .lecturerUpdatedAt(va.getLecturerUpdatedAt() != null ? va.getLecturerUpdatedAt().toString() : null)
+                .lecturerUpdatedAt(formatUtc(va.getLecturerUpdatedAt()))
                 .lecturerUpdatedBy(va.getLecturerUpdatedBy())
-                .snapshotCreatedAt(va.getSnapshotCreatedAt() != null ? va.getSnapshotCreatedAt().toString() : null)
+                .snapshotCreatedAt(formatUtc(va.getSnapshotCreatedAt()))
                 .build();
     }
 
@@ -362,25 +385,9 @@ public class VersionService {
      * Weights: relevance 40%, completeness 30%, clarity 15%, grammar 15%.
      */
     private Double computeAiMark(Answer a) {
+        // Prefer the pre-computed mark stored on the answer (set by AnswerService at analysis time).
         if (a.getAiGeneratedMark() != null) return a.getAiGeneratedMark();
-
-        final double W_RELEVANCE    = 0.40;
-        final double W_COMPLETENESS = 0.30;
-        final double W_CLARITY      = 0.15;
-        final double W_GRAMMAR      = 0.15;
-
-        boolean hasAny = a.getRelevanceScore() != null || a.getCompletenessScore() != null
-                || a.getClarityScore() != null || a.getGrammarScore() != null;
-        if (!hasAny) return null;
-
-        double weightedSum = 0.0, appliedWeight = 0.0;
-        if (a.getRelevanceScore()    != null) { weightedSum += W_RELEVANCE    * a.getRelevanceScore();    appliedWeight += W_RELEVANCE;    }
-        if (a.getCompletenessScore() != null) { weightedSum += W_COMPLETENESS * a.getCompletenessScore(); appliedWeight += W_COMPLETENESS; }
-        if (a.getClarityScore()      != null) { weightedSum += W_CLARITY      * a.getClarityScore();      appliedWeight += W_CLARITY;      }
-        if (a.getGrammarScore()      != null) { weightedSum += W_GRAMMAR      * a.getGrammarScore();      appliedWeight += W_GRAMMAR;      }
-
-        double mark = appliedWeight > 0 ? weightedSum / appliedWeight : 0.0;
-        return Math.round(mark * 100.0) / 100.0;
+        return AnswerScoreUtils.computeWeightedMark(a);
     }
 
     private String buildCommitMessage(Submission s) {
@@ -389,7 +396,15 @@ public class VersionService {
     }
 
     private List<String> splitPipe(String value) {
-        if (value == null || value.isBlank()) return null;
-        return List.of(value.split("\\|\\|"));
+        return AnswerScoreUtils.splitPipe(value);
+    }
+
+    /**
+     * Serialises a LocalDateTime to an ISO-8601 string with a trailing 'Z' suffix,
+     * indicating UTC. {@code LocalDateTime.toString()} alone omits the timezone
+     * designator, which causes ambiguous parsing in JavaScript across different locales.
+     */
+    private static String formatUtc(LocalDateTime dt) {
+        return dt != null ? dt.toString() + "Z" : null;
     }
 }
