@@ -16,6 +16,9 @@ public class CorsConfig {
         config.addAllowedHeader("*");
         config.addAllowedMethod("*");
         config.setAllowCredentials(true);
+        // Explicitly allow Vercel frontend and SmartAPI
+        config.addAllowedOrigin("https://smart-lms-eight.vercel.app");
+        config.addAllowedOrigin("https://api.smartapi.infinityfreeapp.com");
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
