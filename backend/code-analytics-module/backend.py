@@ -12,8 +12,8 @@ from pydantic import BaseModel
 
 
 PORT = int(os.getenv("PORT", "8000"))
-AI_PROVIDER = os.getenv("CODE_ANALYTICS_PROVIDER", "groq").strip().lower()
-LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL", "http://127.0.0.1:8080/completion")
+AI_PROVIDER = os.getenv("CODE_ANALYTICS_PROVIDER", "local").strip().lower()
+LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL", "https://a361-112-134-207-60.ngrok-free.app")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("CODE_ANALYTICS_MODEL", "llama-3.1-8b-instant")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
