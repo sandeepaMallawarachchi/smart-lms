@@ -34,6 +34,8 @@ export interface Assignment {
     assignmentType?: 'project' | 'task';
     /** The lecturer who created this assignment */
     createdBy?: string;
+    /** ISO-8601 creation timestamp from the P&T service */
+    createdAt?: string;
 }
 
 // ─── Submission ──────────────────────────────────────────────
