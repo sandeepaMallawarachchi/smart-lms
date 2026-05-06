@@ -174,7 +174,6 @@ services:
       - .env.backend
     environment:
       PORT: 8000
-      CODE_ANALYTICS_PROVIDER: groq
     ports:
       - "8000:8000"
     restart: unless-stopped
