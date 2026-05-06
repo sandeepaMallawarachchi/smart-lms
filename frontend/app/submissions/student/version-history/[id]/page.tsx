@@ -1,6 +1,6 @@
 'use client';
 
-import React, { use, useState, useMemo, useCallback, useEffect } from 'react';
+import { use, useState, useMemo, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     ArrowLeft, GitBranch, Star, TrendingUp, Shield, AlertCircle,
@@ -96,6 +96,9 @@ function VersionCard({
     onCompareToggle,
     compareDisabled,
     diffSummary,
+    assignmentTitle,
+    courseName,
+    studentName,
 }: {
     version: SubmissionVersion;
     isLatest: boolean;
@@ -116,7 +119,7 @@ function VersionCard({
 
     const handleDownload = async () => {
         const submissionId = version.submissionId?.toString() ?? '';
-        if (!submissionId) return;
+        if (!submissionId || !isLatest) return;
         setDownloadingReport(true);
         try {
             const { plagiarismService } = await import('@/lib/api/submission-services');
@@ -284,20 +287,23 @@ function VersionCard({
                                 Revert
                             </button>
                         )}
-                        <button
-                            onClick={handleDownload}
-                            disabled={downloadingReport}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50 whitespace-nowrap"
-                        >
-                            {downloadingReport ? (
-                                <span className="animate-spin text-sm">⟳</span>
-                            ) : (
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                            )}
-                            Download Report
-                        </button>
+                        {isLatest && (
+                            <button
+                                onClick={handleDownload}
+                                disabled={downloadingReport}
+                                title="Download Integrity & Feedback Report"
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50 whitespace-nowrap"
+                            >
+                                {downloadingReport ? (
+                                    <span className="animate-spin text-sm">⟳</span>
+                                ) : (
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                )}
+                                Download Report
+                            </button>
+                        )}
                         {answers.length > 0 && (
                             <button
                                 onClick={() => setExpanded(e => !e)}
@@ -552,10 +558,6 @@ function ComparisonView({
 const QUESTION_COLORS = [
     'bg-purple-500', 'bg-blue-500', 'bg-green-500', 'bg-amber-500',
     'bg-red-500', 'bg-teal-500', 'bg-pink-500', 'bg-indigo-500',
-];
-const QUESTION_TEXT_COLORS = [
-    'text-purple-600', 'text-blue-600', 'text-green-600', 'text-amber-600',
-    'text-red-600', 'text-teal-600', 'text-pink-600', 'text-indigo-600',
 ];
 const QUESTION_DOT_COLORS = [
     'bg-purple-600', 'bg-blue-600', 'bg-green-600', 'bg-amber-600',
